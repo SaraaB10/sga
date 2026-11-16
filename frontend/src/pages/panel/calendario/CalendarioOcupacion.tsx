@@ -225,7 +225,7 @@ function Leyenda() {
       </li>
       <li className="flex items-center gap-1.5">
         <span aria-hidden="true" className="h-3 w-6 rounded-sm bg-sol/40" />
-        Viernes y sábado
+        Noches de fin de semana (viernes y sábado)
       </li>
     </ul>
   )

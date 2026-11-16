@@ -5,11 +5,21 @@ import { AvisoError, formatearFecha } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { useReglasAlojamiento } from './comun/consultas'
 import { hoyISO } from './comun/reglas'
 
 /** Meses hacia adelante que se pueden consultar desde el mes actual */
 const MESES_ADELANTE = 12
 const DIAS_SEMANA = ['lu', 'ma', 'mi', 'ju', 'vi', 'sá', 'do']
+
+/** Fondo de las noches libres de viernes y sábado; el mismo tono del calendario del panel */
+const CLASE_FIN_DE_SEMANA = 'bg-sol/40'
+
+/** Viernes o sábado: las noches de fin de semana */
+function esNocheDeFinDeSemana(anio: number, mes: number, dia: number): boolean {
+  const diaSemana = new Date(anio, mes, dia).getDay()
+  return diaSemana === 5 || diaSemana === 6
+}
 
 /** Primer día del mes en formato YYYY-MM-DD */
 function inicioDeMes(anio: number, mes: number): string {
@@ -35,6 +45,7 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
   const huecosAntes = (new Date(anio, mes, 1).getDay() + 6) % 7
 
   const consulta = useDisponibilidadApartamento(identificacion, desde, hasta)
+  const { reglas } = useReglasAlojamiento()
   const libres = new Map((consulta.data?.noches ?? []).map((n) => [n.fecha, n.libre]))
   const titulo = formatearFecha(desde, "MMMM 'de' yyyy")
 
@@ -95,15 +106,20 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
               const pasada = fecha < hoy
               const libre = libres.get(fecha) === true
               const estado = pasada ? 'pasada' : libre ? 'libre' : 'ocupada'
+              // Viernes y sábado: en temporada media o alta piden la estancia mínima
+              const finDeSemana = estado === 'libre' && esNocheDeFinDeSemana(anio, mes, i + 1)
+              const textoEstado = estado === 'libre' ? 'libre' : estado === 'ocupada' ? 'no disponible' : 'ya pasó'
               return (
                 <div
                   key={fecha}
                   role="gridcell"
-                  aria-label={`${formatearFecha(fecha, "EEEE d 'de' MMMM")}: ${estado === 'libre' ? 'libre' : estado === 'ocupada' ? 'no disponible' : 'ya pasó'}`}
+                  aria-label={`${formatearFecha(fecha, "EEEE d 'de' MMMM")}: ${textoEstado}${finDeSemana ? ', noche de fin de semana' : ''}${fecha === hoy ? ', hoy' : ''}`}
                   data-estado={estado}
+                  data-fin-de-semana={finDeSemana || undefined}
                   className={cn(
                     'flex aspect-square items-center justify-center rounded-md border text-sm',
-                    estado === 'libre' && 'border-coral/40 bg-crema font-semibold text-foreground',
+                    estado === 'libre' && 'border-coral/40 font-semibold text-foreground',
+                    estado === 'libre' && (finDeSemana ? CLASE_FIN_DE_SEMANA : 'bg-crema'),
                     estado === 'ocupada' && 'border-transparent bg-muted text-muted-foreground line-through',
                     estado === 'pasada' && 'border-transparent text-muted-foreground/50',
                     fecha === hoy && 'ring-2 ring-coral/60',
@@ -116,14 +132,50 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
           </div>
         )}
 
-        <ul aria-label="Convenciones" className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
-          <li className="flex items-center gap-1.5">
-            <span aria-hidden="true" className="size-3 rounded-sm border border-coral/40 bg-crema" /> Libre
+        <h3 id="leyenda-disponibilidad" className="mt-4 text-xs font-semibold text-foreground">
+          Qué significa cada color
+        </h3>
+        <ul
+          aria-labelledby="leyenda-disponibilidad"
+          className="mt-2 grid gap-x-4 gap-y-2 text-xs text-muted-foreground sm:grid-cols-2"
+        >
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className="size-4 shrink-0 rounded-sm border border-coral/40 bg-crema" />
+            Libre: se puede reservar
           </li>
-          <li className="flex items-center gap-1.5">
-            <span aria-hidden="true" className="size-3 rounded-sm bg-muted" /> No disponible
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className={cn('size-4 shrink-0 rounded-sm border border-coral/40', CLASE_FIN_DE_SEMANA)} />
+            Noches de fin de semana (viernes y sábado)
+          </li>
+          <li className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="flex size-4 shrink-0 items-center justify-center rounded-sm bg-muted text-[0.6rem] leading-none line-through"
+            >
+              9
+            </span>
+            No disponible: ya reservada o bloqueada
+          </li>
+          <li className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="flex size-4 shrink-0 items-center justify-center rounded-sm text-[0.6rem] leading-none text-muted-foreground/50"
+            >
+              9
+            </span>
+            Ya pasó
+          </li>
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className="size-4 shrink-0 rounded-sm ring-2 ring-coral/60" />
+            Hoy
           </li>
         </ul>
+        {reglas.estanciaMinimaActiva && reglas.estanciaMinima !== null && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            En temporada media y alta, una estancia que incluye una noche de viernes o sábado debe ser de mínimo{' '}
+            {reglas.estanciaMinima} noches.
+          </p>
+        )}
       </div>
     </section>
   )
