@@ -207,7 +207,7 @@ public class DatosInicialesReservasConfig {
 
             // EXTERNO: llega de una plataforma de terceros con su identificador (RN-19) y sin hora de llegada.
             nueva("APT-201", hoy.plusDays(15), hoy.plusDays(18),
-                    titular("Emily Johnson", "PA", "PA5550123", "emily.johnson@mail.com", "+15555550707"),
+                    titular("Emily Johnson", "PA", "55501230", "emily.johnson@mail.com", "3165550707"),
                     CanalOrigen.EXTERNO, null, "BK-DEMO-000123");
         }
 

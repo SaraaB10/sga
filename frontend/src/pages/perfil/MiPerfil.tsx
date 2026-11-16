@@ -7,7 +7,7 @@ import { useActualizarMiPerfil, useCambiarMiContrasena } from '@/api/usuarios'
 import type { UsuarioResponse } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { AvisoError, Campo, InputContrasena } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   AYUDA_CONTRASENA,
   contrasenaNueva,
+  DIGITOS_TELEFONO,
   erroresDelServidor,
   esErrorDeCampos,
   telefono,
@@ -135,10 +136,9 @@ function DatosPerfil({ usuario }: { usuario: UsuarioResponse }) {
             <Input type="email" value={usuario.correo} readOnly disabled />
           </Campo>
           <Campo id="perfil-telefono" etiqueta="Teléfono" error={errores.telefono}>
-            <Input
-              type="tel"
-              autoComplete="tel"
-              maxLength={20}
+            <InputDigitos
+              maximo={DIGITOS_TELEFONO}
+              autoComplete="tel-national"
               value={telefonoActual}
               onChange={(e) => setTelefono(e.target.value)}
             />

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Rol } from '@/api/tipos'
 import { cumpleEdadMinima, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
-import { contrasenaNueva, correo, fechaPasada, telefono, textoObligatorio } from '@/lib/validacion'
+import { contrasenaNueva, correo, documento, fechaPasada, telefono, textoObligatorio } from '@/lib/validacion'
 import { ROLES } from './listaRoles'
 
 /** Usuario nuevo del panel: las reglas de CrearUsuarioRequest */
@@ -10,7 +10,7 @@ export const esquemaCrearUsuario = z.object({
   correo: correo(),
   contrasena: contrasenaNueva(),
   telefono: telefono(),
-  documento: textoObligatorio('Escribe el documento', 15, 'El documento admite máximo 15 caracteres'),
+  documento: documento(),
   fechaNacimiento: fechaPasada('Escribe la fecha de nacimiento').refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
   rol: z.enum(ROLES as [Rol, ...Rol[]], 'Elige el rol'),
 })

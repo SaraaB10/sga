@@ -9,7 +9,7 @@ import { registrarHuesped } from '@/api/auth'
 import { esErrorApi } from '@/api/cliente'
 import { useAuth } from '@/auth/AuthContext'
 import { rutaDespuesDeLogin } from '@/auth/destino'
-import { AvisoError, Campo, InputContrasena } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
@@ -17,7 +17,10 @@ import {
   AYUDA_CONTRASENA,
   contrasenaNueva,
   correo,
+  DIGITOS_TELEFONO,
+  documento,
   erroresDelServidor,
+  MAXIMO_DIGITOS_DOCUMENTO,
   fechaPasada,
   telefono,
   textoObligatorio,
@@ -29,8 +32,8 @@ const esquema = z.object({
   nombre: textoObligatorio('Escribe tu nombre', 100, 'El nombre admite máximo 100 caracteres'),
   correo: correo(),
   contrasena: contrasenaNueva('Escribe una contraseña'),
-  telefono: telefono(),
-  documento: textoObligatorio('Escribe tu documento', 15, 'El documento admite máximo 15 caracteres'),
+  telefono: telefono('Escribe tu teléfono'),
+  documento: documento('Escribe tu documento'),
   fechaNacimiento: fechaPasada('Elige tu fecha de nacimiento').refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
 })
 
@@ -113,10 +116,10 @@ export default function Registro() {
             <InputContrasena autoComplete="new-password" {...register('contrasena')} />
           </Campo>
           <Campo id="telefono" etiqueta="Teléfono" error={errors.telefono?.message}>
-            <Input type="tel" autoComplete="tel" inputMode="tel" {...register('telefono')} />
+            <InputDigitos maximo={DIGITOS_TELEFONO} autoComplete="tel-national" {...register('telefono')} />
           </Campo>
           <Campo id="documento" etiqueta="Documento" error={errors.documento?.message}>
-            <Input inputMode="numeric" {...register('documento')} />
+            <InputDigitos maximo={MAXIMO_DIGITOS_DOCUMENTO} {...register('documento')} />
           </Campo>
           <Campo id="fechaNacimiento" etiqueta="Fecha de nacimiento" error={errors.fechaNacimiento?.message} className="sm:col-span-2">
             <Input

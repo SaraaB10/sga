@@ -11,6 +11,7 @@ import {
   Dinero,
   EstadoReserva,
   Fecha,
+  InputDigitos,
   Paginador,
   TablaResponsive,
   Vacio,
@@ -19,7 +20,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { rangoFiltro, textoOpcional, useValidacion } from '@/lib/validacion'
+import {
+  documentoOpcional,
+  MAXIMO_DIGITOS_DOCUMENTO,
+  rangoFiltro,
+  textoOpcional,
+  useValidacion,
+} from '@/lib/validacion'
 import { NOMBRE_CANAL } from '@/pages/huesped/reserva/formato'
 import { EncabezadoFiltros } from '@/pages/publico/comun/EncabezadoFiltros'
 import { claseContenidoPlegable, claseSelect } from '@/pages/publico/comun/estilos'
@@ -183,14 +190,14 @@ export default function ListadoReservas() {
   )
 }
 
-// Filtros de GET /api/reservas: búsqueda de hasta 100 caracteres, documento del titular de hasta 15 y
+// Filtros de GET /api/reservas: búsqueda de hasta 100 caracteres, documento del titular de 6 a 10 dígitos y
 // "llegada hasta" no antes de "desde"
 const esquemaFiltros = rangoFiltro().safeExtend({
   buscar: textoOpcional(100, 'La búsqueda admite máximo 100 caracteres'),
   estado: z.string(),
   apartamento: z.string(),
   canal: z.string(),
-  titular: textoOpcional(15, 'El documento admite máximo 15 caracteres'),
+  titular: documentoOpcional(),
 })
 
 function FiltrosListado({
@@ -289,7 +296,11 @@ function FiltrosListado({
         </select>
       </Campo>
       <Campo id="fr-titular" etiqueta="Documento del titular" error={errores.titular}>
-        <Input inputMode="numeric" value={borrador.titular} onChange={(e) => cambiar('titular', e.target.value)} />
+        <InputDigitos
+          maximo={MAXIMO_DIGITOS_DOCUMENTO}
+          value={borrador.titular}
+          onChange={(e) => cambiar('titular', e.target.value)}
+        />
       </Campo>
       <Campo id="fr-desde" etiqueta="Llegada desde" error={errores.desde}>
         <Input type="date" value={borrador.desde} onChange={(e) => cambiar('desde', e.target.value)} />

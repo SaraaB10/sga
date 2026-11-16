@@ -16,13 +16,14 @@ export type Errores = Record<string, string | undefined>
 
 /** Al menos una mayúscula y un número, como el @Pattern de las contraseñas del backend */
 const PATRON_CONTRASENA = /^(?=.*\p{Lu})(?=.*\d).*$/u
-/**
- * Teléfono: + opcional al inicio y al menos 7 dígitos, con espacios, guiones o paréntesis entre ellos. Es el mismo
- * patrón y el mismo mensaje de ReglaTelefono en el backend.
- */
-const PATRON_TELEFONO = /^\+?(?:[ ()-]*\d){7,}[ ()-]*$/
-const MENSAJE_TELEFONO =
-  'El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, paréntesis y el signo + al inicio'
+/** Teléfono: exactamente 10 dígitos, sin espacios ni símbolos. Mismo patrón y mensaje de ReglaTelefono del backend */
+export const DIGITOS_TELEFONO = 10
+const PATRON_TELEFONO = /^\d{10}$/
+export const MENSAJE_TELEFONO = 'El teléfono debe tener 10 dígitos, solo números'
+/** Documento: de 6 a 10 dígitos, sin espacios ni símbolos. Mismo patrón y mensaje de ReglaDocumento del backend */
+export const MAXIMO_DIGITOS_DOCUMENTO = 10
+const PATRON_DOCUMENTO = /^\d{6,10}$/
+export const MENSAJE_DOCUMENTO = 'El documento debe tener entre 6 y 10 dígitos, solo números'
 const PATRON_URL = /^https?:\/\/\S+$/i
 const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/
 
@@ -68,13 +69,24 @@ export function correo(maximo = 120) {
     .max(maximo, `El correo admite máximo ${maximo} caracteres`)
 }
 
-export function telefono(maximo = 20) {
-  return z
-    .string()
-    .trim()
-    .min(1, 'Escribe el teléfono')
-    .max(maximo, `El teléfono admite máximo ${maximo} caracteres`)
-    .regex(PATRON_TELEFONO, MENSAJE_TELEFONO)
+/** Deja solo los dígitos de un texto, hasta `maximo` (lo usan los campos de teléfono y documento) */
+export function soloDigitos(valor: string, maximo: number): string {
+  return valor.replace(/\D/g, '').slice(0, maximo)
+}
+
+/** Teléfono obligatorio: 10 dígitos, solo números. Sin trim: un espacio también es un símbolo */
+export function telefono(mensajeVacio = 'Escribe el teléfono') {
+  return z.string().min(1, mensajeVacio).regex(PATRON_TELEFONO, MENSAJE_TELEFONO)
+}
+
+/** Número de documento obligatorio: de 6 a 10 dígitos, solo números */
+export function documento(mensajeVacio = 'Escribe el documento') {
+  return z.string().min(1, mensajeVacio).regex(PATRON_DOCUMENTO, MENSAJE_DOCUMENTO)
+}
+
+/** Número de documento opcional (ocupantes): vacío, o de 6 a 10 dígitos */
+export function documentoOpcional() {
+  return z.string().refine((valor) => valor === '' || PATRON_DOCUMENTO.test(valor), MENSAJE_DOCUMENTO)
 }
 
 /** Contraseña nueva: 8 a 72 caracteres, con una mayúscula y un número */

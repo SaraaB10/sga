@@ -3,10 +3,17 @@ import { toast } from 'sonner'
 import { useCambiarRolUsuario, useCrearUsuario, type CrearUsuarioRequest } from '@/api/usuarios'
 import type { Rol, UsuarioResponse } from '@/api/tipos'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { Campo, InputContrasena } from '@/components/coral'
+import { Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Input } from '@/components/ui/input'
 import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
-import { AYUDA_CONTRASENA, erroresDelServidor, unirErrores, useValidacion } from '@/lib/validacion'
+import {
+  AYUDA_CONTRASENA,
+  DIGITOS_TELEFONO,
+  erroresDelServidor,
+  MAXIMO_DIGITOS_DOCUMENTO,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
 import { useAlAbrir } from '@/pages/panel/folio/useAlAbrir'
 import { claseSelect } from '@/pages/publico/comun/estilos'
@@ -92,10 +99,10 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
           <InputContrasena autoComplete="new-password" maxLength={72} {...campo('contrasena')} />
         </Campo>
         <Campo id="usuario-telefono" etiqueta="Teléfono" error={error('telefono')}>
-          <Input type="tel" maxLength={20} {...campo('telefono')} />
+          <InputDigitos maximo={DIGITOS_TELEFONO} {...campo('telefono')} />
         </Campo>
         <Campo id="usuario-documento" etiqueta="Documento" error={error('documento')}>
-          <Input inputMode="numeric" maxLength={15} {...campo('documento')} />
+          <InputDigitos maximo={MAXIMO_DIGITOS_DOCUMENTO} {...campo('documento')} />
         </Campo>
         <Campo id="usuario-nacimiento" etiqueta="Fecha de nacimiento" error={error('fechaNacimiento')}>
           <Input

@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Regla del teléfono (ReglaTelefono), la misma del frontend: al menos 7 dígitos y solo números, espacios, guiones,
- * paréntesis y un + al inicio. Se prueba sobre los mensajes que la usan: registro, creación de usuario, perfil y
- * titular de la reserva.
+ * Regla del teléfono (ReglaTelefono), la misma del frontend: exactamente 10 dígitos, sin espacios ni símbolos. Se
+ * prueba sobre los mensajes que la usan: registro, creación de usuario, perfil y titular de la reserva (también el del
+ * canal externo).
  */
 class ReglaTelefonoTest {
 
@@ -41,33 +41,37 @@ class ReglaTelefonoTest {
     }
 
     @ParameterizedTest(name = "\"{0}\" es válido")
-    @ValueSource(strings = {"3001234567", "1234567", "+573001234567", "+57 300 123 4567", "(604) 123-4567",
-            "300-123-4567", "+1 (555) 555-0707"})
-    @DisplayName("Acepta teléfonos con al menos 7 dígitos y los separadores permitidos")
+    @ValueSource(strings = {"3001234567", "6041234567", "0000000000"})
+    @DisplayName("Acepta teléfonos de exactamente 10 dígitos")
     void aceptaTelefonosValidos(String telefono) {
         assertTrue(erroresDeTelefono(telefono).isEmpty(), "Se rechazó " + telefono + ": " + erroresDeTelefono(telefono));
     }
 
     @ParameterizedTest(name = "\"{0}\" se rechaza")
-    @ValueSource(strings = {"123456", "(300) 12", "300-ABC-4567", "300.123.4567", "300 123 4567 ext 2", "57+3001234567",
-            "++573001234567", "+", "----------"})
-    @DisplayName("Rechaza teléfonos con menos de 7 dígitos, letras, otros signos o un + fuera del inicio")
+    @ValueSource(strings = {"300123456", "30012345678", "1234567", "+573001234567", "300 123 4567", "300-123-4567",
+            "(604)1234567", "300.123.4567", "300ABC4567", "+3001234567", " 3001234567", "3001234567 "})
+    @DisplayName("Rechaza teléfonos con otra longitud, letras, espacios o símbolos")
     void rechazaTelefonosInvalidos(String telefono) {
         assertEquals(List.of(ReglaTelefono.MENSAJE), erroresDeTelefono(telefono));
     }
 
     @Test
-    @DisplayName("Vacío: solo el mensaje de obligatorio; más de 20 caracteres: solo el de la longitud")
-    void cadaErrorTieneUnSoloMensaje() {
+    @DisplayName("El mensaje es el mismo del frontend")
+    void mensaje() {
+        assertEquals("El teléfono debe tener 10 dígitos, solo números", ReglaTelefono.MENSAJE);
+    }
+
+    @Test
+    @DisplayName("Vacío o solo espacios: únicamente el mensaje de obligatorio")
+    void vacioSoloTieneElMensajeDeObligatorio() {
         assertEquals(List.of("El teléfono es obligatorio"), erroresDeTelefono(""));
         assertEquals(List.of("El teléfono es obligatorio"), erroresDeTelefono("   "));
-        assertEquals(List.of(ReglaTelefono.MENSAJE_MAXIMO), erroresDeTelefono("+57 (300) 123-4567 890"));
     }
 
     @Test
     @DisplayName("La misma regla rige en la creación de usuarios, el perfil y el titular de la reserva")
     void laMismaReglaEnTodosLosMensajes() {
-        String malo = "300-ABC-4567";
+        String malo = "300-123-4567";
         assertEquals(Set.of(ReglaTelefono.MENSAJE), mensajes(validador.validate(new CrearUsuarioRequest("Ana Torres",
                 "ana@correo.co", "Segura2026", malo, "1095000001", LocalDate.of(1990, 5, 20), "HUESPED"))));
         assertEquals(Set.of(ReglaTelefono.MENSAJE),
@@ -75,7 +79,7 @@ class ReglaTelefonoTest {
         assertEquals(Set.of(ReglaTelefono.MENSAJE),
                 mensajes(validador.validate(new TitularRequest("Ana Torres", "CC", "1095000001", "ana@correo.co", malo))));
         assertTrue(validador.validate(new TitularRequest("Ana Torres", "CC", "1095000001", "ana@correo.co",
-                "+57 300 123 4567")).isEmpty());
+                "3001234567")).isEmpty());
     }
 
     /** Mensajes de error del teléfono en un registro con los demás datos válidos */

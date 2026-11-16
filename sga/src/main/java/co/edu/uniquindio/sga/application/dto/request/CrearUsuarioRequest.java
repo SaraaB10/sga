@@ -31,12 +31,11 @@ public record CrearUsuarioRequest(
         String contrasena,
 
         @NotBlank(message = "El teléfono es obligatorio")
-        @Size(max = ReglaTelefono.MAXIMO, message = ReglaTelefono.MENSAJE_MAXIMO)
         @Pattern(regexp = ReglaTelefono.PATRON, message = ReglaTelefono.MENSAJE)
         String telefono,
 
         @NotBlank(message = "El documento es obligatorio")
-        @Size(max = 15, message = "El documento admite máximo 15 caracteres")
+        @Pattern(regexp = ReglaDocumento.PATRON, message = ReglaDocumento.MENSAJE)
         String documento,
 
         @NotNull(message = "La fecha de nacimiento es obligatoria")

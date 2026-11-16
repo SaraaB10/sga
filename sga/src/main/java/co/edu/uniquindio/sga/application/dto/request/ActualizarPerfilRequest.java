@@ -14,7 +14,6 @@ public record ActualizarPerfilRequest(
         String nombre,
 
         @NotBlank(message = "El teléfono es obligatorio")
-        @Size(max = ReglaTelefono.MAXIMO, message = ReglaTelefono.MENSAJE_MAXIMO)
         @Pattern(regexp = ReglaTelefono.PATRON, message = ReglaTelefono.MENSAJE)
         String telefono,
 

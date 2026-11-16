@@ -5048,3 +5048,151 @@ Content-Type: application/json
         client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 1; }), "Debía cobrar 1 persona por noche");
     });
 %}
+
+### Sección 18: FORMATO DE LOS DATOS DE LAS PERSONAS Y REGLAS DE LA CUENTA
+
+# ====================================================================================================
+# 18. Teléfono (10 dígitos, solo números) y documento (de 6 a 10 dígitos, solo números) en el registro, la creación
+#     de usuarios, el perfil, el titular y los ocupantes de la reserva y el canal externo.
+# ====================================================================================================
+
+### 18.1 400 Registro con el teléfono con espacios y el documento con letras
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "316 000 0030",
+  "documento": "PA100030",
+  "fechaNacimiento": "1990-05-20"
+}
+
+> {%
+    client.test("18.1 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/auth/registro", "path: " + e.path);
+        client.assert(e.timestamp != null, "timestamp: " + e.timestamp);
+        client.assert(e.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + e.errores.telefono);
+        client.assert(e.errores.documento === "El documento debe tener entre 6 y 10 dígitos, solo números", "documento: " + e.errores.documento);
+    });
+%}
+
+### 18.2 400 Registro con el teléfono de 9 dígitos y el documento de 5
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "316000003",
+  "documento": "10003",
+  "fechaNacimiento": "1990-05-20"
+}
+
+> {%
+    client.test("18.2 400 longitudes", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + response.body.errores.telefono);
+        client.assert(response.body.errores.documento === "El documento debe tener entre 6 y 10 dígitos, solo números", "documento: " + response.body.errores.documento);
+    });
+%}
+
+### 18.3 400 El administrador crea un usuario con el teléfono con + y el documento de 11 dígitos
+POST {{host}}/api/usuarios
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "+573160000030",
+  "documento": "10000000300",
+  "fechaNacimiento": "1990-05-20",
+  "rol": "RECEPCIONISTA"
+}
+
+> {%
+    client.test("18.3 400 teléfono y documento", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.path === "/api/usuarios", "path: " + response.body.path);
+        client.assert(response.body.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + response.body.errores.telefono);
+        client.assert(response.body.errores.documento === "El documento debe tener entre 6 y 10 dígitos, solo números", "documento: " + response.body.errores.documento);
+    });
+%}
+
+### 18.4 Registro con el teléfono de 10 dígitos y el documento de 6: 201
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "3160000030",
+  "documento": "100030",
+  "fechaNacimiento": "1990-05-20"
+}
+
+> {%
+    client.test("18.4 201 cuenta creada", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.correo === "paula.formato@correo.co", "correo: " + response.body.correo);
+        client.assert(response.body.rol === "HUESPED", "rol: " + response.body.rol);
+    });
+%}
+
+### 18.5 400 Perfil con el teléfono con guiones
+PUT {{host}}/api/usuarios/me
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Administrador Coral", "telefono": "300-100-0001" }
+
+> {%
+    client.test("18.5 400 teléfono del perfil", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + response.body.errores.telefono);
+    });
+%}
+
+### 18.6 400 Reserva con el teléfono del titular de 7 dígitos y el documento de un ocupante con puntos
+POST {{host}}/api/reservas
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "canalOrigen": "DIRECTO",
+  "titular": { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "email": "ana.gomez@correo.co", "telefono": "3005550" },
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Luis Gómez", "tipoDocumento": "CC", "numeroDocumento": "1.094.200", "fechaNacimiento": "1989-01-10" }
+  ]
+}
+
+> {%
+    client.test("18.6 400 titular y ocupante", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores["titular.telefono"] === "El teléfono debe tener 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
+        client.assert(response.body.errores["ocupantes[1].numeroDocumento"] === "El documento debe tener entre 6 y 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### 18.7 400 Filtro del listado de reservas con un documento con letras
+GET {{host}}/api/reservas?titular=CC1094
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("18.7 400 documento del filtro", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.titular === "El documento debe tener entre 6 y 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}

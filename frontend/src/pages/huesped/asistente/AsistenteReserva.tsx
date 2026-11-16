@@ -8,17 +8,20 @@ import { useApartamento, usePoliticaVigente } from '@/api/publico'
 import { useCrearReserva, type CanalOrigen, type ReservaDetalleResponse } from '@/api/reservas'
 import type { OcupanteRequest } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
-import { AvisoError, Campo, Fecha } from '@/components/coral'
+import { AvisoError, Campo, Fecha, InputDigitos } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import {
   correo,
+  DIGITOS_TELEFONO,
+  documento,
   erroresDelServidor,
   fecha,
   fechaNoFutura,
   finDespuesDeInicio,
+  MAXIMO_DIGITOS_DOCUMENTO,
   telefono,
   textoObligatorio,
   validar,
@@ -129,9 +132,9 @@ const esquemaEstancia = z
 const esquemaTitular = z.object({
   nombre: textoObligatorio('Escribe el nombre del titular.'),
   tipoDocumento: z.string().min(1, 'Elige el tipo de documento.'),
-  numeroDocumento: textoObligatorio('Escribe el número de documento.', 15, 'El documento admite máximo 15 caracteres'),
+  numeroDocumento: documento('Escribe el número de documento.'),
   email: correo(),
-  telefono: telefono(),
+  telefono: telefono('Escribe el teléfono.'),
   fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
 })
 
@@ -632,8 +635,8 @@ export function AsistenteReserva({ modo }: Props) {
                       </select>
                     </Campo>
                     <Campo id="tit-documento" etiqueta="Número de documento" error={errores.titularDocumento}>
-                      <Input
-                        inputMode="numeric"
+                      <InputDigitos
+                        maximo={MAXIMO_DIGITOS_DOCUMENTO}
                         value={titular.numeroDocumento}
                         onChange={(e) => setTitular({ ...titular, numeroDocumento: e.target.value })}
                       />
@@ -646,8 +649,8 @@ export function AsistenteReserva({ modo }: Props) {
                       />
                     </Campo>
                     <Campo id="tit-telefono" etiqueta="Teléfono" error={errores.titularTelefono}>
-                      <Input
-                        type="tel"
+                      <InputDigitos
+                        maximo={DIGITOS_TELEFONO}
                         value={titular.telefono}
                         onChange={(e) => setTitular({ ...titular, telefono: e.target.value })}
                       />

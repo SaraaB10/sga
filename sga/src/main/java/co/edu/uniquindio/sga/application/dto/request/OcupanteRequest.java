@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.application.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 
 import java.time.LocalDate;
 
@@ -14,6 +15,7 @@ public record OcupanteRequest(
         String nombre,
 
         String tipoDocumento,      // opcional, junto con numeroDocumento
+        @Pattern(regexp = ReglaDocumento.PATRON, message = ReglaDocumento.MENSAJE)
         String numeroDocumento,    // opcional
 
         @NotNull(message = "La fecha de nacimiento del ocupante es obligatoria")

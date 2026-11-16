@@ -2,7 +2,6 @@ package co.edu.uniquindio.sga.application.dto.request;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 /**
  * Titular de la reserva (3.2). Todos sus datos son obligatorios. El documento viaja como dos textos
@@ -16,6 +15,7 @@ public record TitularRequest(
     String tipoDocumento,
 
     @NotBlank(message = "El número de documento del titular es obligatorio")
+    @Pattern(regexp = ReglaDocumento.PATRON, message = ReglaDocumento.MENSAJE)
     String numeroDocumento,
 
     @NotBlank(message = "El email del titular es obligatorio")
@@ -23,7 +23,6 @@ public record TitularRequest(
     String email,
 
     @NotBlank(message = "El teléfono del titular es obligatorio")
-    @Size(max = ReglaTelefono.MAXIMO, message = ReglaTelefono.MENSAJE_MAXIMO)
     @Pattern(regexp = ReglaTelefono.PATRON, message = ReglaTelefono.MENSAJE)
     String telefono
 ) {

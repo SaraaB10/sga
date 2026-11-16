@@ -71,13 +71,13 @@ Content-Type: application/json
   "titular": {
     "nombre": "Sophie Martin",
     "tipoDocumento": "PA",
-    "numeroDocumento": "PA8880001",
+    "numeroDocumento": "88800001",
     "email": "sophie.martin@mail.com",
-    "telefono": "+33612345678"
+    "telefono": "3176123456"
   },
   "ocupantes": [
-    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880001", "fechaNacimiento": "1987-04-09" },
-    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880002", "fechaNacimiento": "1985-10-21" }
+    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "88800001", "fechaNacimiento": "1987-04-09" },
+    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "88800002", "fechaNacimiento": "1985-10-21" }
   ]
 }
 
@@ -106,13 +106,13 @@ Content-Type: application/json
   "titular": {
     "nombre": "Sophie Martin",
     "tipoDocumento": "PA",
-    "numeroDocumento": "PA8880001",
+    "numeroDocumento": "88800001",
     "email": "sophie.martin@mail.com",
-    "telefono": "+33612345678"
+    "telefono": "3176123456"
   },
   "ocupantes": [
-    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880001", "fechaNacimiento": "1987-04-09" },
-    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880002", "fechaNacimiento": "1985-10-21" }
+    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "88800001", "fechaNacimiento": "1987-04-09" },
+    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "88800002", "fechaNacimiento": "1985-10-21" }
   ]
 }
 
@@ -139,12 +139,12 @@ Content-Type: application/json
   "titular": {
     "nombre": "Hans Weber",
     "tipoDocumento": "PA",
-    "numeroDocumento": "PA9990001",
+    "numeroDocumento": "99900001",
     "email": "hans.weber@mail.com",
-    "telefono": "+4915123456789"
+    "telefono": "3184915123"
   },
   "ocupantes": [
-    { "nombre": "Hans Weber", "tipoDocumento": "PA", "numeroDocumento": "PA9990001", "fechaNacimiento": "1979-12-02" }
+    { "nombre": "Hans Weber", "tipoDocumento": "PA", "numeroDocumento": "99900001", "fechaNacimiento": "1979-12-02" }
   ]
 }
 
