@@ -4540,3 +4540,285 @@ Content-Type: application/json
         client.assert(response.body.token != null && response.body.roles.join() === "HUESPED", "Login inesperado");
     });
 %}
+
+### Sección 17: ORDEN DE LAS VALIDACIONES, CALENDARIO DE DISPONIBILIDAD, FILTRO POR SERVICIOS Y SERVICIOS ADICIONALES
+
+# ====================================================================================================
+# 17. Orden de las seis condiciones de una reserva, calendario público de disponibilidad, filtro por servicios
+#     y gestión de los servicios adicionales del alojamiento (administrador)
+# ====================================================================================================
+
+### 17.0 Fechas de la sección
+GET {{host}}/api/apartamentos
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("17.0 la app responde", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+    });
+    var DIA = 86400000;
+    var hoy = new Date(Date.now() - 5 * 3600000);
+    function fecha(dias) {
+        return new Date(hoy.getTime() + dias * DIA).toISOString().substring(0, 10);
+    }
+    client.global.set("s17Ayer", fecha(-1));
+    client.global.set("s17Hoy", fecha(0));
+    client.global.set("s17HoyMas1", fecha(1));
+    client.global.set("s17HoyMas11", fecha(11));
+    client.global.set("s17HoyMas12", fecha(12));
+    client.global.set("s17HoyMas14", fecha(14));
+    client.global.set("s17HoyMas16", fecha(16));
+    client.global.set("s17HoyMas63", fecha(63));
+    client.global.set("s17HoyMas200", fecha(200));
+    client.global.set("s17HoyMas203", fecha(203));
+%}
+
+### 17.1 Orden 2 antes que 4: entrada en el pasado y 3 ocupantes en APT-101 (capacidad 2) falla por RN-04
+POST {{host}}/api/reservas
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-101",
+  "fechaEntrada": "{{s17Ayer}}",
+  "fechaSalida": "{{s17HoyMas1}}",
+  "horaEstimadaLlegada": "16:00",
+  "canalOrigen": "DIRECTO",
+  "titular": { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "email": "ana.gomez@correo.co", "telefono": "3005550101" },
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Pedro Gómez", "fechaNacimiento": "1987-09-30" },
+    { "nombre": "Luis Gómez", "fechaNacimiento": "1985-01-15" }
+  ]
+}
+
+> {%
+    client.test("17.1 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje.indexOf("RN-04") === 0, "Se esperaba RN-04 y llegó: " + e.mensaje);
+        client.assert(e.path === "/api/reservas", "path: " + e.path);
+        client.assert(e.timestamp != null, "Falta timestamp");
+        client.assert(e.errores === null, "errores debía ser null");
+    });
+%}
+
+### 17.2 Orden 4 antes que 5: 3 ocupantes en APT-102 (capacidad 2) sobre la reserva CONFIRMADA falla por RN-02
+POST {{host}}/api/reservas
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-102",
+  "fechaEntrada": "{{s17HoyMas12}}",
+  "fechaSalida": "{{s17HoyMas14}}",
+  "horaEstimadaLlegada": "16:00",
+  "canalOrigen": "DIRECTO",
+  "titular": { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "email": "ana.gomez@correo.co", "telefono": "3005550101" },
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Pedro Gómez", "fechaNacimiento": "1987-09-30" },
+    { "nombre": "Luis Gómez", "fechaNacimiento": "1985-01-15" }
+  ]
+}
+
+> {%
+    client.test("17.2 409 RN-02 antes que RN-01", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje.indexOf("RN-02") === 0, "Se esperaba RN-02 y llegó: " + response.body.mensaje);
+    });
+%}
+
+### 17.3 Calendario público (sin token) de APT-102: la reserva CONFIRMADA ocupa de hoy+12 a hoy+14
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}
+
+> {%
+    client.test("17.3 200 libre o no por noche, sin datos de la reserva", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var libres = response.body.noches.map(function (n) { return n.libre; }).join();
+        client.assert(response.body.apartamento === "APT-102", "apartamento: " + response.body.apartamento);
+        client.assert(libres === "true,false,false,false,true", "noches: " + libres);
+        client.assert(JSON.stringify(response.body).indexOf("RES-") < 0, "No debía traer códigos de reserva");
+    });
+%}
+
+### 17.4 Calendario: las noches anteriores a hoy no están libres
+GET {{host}}/api/apartamentos/APT-301/disponibilidad?desde={{s17Ayer}}&hasta={{s17HoyMas1}}
+
+> {%
+    client.test("17.4 200 la noche de ayer no está libre", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.noches.length === 2, "Se esperaban 2 noches");
+        client.assert(response.body.noches[0].libre === false, "La noche de ayer no debía estar libre");
+    });
+%}
+
+### 17.5 409 El calendario abarca máximo 62 noches (de hoy a hoy+63 son 63)
+GET {{host}}/api/apartamentos/APT-101/disponibilidad?desde={{s17Hoy}}&hasta={{s17HoyMas63}}
+
+> {%
+    client.test("17.5 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La disponibilidad abarca máximo 62 noches y se pidieron 63", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/apartamentos/APT-101/disponibilidad", "path: " + e.path);
+        client.assert(e.timestamp != null, "Falta timestamp");
+    });
+%}
+
+### 17.6 404 Calendario de un apartamento inexistente
+GET {{host}}/api/apartamentos/APT-999/disponibilidad?desde={{s17Hoy}}&hasta={{s17HoyMas11}}
+
+> {%
+    client.test("17.6 404 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 404 && e.error === "Not Found", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "No se encontró el apartamento con identificación: APT-999", "mensaje: " + e.mensaje);
+    });
+%}
+
+### 17.7 Filtro por servicios (sin token): hidromasaje y vista al mar a la vez solo los tiene APT-101
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=hidromasaje&servicios=mar
+
+> {%
+    client.test("17.7 200 los dos servicios se aplican juntos", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var ids = response.body.contenido.map(function (a) { return a.identificacion; });
+        client.assert(ids.indexOf("APT-101") >= 0, "Debía venir APT-101: " + ids);
+        client.assert(ids.indexOf("APT-201") < 0, "APT-201 tiene hidromasaje pero no vista al mar: " + ids);
+        client.assert(ids.indexOf("APT-102") < 0, "APT-102 no tiene hidromasaje: " + ids);
+    });
+%}
+
+### 17.8 Filtro por servicios separados por coma y sin tildes: cocina, terraza y bahía solo los tiene APT-102
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=cocina,terraza,bahia
+
+> {%
+    client.test("17.8 200 solo APT-102", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var ids = response.body.contenido.map(function (a) { return a.identificacion; });
+        client.assert(ids.join() === "APT-102", "Se esperaba solo APT-102: " + ids);
+    });
+%}
+
+### 17.9 El administrador crea un servicio adicional: 201 + Location, id en mayúsculas
+POST {{host}}/api/alojamiento/servicios
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "id": "srv-spa", "nombre": "Spa en la habitación", "descripcion": "Masaje de 60 minutos", "generaCargo": true, "valor": 180000 }
+
+> {%
+    client.test("17.9 201 servicio creado", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.id === "SRV-SPA" && response.body.activo === true, "Servicio inesperado");
+        client.assert(response.body.motivoObligatorio === null, "No debía ser obligatorio");
+        var location = response.headers.valueOf("Location");
+        client.assert(location.indexOf("/api/alojamiento/servicios/SRV-SPA") > 0, "Location: " + location);
+        client.global.set("s17ServicioLocation", location);
+    });
+%}
+
+### 17.10 Consultar el servicio en la URL del Location
+GET {{s17ServicioLocation}}
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("17.10 200 el mismo servicio", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.valor === 180000, "valor: " + response.body.valor);
+    });
+%}
+
+### 17.11 Editar el servicio: cambia el nombre y el valor
+PUT {{host}}/api/alojamiento/servicios/SRV-SPA
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Spa en el balcón", "descripcion": "Masaje de 60 minutos frente al mar", "generaCargo": true, "valor": 200000 }
+
+> {%
+    client.test("17.11 200 servicio editado", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.nombre === "Spa en el balcón" && response.body.valor === 200000, "Edición inesperada");
+    });
+%}
+
+### 17.12 Desactivar el servicio (eliminación lógica)
+PUT {{host}}/api/alojamiento/servicios/SRV-SPA/desactivar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("17.12 200 servicio inactivo", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.activo === false, "Debía quedar inactivo");
+    });
+%}
+
+### 17.13 La recepción nocturna explica por qué es obligatoria (GET público del alojamiento)
+GET {{host}}/api/alojamiento
+
+> {%
+    client.test("17.13 200 motivo de la recepción nocturna", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var nocturna = response.body.serviciosAdicionales.filter(function (s) { return s.id === "SRV-RECEPCION-NOCTURNA"; })[0];
+        client.assert(nocturna.motivoObligatorio.indexOf("RP-03") >= 0, "motivo: " + nocturna.motivoObligatorio);
+        var spa = response.body.serviciosAdicionales.filter(function (s) { return s.id === "SRV-SPA"; })[0];
+        client.assert(spa.activo === false, "SRV-SPA debía estar inactivo");
+    });
+%}
+
+### 17.14 409 RP-03 La recepción nocturna no se desactiva
+PUT {{host}}/api/alojamiento/servicios/SRV-RECEPCION-NOCTURNA/desactivar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("17.14 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "RP-03: El servicio Recepción nocturna no se puede desactivar: cobra el recargo de las llegadas nocturnas", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/alojamiento/servicios/SRV-RECEPCION-NOCTURNA/desactivar", "path: " + e.path);
+        client.assert(e.timestamp != null, "Falta timestamp");
+    });
+%}
+
+### 17.15 409 RP-03 La recepción nocturna no se deja sin cargo
+PUT {{host}}/api/alojamiento/servicios/SRV-RECEPCION-NOCTURNA
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Recepción nocturna", "generaCargo": false }
+
+> {%
+    client.test("17.15 409 RP-03", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje.indexOf("RP-03") === 0, "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### 17.16 404 Servicio inexistente
+PUT {{host}}/api/alojamiento/servicios/SRV-NO-EXISTE/desactivar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("17.16 404 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 404 && e.error === "Not Found", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "No se encontró el servicio adicional con id: SRV-NO-EXISTE", "mensaje: " + e.mensaje);
+    });
+%}
+
+### 17.17 403 La recepción no gestiona los servicios adicionales
+POST {{host}}/api/alojamiento/servicios
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "id": "SRV-OTRO", "nombre": "Otro", "generaCargo": false }
+
+> {%
+    client.test("17.17 403 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 403 && e.error === "Forbidden", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "No tiene permiso para realizar esta operación", "mensaje: " + e.mensaje);
+    });
+%}

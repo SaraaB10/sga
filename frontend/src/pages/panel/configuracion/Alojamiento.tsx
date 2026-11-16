@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { erroresDe } from '@/pages/panel/folio/erroresDe'
 import { formatearHora } from '@/pages/publico/comun/reglas'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
+import { ServiciosAdicionales } from './ServiciosAdicionales'
 
 interface Formulario {
   nombre: string
@@ -45,7 +46,7 @@ export default function Alojamiento() {
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <header>
         <h1 className="font-titulo text-3xl font-semibold">Alojamiento</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Datos, horario y normas que ven los huéspedes.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Datos, horario, normas y servicios que ven los huéspedes.</p>
       </header>
       {alojamiento.error ? (
         <AvisoError titulo="No se pudo consultar el alojamiento" error={alojamiento.error} />
@@ -57,7 +58,7 @@ export default function Alojamiento() {
       ) : (
         <>
           <FormularioAlojamiento alojamiento={alojamiento.data} />
-          <ServiciosAdicionales alojamiento={alojamiento.data} />
+          <ServiciosAdicionales servicios={alojamiento.data.serviciosAdicionales} />
           <Parametros parametros={alojamiento.data.parametros} />
         </>
       )}
@@ -186,38 +187,6 @@ function NotaSoloLectura({ children }: { children: ReactNode }) {
       <Lock aria-hidden="true" className="size-3.5 shrink-0" />
       {children}
     </p>
-  )
-}
-
-function ServiciosAdicionales({ alojamiento }: { alojamiento: AlojamientoResponse }) {
-  const servicios = alojamiento.serviciosAdicionales
-  return (
-    <div className="flex flex-col gap-3 rounded-tarjeta border border-border bg-card p-5 shadow-tarjeta md:p-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-titulo text-xl font-semibold">Servicios adicionales</h2>
-        <NotaSoloLectura>Se cambian en la configuración del servidor.</NotaSoloLectura>
-      </div>
-      {servicios.length === 0 ? (
-        <p className="text-sm text-muted-foreground">El alojamiento no tiene servicios adicionales.</p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-border">
-          {servicios.map((s) => (
-            <li key={s.id} className="flex items-start justify-between gap-3 py-3 text-sm">
-              <div className="min-w-0">
-                <p className="font-medium">
-                  {s.nombre}
-                  {!s.activo && <span className="ml-2 text-xs font-normal text-muted-foreground">(inactivo)</span>}
-                </p>
-                {s.descripcion && <p className="text-muted-foreground">{s.descripcion}</p>}
-              </div>
-              <span className="shrink-0 text-right">
-                {s.generaCargo ? <Dinero valor={s.valor} className="font-semibold" /> : <span className="text-muted-foreground">Sin cargo</span>}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   )
 }
 

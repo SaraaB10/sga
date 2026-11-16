@@ -30,7 +30,8 @@ public record AlojamientoResponse(
             String descripcion,
             boolean generaCargo,
             long valor,
-            boolean activo
+            boolean activo,
+            String motivoObligatorio            // por qué no se puede desactivar ni dejar sin cargo; null si se puede
     ) {
     }
 
