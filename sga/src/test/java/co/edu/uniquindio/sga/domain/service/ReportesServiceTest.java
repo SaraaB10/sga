@@ -188,6 +188,19 @@ class ReportesServiceTest {
     }
 
     @Test
+    @DisplayName("RP-02: la devolución del depósito resta del ingreso de su medio y no cuenta como un pago más")
+    void ingresosRestanLaDevolucionDelDeposito() {
+        folio(List.of(new Pago(Dinero.de(900_000), MedioPago.TARJETA_DEBITO_CREDITO, dia(3)),
+                Pago.devolucionDe(Dinero.de(250_000), MedioPago.TARJETA_DEBITO_CREDITO, dia(5))));
+
+        ReporteIngresos reporte = reportes.ingresos(DESDE, HASTA, ACEPTADOS);
+
+        assertEquals(Dinero.de(650_000), reporte.total());
+        assertEquals(1, reporte.cantidadPagos());
+        assertEquals(Dinero.de(650_000), medio(reporte, MedioPago.TARJETA_DEBITO_CREDITO).total());
+    }
+
+    @Test
     @DisplayName("7.9: un medio con pagos que ya no está en el catálogo también aparece, después de los aceptados")
     void ingresosConMedioFueraDelCatalogo() {
         MedioPago efectivo = new MedioPago("EFECTIVO");

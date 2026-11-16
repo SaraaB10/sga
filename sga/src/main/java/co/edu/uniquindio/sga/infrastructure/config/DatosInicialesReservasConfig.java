@@ -144,7 +144,8 @@ public class DatosInicialesReservasConfig {
 
             // ---------- Estancias pasadas: parten de una reserva CONFIRMADA reconstruida ----------
 
-            // FINALIZADA: llegó, pagó todo el folio y salió; el folio queda cerrado (RN-17).
+            // FINALIZADA: llegó, pagó todo el folio, recibió de vuelta el depósito (RP-02) y salió; el folio queda
+            // cerrado en cero (RN-17).
             ReservaConFolio finalizada = confirmadaEnElPasado("APT-101", hoy.minusDays(10), hoy.minusDays(7),
                     titular("Carlos Restrepo", "CC", "1094111222", "carlos.restrepo@correo.co", "3105550101"),
                     CanalOrigen.DIRECTO);
@@ -154,6 +155,7 @@ public class DatosInicialesReservasConfig {
             reserva.registrarLlegada(reserva.getEstancia().fechaEntrada(), EstadoOperativo.PREPARADO);
             LocalDate salida = reserva.getEstancia().fechaSalida();
             folio.registrarPago(new Pago(folio.saldo(), MedioPago.TARJETA_DEBITO_CREDITO, salida));
+            folio.devolverDeposito(MedioPago.TARJETA_DEBITO_CREDITO, salida);
             reserva.registrarSalida(salida);
             folio.cerrar(salida);
             guardar(reserva, folio);

@@ -524,6 +524,43 @@ Content-Type: application/json
     });
 %}
 
+### 3.9b RP-02 Devolver el depósito de garantía: su inverso y la devolución del dinero dejan el saldo en cero
+POST {{host}}/api/reservas/{{codigo}}/folio/devolucion-deposito
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "medio": "TARJETA_DEBITO_CREDITO"
+}
+
+> {%
+    client.test("3.9b 201 depósito devuelto", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.depositoReembolsado === true, "El depósito debía quedar reembolsado");
+        var devolucion = response.body.pagos[response.body.pagos.length - 1];
+        client.assert(devolucion.devolucion === true && devolucion.valor === response.body.depositoGarantia, "Devolución: " + JSON.stringify(devolucion));
+        var inverso = response.body.cargos[response.body.cargos.length - 1];
+        client.assert(inverso.valor === -response.body.depositoGarantia, "Inverso del depósito: " + JSON.stringify(inverso));
+        client.assert(response.body.saldo === 0 && response.body.totalPagado === response.body.totalCargos, "Saldo: " + response.body.saldo);
+    });
+%}
+
+### 3.9c RP-02 El depósito no se devuelve dos veces
+POST {{host}}/api/reservas/{{codigo}}/folio/devolucion-deposito
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "medio": "TARJETA_DEBITO_CREDITO"
+}
+
+> {%
+    client.test("3.9c 409 depósito ya devuelto", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje.indexOf("RP-02") === 0, "mensaje: " + response.body.mensaje);
+    });
+%}
+
 ### 3.10 CU-06 Cerrar el folio (saldo exactamente cero, RN-17)
 PUT {{host}}/api/reservas/{{codigo}}/folio/cerrar
 Authorization: Bearer {{tokenAdmin}}

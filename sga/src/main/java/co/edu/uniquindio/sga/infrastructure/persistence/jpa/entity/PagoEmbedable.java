@@ -27,4 +27,7 @@ public class PagoEmbedable {
 
     @Column(nullable = false)
     private LocalDate fecha;
+
+    /** true si es una devolución al huésped (RP-02). Nulo en las filas guardadas antes de esta columna: abono */
+    private Boolean devolucion;
 }

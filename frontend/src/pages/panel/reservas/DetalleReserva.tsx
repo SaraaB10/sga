@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CircleCheck, CircleX, MoonStar, PencilLine, Receipt } from 'lucide-react'
+import { ArrowLeft, CircleCheck, CircleX, LogOut, MoonStar, PencilLine, Receipt } from 'lucide-react'
 import { z } from 'zod'
 import { usePoliticaVigente, useApartamento } from '@/api/publico'
 import {
@@ -25,6 +25,7 @@ import { useReglasAlojamiento } from '@/pages/publico/comun/consultas'
 import { formatearHora, horaDesde, tramosOrdenados } from '@/pages/publico/comun/reglas'
 import { TextoCargo } from '@/pages/publico/comun/TextoCargo'
 import { DialogoModificar } from './DialogoModificar'
+import { DialogoSalida } from './DialogoSalida'
 
 type Dialogo = 'modificar' | 'confirmar' | 'cancelar' | 'noshow' | null
 
@@ -56,6 +57,7 @@ export default function DetalleReserva() {
   const [hora, setHora] = useState('')
   const validacionHora = useValidacion(esquemaConfirmacion(!!reserva.data?.horaEstimadaLlegada), { hora })
   const [resultado, setResultado] = useState<Resultado | null>(null)
+  const [saliendo, setSaliendo] = useState(false)
 
   // Reloj por minuto: el botón de no-show se activa solo al llegar la hora límite
   const [ahora, setAhora] = useState(() => Date.now())
@@ -134,6 +136,12 @@ export default function DetalleReserva() {
               <CircleCheck aria-hidden="true" /> Confirmar
             </Button>
           )}
+          {/* Cualquier día de la estancia: antes de la fecha de salida es una salida anticipada */}
+          {r.estado === 'EN_CURSO' && (
+            <Button onClick={() => setSaliendo(true)}>
+              <LogOut aria-hidden="true" /> Registrar salida
+            </Button>
+          )}
           {activa && (
             <Button variant="outline" className="text-error" onClick={() => setDialogo('cancelar')}>
               <CircleX aria-hidden="true" /> Cancelar
@@ -190,6 +198,19 @@ export default function DetalleReserva() {
       </div>
 
       {/* ---------- Diálogos ---------- */}
+      <DialogoSalida
+        reserva={
+          saliendo
+            ? {
+                codigo: r.codigo,
+                apartamento: r.identificacionApartamento,
+                nombreTitular: r.titular.nombre,
+                fechaSalida: r.fechaSalida,
+              }
+            : null
+        }
+        alCerrar={() => setSaliendo(false)}
+      />
       <DialogoModificar
         reserva={r}
         abierto={dialogo === 'modificar'}

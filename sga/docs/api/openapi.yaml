@@ -1324,6 +1324,59 @@ paths:
         '409':
           $ref: '#/components/responses/ReglaDeNegocio'
 
+  /api/reservas/{codigo}/folio/devolucion-deposito:
+    parameters:
+      - $ref: '#/components/parameters/CodigoReserva'
+    post:
+      tags: [ Folio ]
+      summary: Devolver el depósito de garantía (RP-02)
+      description: |
+        Durante la estancia (reserva EN_CURSO), antes de la salida. Asienta el movimiento inverso del cargo del
+        depósito (RN-16) y registra como devolución al huésped el dinero que ya había pagado de él (hasta el valor
+        del depósito), con el medio indicado y la fecha de hoy; en `pagos` sale con `devolucion: true` y resta del
+        total pagado. El SGA registra la devolución; el desembolso ocurre fuera. Con todo pagado, el folio queda en
+        cero y puede cerrarse (RN-17). Una sola vez por folio. Mapea a `DevolverDepositoUseCase`.
+      operationId: devolverDeposito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevolverDepositoRequest'
+            example:
+              medio: TARJETA_DEBITO_CREDITO
+      responses:
+        '201':
+          description: Devolución registrada; Location apunta al folio
+          headers:
+            Location:
+              description: URL del folio, por ejemplo /api/reservas/RES-2026-00003/folio
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolioResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Roles: RECEPCIONISTA o ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: |
+            La reserva no está EN_CURSO, el folio está cerrado, el depósito ya se devolvió (RP-02) o el medio no
+            está aceptado (L-18)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/reservas/{codigo}/folio/autorizacion-cierre:
     parameters:
       - $ref: '#/components/parameters/CodigoReserva'
@@ -3772,6 +3825,12 @@ components:
         valor: { type: integer, format: int64, minimum: 1, description: Pesos enteros }
         medio: { $ref: '#/components/schemas/MedioPago' }
 
+    DevolverDepositoRequest:
+      type: object
+      required: [ medio ]
+      properties:
+        medio: { $ref: '#/components/schemas/MedioPago' }
+
     AutorizarCierreFolioRequest:
       type: object
       required: [ autorizadoPor, motivo ]
@@ -3805,9 +3864,12 @@ components:
     PagoResponse:
       type: object
       properties:
-        valor: { type: integer, format: int64 }
+        valor: { type: integer, format: int64, description: Siempre positivo }
         medio: { $ref: '#/components/schemas/MedioPago' }
         fecha: { type: string, format: date }
+        devolucion:
+          type: boolean
+          description: true si es dinero devuelto al huésped (el depósito, RP-02); resta del total pagado
 
     FolioResponse:
       type: object
@@ -3815,6 +3877,7 @@ components:
         codigoReserva: { type: string, example: RES-2026-00001 }
         fechaApertura: { type: string, format: date }
         depositoGarantia: { type: integer, format: int64, example: 250000 }
+        depositoReembolsado: { type: boolean, description: true cuando ya se devolvió el depósito (RP-02) }
         cargos:
           type: array
           items: { $ref: '#/components/schemas/CargoResponse' }
@@ -3822,7 +3885,7 @@ components:
           type: array
           items: { $ref: '#/components/schemas/PagoResponse' }
         totalCargos: { type: integer, format: int64 }
-        totalPagado: { type: integer, format: int64 }
+        totalPagado: { type: integer, format: int64, description: Abonos menos devoluciones al huésped }
         saldo: { type: integer, format: int64, description: Cargos menos pagos; negativo si hay saldo a favor }
         cerrado: { type: boolean }
         fechaCierre: { type: string, format: date, nullable: true }

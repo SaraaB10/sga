@@ -6,6 +6,7 @@ import co.edu.uniquindio.sga.domain.valueobject.Cargo;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
 import co.edu.uniquindio.sga.domain.valueobject.Pago;
 import co.edu.uniquindio.sga.domain.valueobject.TipoCargo;
 
@@ -102,7 +103,38 @@ public class Folio {
         if (pago.valor() == null || pago.valor().esCero() || pago.valor().esNegativo()) {
             throw new ReglaDominioException("El valor del pago debe ser mayor que cero");
         }
+        if (pago.devolucion()) {
+            throw new ReglaDominioException("RN-15: una devolución no es un pago; la del depósito se registra con "
+                    + "devolverDeposito");
+        }
         pagos.add(pago);
+    }
+
+    /**
+     * RP-02: devolución del depósito de garantía al salir. Asienta el movimiento inverso del cargo del depósito
+     * (RN-16) y, si con eso el huésped queda con saldo a favor, registra la devolución de ese dinero (hasta el valor
+     * del depósito) como movimiento del folio, con su medio y su fecha; el sistema no la ejecuta (3.4). Si el
+     * huésped aún no había pagado el depósito, solo se anula el cargo: no hay dinero que devolver.
+     * El depósito queda marcado como reembolsado y no se puede devolver dos veces.
+     *
+     * @return el dinero registrado como devuelto al huésped (cero si no había pagado el depósito)
+     */
+    public Dinero devolverDeposito(MedioPago medio, LocalDate fecha) {
+        validarAbierto();
+        requerido(medio, "RN-15: la devolución debe indicar su medio");
+        requerido(fecha, "La fecha de la devolución es obligatoria");
+        if (depositoGarantia == null) {
+            throw new ReglaDominioException("RP-02: el folio " + id + " no tiene depósito de garantía");
+        }
+        cargos.add(depositoGarantia.generarDevolucion(fecha));     // rechaza si ya fue reembolsado
+        depositoGarantia = depositoGarantia.marcarReembolsado();
+        Dinero aFavor = saldo().negar();
+        Dinero devuelto = !aFavor.esPositivo() ? Dinero.cero()
+                : depositoGarantia.monto().esMayorOIgualQue(aFavor) ? aFavor : depositoGarantia.monto();
+        if (devuelto.esPositivo()) {
+            pagos.add(Pago.devolucionDe(devuelto, medio, fecha));
+        }
+        return devuelto;
     }
 
     /**
@@ -173,8 +205,9 @@ public class Folio {
         return cargos.stream().map(Cargo::valor).reduce(Dinero.cero(), Dinero::sumar);
     }
 
+    /** Abonos menos devoluciones al huésped. */
     public Dinero totalPagado() {
-        return pagos.stream().map(Pago::valor).reduce(Dinero.cero(), Dinero::sumar);
+        return pagos.stream().map(Pago::valorNeto).reduce(Dinero.cero(), Dinero::sumar);
     }
 
     /** RN-15: positivo = debe el huésped, cero, negativo = saldo a favor. */

@@ -151,4 +151,51 @@ class FolioTest {
                 () -> DepositoGarantia.de("Depósito de garantía", Dinero.cero()));
         assertTrue(enCero.getMessage().startsWith("RP-02"));
     }
+
+    @Test
+    @DisplayName("RP-02: con todo pagado, devolver el depósito asienta su inverso y la devolución, y el folio cierra en cero")
+    void devolverDepositoPagado() {
+        folio.registrarPago(new Pago(Dinero.de(870_000), MedioPago.TRANSFERENCIA_BANCARIA, HOY));
+
+        Dinero devuelto = folio.devolverDeposito(MedioPago.TRANSFERENCIA_BANCARIA, HOY.plusDays(2));
+
+        assertEquals(Dinero.de(250_000), devuelto);
+        Cargo inverso = folio.getCargos().get(2);
+        assertEquals(Dinero.de(-250_000), inverso.valor());
+        assertEquals("Devolución de Depósito de garantía", inverso.concepto());
+        Pago devolucion = folio.getPagos().get(1);
+        assertTrue(devolucion.devolucion());
+        assertEquals(Dinero.de(250_000), devolucion.valor());
+        assertEquals(Dinero.de(620_000), folio.totalPagado());               // abonos menos devoluciones
+        assertTrue(folio.saldo().esCero());
+        assertTrue(folio.getDepositoGarantia().reembolsado());
+        folio.cerrar(HOY.plusDays(2));
+        assertTrue(folio.isCerrado());
+    }
+
+    @Test
+    @DisplayName("RP-02: si el huésped no pagó el depósito, solo se anula el cargo; no se devuelve dos veces")
+    void devolverDepositoSinPagarlo() {
+        folio.registrarPago(new Pago(Dinero.de(620_000), MedioPago.TRANSFERENCIA_BANCARIA, HOY));       // solo el alojamiento
+
+        assertEquals(Dinero.cero(), folio.devolverDeposito(MedioPago.TRANSFERENCIA_BANCARIA, HOY));
+        assertEquals(1, folio.getPagos().size());                               // sin dinero que devolver
+        assertTrue(folio.saldo().esCero());
+
+        ReglaDominioException otraVez = assertThrows(ReglaDominioException.class,
+                () -> folio.devolverDeposito(MedioPago.TRANSFERENCIA_BANCARIA, HOY));
+        assertTrue(otraVez.getMessage().startsWith("RP-02"));
+        // Una devolución no entra como pago
+        assertThrows(ReglaDominioException.class, () -> folio.registrarPago(
+                Pago.devolucionDe(Dinero.de(1_000), MedioPago.TARJETA_DEBITO_CREDITO, HOY)));
+    }
+
+    @Test
+    @DisplayName("RP-02: con el depósito pagado a medias se devuelve solo lo pagado de él")
+    void devolverDepositoPagadoEnParte() {
+        folio.registrarPago(new Pago(Dinero.de(720_000), MedioPago.TRANSFERENCIA_BANCARIA, HOY));       // 100.000 del depósito
+
+        assertEquals(Dinero.de(100_000), folio.devolverDeposito(MedioPago.TARJETA_DEBITO_CREDITO, HOY));
+        assertTrue(folio.saldo().esCero());
+    }
 }

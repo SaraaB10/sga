@@ -22,6 +22,8 @@ interface Props {
   peligroso?: boolean
   /** Mientras se ejecuta la acción */
   cargando?: boolean
+  /** La acción todavía no se puede hacer (el contenido explica por qué) */
+  deshabilitado?: boolean
   alConfirmar: () => void
   /** Contenido extra, por ejemplo un AvisoError con el 409 */
   children?: ReactNode
@@ -37,6 +39,7 @@ export function ConfirmarDialogo({
   textoCancelar = 'Cancelar',
   peligroso = false,
   cargando = false,
+  deshabilitado = false,
   alConfirmar,
   children,
 }: Props) {
@@ -53,7 +56,7 @@ export function ConfirmarDialogo({
           <Button
             variant={peligroso ? 'destructive' : 'default'}
             className={peligroso ? 'bg-error text-white hover:bg-error/90' : undefined}
-            disabled={cargando}
+            disabled={cargando || deshabilitado}
             onClick={alConfirmar}
           >
             {cargando && <Loader2 aria-hidden="true" className="animate-spin" />}
