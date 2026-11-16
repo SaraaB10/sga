@@ -40,26 +40,28 @@ class OperacionReservaControllerIntegracionTest {
     @DisplayName("Llegada y salida arrastran el estado del apartamento y exigen que esté PREPARADO (RN-11, RN-12)")
     void llegadaYSalidaMuevenElEstadoDelApartamento() throws Exception {
         LocalDate hoy = LocalDate.now(BOGOTA);
-        Confirmada reserva = reservaConfirmada("APT-202", hoy, hoy.plusDays(2));
+        // APT-301 no tiene reservas ni bloqueos hoy (su bloqueo de los datos iniciales empieza en hoy+20)
+        Confirmada reserva = reservaConfirmada("APT-301", hoy, hoy.plusDays(2));
         String codigo = reserva.codigo();
 
-        // RN-11: si el apartamento no está PREPARADO no recibe al grupo. Los datos iniciales (12.3) lo dejan
-        // FUERA_DE_SERVICIO, así que el personal debe prepararlo antes de la llegada.
+        // RN-11: si el apartamento no está PREPARADO no recibe al grupo. Fuera de servicio (7.6; 3.3: el estado no
+        // retira la venta), el personal debe prepararlo antes de la llegada.
+        operacionEstado("APT-301", "poner-fuera-de-servicio").andExpect(status().isOk());
         llegada(codigo).andExpect(status().isConflict()).andExpect(jsonPath("$.mensaje", startsWith("RN-11")));
-        operacionEstado("APT-202", "restablecer-servicio").andExpect(status().isOk());
-        operacionEstado("APT-202", "iniciar-preparacion").andExpect(status().isOk());
-        operacionEstado("APT-202", "terminar-preparacion").andExpect(status().isOk());
+        operacionEstado("APT-301", "restablecer-servicio").andExpect(status().isOk());
+        operacionEstado("APT-301", "iniciar-preparacion").andExpect(status().isOk());
+        operacionEstado("APT-301", "terminar-preparacion").andExpect(status().isOk());
 
         llegada(codigo).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("EN_CURSO"));
         // El apartamento quedó OCUPADO: no se puede sacar de servicio con huéspedes adentro (7.6)
-        operacionEstado("APT-202", "poner-fuera-de-servicio").andExpect(status().isConflict());
+        operacionEstado("APT-301", "poner-fuera-de-servicio").andExpect(status().isConflict());
 
         post("/api/reservas/" + codigo + "/folio/pagos", pago(reserva.saldo())).andExpect(status().isCreated());
         salida(codigo).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("FINALIZADA"));
 
         // Tras la salida el apartamento pasa a PENDIENTE_PREPARACION, y el personal lo deja listo otra vez
-        operacionEstado("APT-202", "iniciar-preparacion").andExpect(status().isOk());
-        operacionEstado("APT-202", "terminar-preparacion").andExpect(status().isOk())
+        operacionEstado("APT-301", "iniciar-preparacion").andExpect(status().isOk());
+        operacionEstado("APT-301", "terminar-preparacion").andExpect(status().isOk())
                 .andExpect(jsonPath("$.estadoOperativo").value("PREPARADO"));
     }
 

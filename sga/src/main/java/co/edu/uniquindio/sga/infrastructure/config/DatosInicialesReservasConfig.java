@@ -44,16 +44,23 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 /**
  * Datos de prueba de reservas (12.3): al menos una reserva en cada estado del ciclo de vida (sección 8) y al menos
- * una por cada canal de origen. Corre después de los datos del alojamiento (@Order(2)) y no hace nada si ya hay
- * reservas. Las fechas son relativas a hoy para que la demostración funcione cualquier día.
+ * una por cada canal de origen. Corre después de los datos del alojamiento (@Order(2)). Si ya hay reservas no
+ * duplica nada: solo agrega una por cada estado o canal que no tenga ninguna, en noches libres (Cargador.completar).
+ * Las fechas son relativas a hoy para que la demostración funcione cualquier día.
  *
- * Solo usa APT-101, APT-102 y APT-201 (APT-202 queda fuera de servicio y APT-301 tiene un bloqueo) y ninguna
- * estancia retenida se solapa con otra del mismo apartamento (RN-01, RN-20):
+ * Solo usa APT-101, APT-102 y APT-201 (APT-202 queda fuera de servicio y los bloqueos de APT-101, de hoy+4 a hoy+7,
+ * y de APT-301 no se cruzan con ellas) y ninguna estancia retenida se solapa con otra del mismo apartamento
+ * (RN-01, RN-20):
  *   APT-101  FINALIZADA  hoy-10 → hoy-7   DIRECTO   (reconstruida: estancia pasada)
  *            PENDIENTE   hoy+10 → hoy+12  PORTAL
  *            CANCELADA   hoy+20 → hoy+22  PORTAL
@@ -115,9 +122,7 @@ public class DatosInicialesReservasConfig {
             PoliticaCancelacionService politicaCancelacionService,
             Clock reloj) {
         return args -> {
-            if (!reservaRepository.listarTodas().isEmpty()) {
-                return;                                          // no duplicar si ya hay reservas
-            }
+            boolean vacia = reservaRepository.listarTodas().isEmpty();
             cargarPoliticaCancelacion.run(args);
             cargarParametrosAlojamiento.run(args);
             Alojamiento coral = alojamientoRepository.obtener()
@@ -127,8 +132,16 @@ public class DatosInicialesReservasConfig {
                     creacionReservaService, confirmacionReservaService, cancelarReservaService,
                     cotizadorEstanciaService, politicaCancelacionService.vigente(), coral.getDepositoGarantia(),
                     LocalDateTime.now(reloj));
-            cargador.cargar();
-            log.info("Datos de prueba de reservas cargados: {} reservas", reservaRepository.listarTodas().size());
+            if (vacia) {
+                cargador.cargar();
+                log.info("Datos de prueba de reservas cargados: {} reservas", reservaRepository.listarTodas().size());
+                return;
+            }
+            // Ya hay reservas: no se duplican; solo se agregan las de los estados y canales que falten
+            int creadas = cargador.completar();
+            if (creadas > 0) {
+                log.info("Datos de prueba de reservas completados: {} reservas nuevas", creadas);
+            }
         };
     }
 
@@ -143,10 +156,112 @@ public class DatosInicialesReservasConfig {
             LocalDate hoy = ahora.toLocalDate();
 
             // ---------- Estancias pasadas: parten de una reserva CONFIRMADA reconstruida ----------
+            finalizada("APT-101", new Estancia(hoy.minusDays(10), hoy.minusDays(7)));
+            noShow("APT-102", new Estancia(hoy.minusDays(5), hoy.minusDays(3)));
+            enCurso("APT-201", new Estancia(hoy.minusDays(1), hoy.plusDays(2)));
 
-            // FINALIZADA: llegó, pagó todo el folio, recibió de vuelta el depósito (RP-02) y salió; el folio queda
-            // cerrado en cero (RN-17).
-            ReservaConFolio finalizada = confirmadaEnElPasado("APT-101", hoy.minusDays(10), hoy.minusDays(7),
+            // ---------- Estancias futuras: nacen PENDIENTE con CreacionReservaService (CU-03) ----------
+            pendiente("APT-101", new Estancia(hoy.plusDays(10), hoy.plusDays(12)), CanalOrigen.PORTAL);
+            confirmada("APT-102", new Estancia(hoy.plusDays(12), hoy.plusDays(15)));
+            cancelada("APT-101", new Estancia(hoy.plusDays(20), hoy.plusDays(22)));
+            pendiente("APT-201", new Estancia(hoy.plusDays(15), hoy.plusDays(18)), CanalOrigen.EXTERNO);
+        }
+
+        /**
+         * Completa una base que ya tiene reservas sin duplicar nada: agrega una reserva por cada estado y por cada
+         * canal que no tenga ninguna. Cada una va en el primer apartamento a la venta y las primeras noches libres
+         * (sin reservas que no estén canceladas ni bloqueos), y pasa por las mismas reglas que la carga inicial;
+         * si un intento choca con una regla, prueba el siguiente.
+         *
+         * @return cuántas reservas creó.
+         */
+        int completar() {
+            LocalDate hoy = ahora.toLocalDate();
+            int antes = reservas.listarTodas().size();
+            Set<EstadoReserva> estados = EnumSet.noneOf(EstadoReserva.class);
+            reservas.listarTodas().forEach(r -> estados.add(r.getEstado()));
+
+            if (!estados.contains(EstadoReserva.FINALIZADA)) {
+                intentar(hoy.minusDays(10), 3, -7, a -> true, this::finalizada);
+            }
+            if (!estados.contains(EstadoReserva.NO_SHOW)) {
+                intentar(hoy.minusDays(5), 2, -7, a -> true, this::noShow);
+            }
+            if (!estados.contains(EstadoReserva.EN_CURSO)) {
+                // Solo un apartamento PREPARADO puede recibir al grupo (RN-11)
+                intentar(hoy.minusDays(1), 3, 0,
+                        a -> a.getEstadoOperativo() == EstadoOperativo.PREPARADO, this::enCurso);
+            }
+            if (!estados.contains(EstadoReserva.PENDIENTE)) {
+                intentar(hoy.plusDays(10), 2, 7, this::sinFueraDeServicio,
+                        (apto, estancia) -> pendiente(apto, estancia, CanalOrigen.PORTAL));
+            }
+            if (!estados.contains(EstadoReserva.CONFIRMADA)) {
+                intentar(hoy.plusDays(12), 3, 7, this::sinFueraDeServicio, this::confirmada);
+            }
+            if (!estados.contains(EstadoReserva.CANCELADA)) {
+                intentar(hoy.plusDays(20), 2, 7, this::sinFueraDeServicio, this::cancelada);
+            }
+
+            Set<CanalOrigen> canales = EnumSet.noneOf(CanalOrigen.class);
+            reservas.listarTodas().forEach(r -> canales.add(r.getCanalOrigen()));
+            for (CanalOrigen canal : CanalOrigen.values()) {
+                if (!canales.contains(canal)) {
+                    intentar(hoy.plusDays(30), 2, 7, this::sinFueraDeServicio,
+                            (apto, estancia) -> pendiente(apto, estancia, canal));
+                }
+            }
+            return reservas.listarTodas().size() - antes;
+        }
+
+        private boolean sinFueraDeServicio(Apartamento apartamento) {
+            return apartamento.getEstadoOperativo() != EstadoOperativo.FUERA_DE_SERVICIO;
+        }
+
+        /**
+         * Prueba la estancia en cada apartamento a la venta que cumpla el filtro; si ninguno sirve, la corre
+         * {@code paso} días (hasta 12 veces; con paso 0 solo prueba esas fechas).
+         */
+        private void intentar(LocalDate entrada, int noches, int paso, Predicate<Apartamento> filtro,
+                              BiConsumer<String, Estancia> crear) {
+            int intentos = paso == 0 ? 1 : 12;
+            for (int i = 0; i < intentos; i++) {
+                LocalDate desde = entrada.plusDays((long) paso * i);
+                Estancia estancia = new Estancia(desde, desde.plusDays(noches));
+                List<Apartamento> candidatos = apartamentos.listarVigentesParaVenta().stream()
+                        .filter(filtro)
+                        .filter(a -> nochesLibres(a, estancia))
+                        .sorted(Comparator.comparing(a -> a.getIdentificacion().codigo()))
+                        .toList();
+                for (Apartamento candidato : candidatos) {
+                    try {
+                        crear.accept(candidato.getIdentificacion().codigo(), estancia);
+                        return;
+                    } catch (ReglaDominioException e) {
+                        log.debug("Datos de prueba: {} no sirve para {}: {}",
+                                candidato.getIdentificacion().codigo(), estancia, e.getMessage());
+                    }
+                }
+            }
+            log.warn("Datos de prueba: no se encontraron noches libres para completar una reserva desde {}", entrada);
+        }
+
+        /** Ninguna reserva que no esté cancelada usa esas noches del apartamento y no hay bloqueos vigentes. */
+        private boolean nochesLibres(Apartamento apartamento, Estancia estancia) {
+            boolean ocupadas = reservas.listarTodas().stream()
+                    .filter(r -> r.esDelApartamento(apartamento.getIdentificacion()))
+                    .filter(r -> r.getEstado() != EstadoReserva.CANCELADA)
+                    .anyMatch(r -> r.getEstancia().seSolapaCon(estancia));
+            return !ocupadas && !apartamento.estaBloqueadoDurante(estancia);
+        }
+
+        /**
+         * FINALIZADA: llegó, pagó todo el folio, recibió de vuelta el depósito (RP-02) y salió; el folio queda
+         * cerrado en cero (RN-17).
+         */
+        private void finalizada(String apartamento, Estancia estancia) {
+            ReservaConFolio finalizada = confirmadaEnElPasado(apartamento, estancia.fechaEntrada(),
+                    estancia.fechaSalida(),
                     titular("Carlos Restrepo", "CC", "1094111222", "carlos.restrepo@correo.co", "3105550101"),
                     CanalOrigen.DIRECTO);
             Reserva reserva = finalizada.reserva();
@@ -159,13 +274,15 @@ public class DatosInicialesReservasConfig {
             reserva.registrarSalida(salida);
             folio.cerrar(salida);
             guardar(reserva, folio);
+        }
 
-            // NO_SHOW: confirmada, pero el grupo no llegó antes de la hora límite (L-15); retiene el 50 % (RN-13).
-            ReservaConFolio noShow = confirmadaEnElPasado("APT-102", hoy.minusDays(5), hoy.minusDays(3),
+        /** NO_SHOW: confirmada, pero el grupo no llegó antes de la hora límite (L-15); retiene el 50 % (RN-13). */
+        private void noShow(String apartamento, Estancia estancia) {
+            ReservaConFolio noShow = confirmadaEnElPasado(apartamento, estancia.fechaEntrada(), estancia.fechaSalida(),
                     titular(VALENTINA_NOMBRE, "CC", VALENTINA_DOCUMENTO, "huesped2@sga.local", "3115550202"),
                     CanalOrigen.PORTAL);
-            reserva = noShow.reserva();
-            folio = noShow.folio();
+            Reserva reserva = noShow.reserva();
+            Folio folio = noShow.folio();
             LocalDateTime limite = reserva.getEstancia().fechaEntrada().atTime(coral.getHoraLimiteNoShow());
             Dinero retencion = reserva.calcularRetencionPorNoShow();
             reserva.declararNoShow(limite, coral.getHoraLimiteNoShow());
@@ -173,44 +290,70 @@ public class DatosInicialesReservasConfig {
             folio.registrarPenalidad(retencion, "Retención por no-show: "
                     + reserva.getPoliticaCancelacion().consecuenciaNoShow(), limite.toLocalDate());
             guardar(reserva, folio);
+        }
 
-            // EN_CURSO: llegó ayer a APT-201, que pasa de PREPARADO a OCUPADO (RN-11, 7.6).
-            ReservaConFolio enCurso = confirmadaEnElPasado("APT-201", hoy.minusDays(1), hoy.plusDays(2),
+        /** EN_CURSO: llegó ayer y el apartamento pasa de PREPARADO a OCUPADO (RN-11, 7.6). */
+        private void enCurso(String apartamento, Estancia estancia) {
+            ReservaConFolio enCurso = confirmadaEnElPasado(apartamento, estancia.fechaEntrada(),
+                    estancia.fechaSalida(),
                     titular("Andrés Mejía", "CC", "1094555666", "andres.mejia@correo.co", "3125550303"),
                     CanalOrigen.DIRECTO);
-            reserva = enCurso.reserva();
-            Apartamento apt201 = apartamento(reserva.getApartamento());
-            reserva.registrarLlegada(reserva.getEstancia().fechaEntrada(), apt201.getEstadoOperativo());
-            apt201.recibirGrupo();
+            Reserva reserva = enCurso.reserva();
+            Apartamento apto = apartamento(reserva.getApartamento());
+            reserva.registrarLlegada(reserva.getEstancia().fechaEntrada(), apto.getEstadoOperativo());
+            apto.recibirGrupo();
             guardar(reserva, enCurso.folio());
-            apartamentos.guardar(apt201);
+            apartamentos.guardar(apto);
+        }
 
-            // ---------- Estancias futuras: nacen PENDIENTE con CreacionReservaService (CU-03) ----------
+        /**
+         * PENDIENTE: por el portal aún no paga el anticipo ni se confirma; la externa llega de una plataforma de
+         * terceros con su identificador (RN-19) y sin hora de llegada.
+         */
+        private void pendiente(String apartamento, Estancia estancia, CanalOrigen canal) {
+            switch (canal) {
+                case PORTAL -> nueva(apartamento, estancia.fechaEntrada(), estancia.fechaSalida(),
+                        titular(LAURA_NOMBRE, "CC", LAURA_DOCUMENTO, "huesped1@sga.local", "3135550404"),
+                        CanalOrigen.PORTAL, HORA_LLEGADA, null);
+                case EXTERNO -> nueva(apartamento, estancia.fechaEntrada(), estancia.fechaSalida(),
+                        titular("Emily Johnson", "PA", "55501230", "emily.johnson@mail.com", "3165550707"),
+                        CanalOrigen.EXTERNO, null, identificadorExternoLibre());
+                case DIRECTO -> nueva(apartamento, estancia.fechaEntrada(), estancia.fechaSalida(),
+                        titular("Santiago Herrera", "CC", "1094999000", "santiago.herrera@correo.co", "3145550505"),
+                        CanalOrigen.DIRECTO, HORA_LLEGADA, null);
+            }
+        }
 
-            // PENDIENTE por el portal: aún no paga el anticipo ni se confirma.
-            nueva("APT-101", hoy.plusDays(10), hoy.plusDays(12),
-                    titular(LAURA_NOMBRE, "CC", LAURA_DOCUMENTO, "huesped1@sga.local", "3135550404"),
-                    CanalOrigen.PORTAL, HORA_LLEGADA, null);
-
-            // CONFIRMADA en recepción: paga el anticipo del 50 % (L-11) y se confirma (RN-09, RN-21).
-            Reserva confirmada = nueva("APT-102", hoy.plusDays(12), hoy.plusDays(15),
+        /** CONFIRMADA en recepción: paga el anticipo del 50 % (L-11) y se confirma (RN-09, RN-21). */
+        private void confirmada(String apartamento, Estancia estancia) {
+            Reserva confirmada = nueva(apartamento, estancia.fechaEntrada(), estancia.fechaSalida(),
                     titular("Santiago Herrera", "CC", "1094999000", "santiago.herrera@correo.co", "3145550505"),
                     CanalOrigen.DIRECTO, HORA_LLEGADA, null);
             Folio folioConfirmada = folios.buscarPorReserva(confirmada.getCodigo()).orElseThrow();
-            folioConfirmada.registrarPago(new Pago(anticipoDe(confirmada), MedioPago.TRANSFERENCIA_BANCARIA, hoy));
+            folioConfirmada.registrarPago(new Pago(anticipoDe(confirmada), MedioPago.TRANSFERENCIA_BANCARIA,
+                    ahora.toLocalDate()));
             folios.guardar(folioConfirmada);
             confirmacion.confirmar(confirmada.getCodigo(), ahora);
+        }
 
-            // CANCELADA con más de 15 días de antelación: retención 0 % (RN-13) y noches liberadas (RN-12).
-            Reserva cancelada = nueva("APT-101", hoy.plusDays(20), hoy.plusDays(22),
+        /** CANCELADA con más de 15 días de antelación: retención 0 % (RN-13) y noches liberadas (RN-12). */
+        private void cancelada(String apartamento, Estancia estancia) {
+            Reserva cancelada = nueva(apartamento, estancia.fechaEntrada(), estancia.fechaSalida(),
                     titular("Mariana Castaño", "CC", "1094121314", "mariana.castano@correo.co", "3155550606"),
                     CanalOrigen.PORTAL, HORA_LLEGADA, null);
-            cancelacion.cancelar(cancelada.getCodigo(), hoy, "El titular cambió sus planes de viaje");
+            cancelacion.cancelar(cancelada.getCodigo(), ahora.toLocalDate(), "El titular cambió sus planes de viaje");
+        }
 
-            // EXTERNO: llega de una plataforma de terceros con su identificador (RN-19) y sin hora de llegada.
-            nueva("APT-201", hoy.plusDays(15), hoy.plusDays(18),
-                    titular("Emily Johnson", "PA", "55501230", "emily.johnson@mail.com", "3165550707"),
-                    CanalOrigen.EXTERNO, null, "BK-DEMO-000123");
+        /** RN-19: el identificador de la reserva externa de prueba no se repite en su canal. */
+        private String identificadorExternoLibre() {
+            int numero = 123;
+            String identificador = "BK-DEMO-000123";
+            while (reservas.buscarPorCanalEIdentificadorExterno(DatosInicialesCanalesConfig.CANAL_DEMO, identificador)
+                    .isPresent()) {
+                numero++;
+                identificador = String.format("BK-DEMO-%06d", numero);
+            }
+            return identificador;
         }
 
         private Reserva nueva(String apartamento, LocalDate entrada, LocalDate salida, Titular titular,

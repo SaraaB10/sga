@@ -4,14 +4,19 @@ import co.edu.uniquindio.sga.domain.entity.Alojamiento;
 import co.edu.uniquindio.sga.domain.entity.Apartamento;
 import co.edu.uniquindio.sga.domain.entity.ServicioAdicional;
 import co.edu.uniquindio.sga.domain.entity.Temporada;
+import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
+import co.edu.uniquindio.sga.domain.repository.BloqueoRepository;
+import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.service.RegistrarBloqueoService;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
 import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
+import co.edu.uniquindio.sga.domain.valueobject.EstadoOperativo;
+import co.edu.uniquindio.sga.domain.valueobject.Estancia;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.Imagen;
 import co.edu.uniquindio.sga.domain.valueobject.RangoFechas;
@@ -28,8 +33,10 @@ import org.springframework.core.annotation.Order;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.IntStream;
 
 /**
@@ -41,10 +48,10 @@ import java.util.stream.IntStream;
  * application.properties. El catálogo (identidad, temporadas, tarifas, inventario y demás servicios) es dato inicial.
  * Las temporadas se registran con la fecha final excluida (nota de A.3).
  *
- * Datos de prueba (12.3): APT-202 queda FUERA_DE_SERVICIO con un bloqueo de hoy+3 a hoy+15 (3.3: el estado no
- * retira la venta futura, el bloqueo sí) y APT-301 tiene un bloqueo vigente de hoy+20 a hoy+25. No se tocan
- * APT-101, APT-102 ni APT-201, que son los de las reservas de prueba. Corre con @Order(1), antes que cualquier
- * otro cargador de datos.
+ * Datos de prueba (12.3): APT-202 queda FUERA_DE_SERVICIO con un bloqueo de hoy a hoy+15 (3.3: el estado no
+ * retira la venta, el bloqueo sí), APT-101 tiene un bloqueo de hoy+4 a hoy+7 y APT-301 uno de hoy+20 a hoy+25.
+ * Ninguno se cruza con las reservas de prueba. Si el alojamiento ya existe no se duplica nada: solo se completa lo
+ * mínimo que falte (ver Completador). Corre con @Order(1), antes que cualquier otro cargador de datos.
  */
 @Configuration
 public class DatosInicialesCoralConfig {
@@ -67,6 +74,8 @@ public class DatosInicialesCoralConfig {
     public CommandLineRunner cargarDatosCoral(
             AlojamientoRepository alojamientoRepository,
             ApartamentoRepository apartamentoRepository,
+            BloqueoRepository bloqueoRepository,
+            ReservaRepository reservaRepository,
             RegistrarBloqueoService registrarBloqueoService,
             Clock reloj,
             @Value("${sga.alojamiento.hora-entrada}") LocalTime horaEntrada,
@@ -74,8 +83,12 @@ public class DatosInicialesCoralConfig {
             @Value("${sga.alojamiento.id-servicio-recepcion-nocturna}") String idRecepcionNocturna,
             @Value("${sga.alojamiento.valor-recepcion-nocturna}") long valorRecepcionNocturna) {
         return args -> {
-            if (alojamientoRepository.obtener().isPresent()) {
-                return;                                          // no duplicar si ya hay datos
+            Optional<Alojamiento> existente = alojamientoRepository.obtener();
+            if (existente.isPresent()) {
+                // Base ya cargada: no se duplica nada, solo se completa lo mínimo que le falte
+                new Completador(existente.get(), alojamientoRepository, apartamentoRepository, bloqueoRepository,
+                        reservaRepository, registrarBloqueoService, LocalDate.now(reloj)).completar();
+                return;
             }
 
             // A.1 Identidad. La coordenada es la de Bocagrande (aproximada: el Anexo A no la trae).
@@ -116,19 +129,7 @@ public class DatosInicialesCoralConfig {
                     "Cena en balcón por cocinero privado", "Cena para 2 personas en el balcón", Dinero.de(260_000)));
 
             // A.2 Inventario y tarifas de A.3 (Base, Media, Alta por ocupante facturable)
-            // A.2: la dotación es lo que trae cada apartamento; sus rasgos (vista, balcón, terraza...) van en
-            // CARACTERISTICAS
-            List<Apartamento> inventario = List.of(
-                    apartamento("APT-101", "Coral Luminoso", "Pensado para parejas o viajes de descanso individual.",
-                            1, 2, 310_000, 430_000, 620_000),
-                    apartamento("APT-102", "Arrecife Rosado", "Orientado a parejas jóvenes o profesionales.",
-                            1, 2, 330_000, 460_000, 660_000),
-                    apartamento("APT-201", "Marea Dorada", "Diseñado para familias o pequeños grupos.",
-                            2, 4, 270_000, 380_000, 560_000),
-                    apartamento("APT-202", "Bahía Cristal", "Distribución funcional para grupos familiares.",
-                            2, 4, 280_000, 390_000, 580_000),
-                    apartamento("APT-301", "Gran Coral Imperial", "La unidad insignia de máxima capacidad.",
-                            3, 6, 250_000, 350_000, 520_000));
+            List<Apartamento> inventario = INVENTARIO.stream().map(DatosInicialesCoralConfig::apartamentoInicial).toList();
 
             for (Apartamento apartamento : inventario) {
                 apartamento.activar(coral.getTemporadas());          // 7.4: exige tarifa en todas las temporadas
@@ -137,22 +138,163 @@ public class DatosInicialesCoralConfig {
             }
             alojamientoRepository.guardar(coral);
 
-            // 12.3: APT-202 fuera de servicio por decisión administrativa (7.6) y bloqueado para la venta (3.3)
+            // 12.3: APT-202 fuera de servicio por decisión administrativa (7.6) y bloqueado desde hoy (3.3: el estado
+            // no retira la venta, el bloqueo sí)
             LocalDate hoy = LocalDate.now(reloj);
-            IdentificacionApartamento apt202 = new IdentificacionApartamento("APT-202");
+            IdentificacionApartamento apt202 = new IdentificacionApartamento(APARTAMENTO_FUERA_DE_SERVICIO);
             Apartamento fueraDeServicio = apartamentoRepository.buscarPorIdentificacion(apt202).orElseThrow();
             fueraDeServicio.ponerFueraDeServicio();
             apartamentoRepository.guardar(fueraDeServicio);
-            registrarBloqueoService.registrarBloqueo(apt202, new RangoFechas(hoy.plusDays(3), hoy.plusDays(15)),
-                    "Fuera de servicio: reparación de la cocina integral");
+            registrarBloqueoService.registrarBloqueo(apt202, new RangoFechas(hoy, hoy.plusDays(15)),
+                    MOTIVO_FUERA_DE_SERVICIO);
 
-            // 12.3: bloqueo vigente sobre APT-301 (RN-07)
+            // 12.3: bloqueos vigentes sobre APT-101 y APT-301 (RN-07), sin reservas de prueba en esas noches
+            registrarBloqueoService.registrarBloqueo(new IdentificacionApartamento("APT-101"),
+                    new RangoFechas(hoy.plusDays(4), hoy.plusDays(7)), "Mantenimiento del aire acondicionado");
             registrarBloqueoService.registrarBloqueo(new IdentificacionApartamento("APT-301"),
                     new RangoFechas(hoy.plusDays(20), hoy.plusDays(25)), "Mantenimiento de la piscina de inmersión");
 
             log.info("Datos iniciales del alojamiento Coral cargados: {} apartamentos", inventario.size());
         };
     }
+
+    /**
+     * Completa una base que ya tiene el alojamiento, sin duplicar lo que existe: los apartamentos del inventario
+     * que falten (con sus tarifas y activos), las tarifas que les falten en las temporadas iniciales, un apartamento
+     * FUERA_DE_SERVICIO con su bloqueo si no hay ninguno y un bloqueo vigente si no hay ninguno. Los bloqueos se
+     * registran con RegistrarBloqueoService, así que nunca caen sobre noches de reservas activas (RN-01).
+     */
+    private record Completador(Alojamiento coral, AlojamientoRepository alojamientos,
+                               ApartamentoRepository apartamentos, BloqueoRepository bloqueos,
+                               ReservaRepository reservas, RegistrarBloqueoService registrarBloqueo, LocalDate hoy) {
+
+        void completar() {
+            completarInventario();
+            completarFueraDeServicio();
+            completarBloqueoVigente();
+        }
+
+        private void completarInventario() {
+            boolean alojamientoCambio = false;
+            for (ApartamentoInicial datos : INVENTARIO) {
+                IdentificacionApartamento id = new IdentificacionApartamento(datos.id());
+                Optional<Apartamento> guardado = apartamentos.buscarPorIdentificacion(id);
+                if (guardado.isPresent()) {
+                    completarTarifas(guardado.get(), datos);
+                    continue;
+                }
+                try {
+                    Apartamento nuevo = apartamentoInicial(datos);
+                    nuevo.activar(coral.getTemporadas());          // 7.4: exige tarifa en todas las temporadas
+                    coral.agregarApartamento(nuevo);               // L-03 y L-04
+                    apartamentos.guardar(nuevo);
+                    alojamientoCambio = true;
+                    log.info("Datos de prueba: se agregó el apartamento {}", datos.id());
+                } catch (ReglaDominioException e) {
+                    log.warn("Datos de prueba: no se pudo agregar {}: {}", datos.id(), e.getMessage());
+                }
+            }
+            if (alojamientoCambio) {
+                alojamientos.guardar(coral);
+            }
+        }
+
+        /** 7.4: define desde hoy las tarifas iniciales que le falten al apartamento en las temporadas iniciales. */
+        private void completarTarifas(Apartamento apartamento, ApartamentoInicial datos) {
+            if (apartamento.isEliminado() || apartamento.tieneTarifasCompletas(coral.getTemporadas())) {
+                return;
+            }
+            for (int i = 0; i < TEMPORADAS.size(); i++) {
+                Optional<Temporada> temporada = coral.buscarTemporada(TEMPORADAS.get(i));
+                if (temporada.isPresent() && !apartamento.tieneTarifasCompletas(List.of(temporada.get()))) {
+                    apartamento.definirTarifa(new Tarifa(TEMPORADAS.get(i), Dinero.de(datos.tarifas().get(i))), hoy);
+                }
+            }
+            apartamentos.guardar(apartamento);
+            log.info("Datos de prueba: se completaron las tarifas de {}", datos.id());
+        }
+
+        /**
+         * 12.3: si ningún apartamento está FUERA_DE_SERVICIO, pone uno (prefiere APT-202) con un bloqueo de hoy a
+         * hoy+15 (3.3: el estado no retira la venta, el bloqueo sí). Solo sirve uno que no esté OCUPADO ni tenga
+         * reservas activas en esas noches.
+         */
+        private void completarFueraDeServicio() {
+            List<Apartamento> vigentes = apartamentos.listarNoEliminados();
+            if (vigentes.stream().anyMatch(a -> a.getEstadoOperativo() == EstadoOperativo.FUERA_DE_SERVICIO)) {
+                return;
+            }
+            RangoFechas rango = new RangoFechas(hoy, hoy.plusDays(15));
+            Estancia noches = new Estancia(rango.fechaInicio(), rango.fechaFin());
+            Optional<Apartamento> candidato = vigentes.stream()
+                    .sorted(Comparator.comparing(
+                            (Apartamento a) -> !a.getIdentificacion().codigo().equals(APARTAMENTO_FUERA_DE_SERVICIO)))
+                    .filter(a -> a.getEstadoOperativo() != EstadoOperativo.OCUPADO)
+                    .filter(a -> reservas.listarActivasQueSeSolapan(a.getIdentificacion(), noches).isEmpty())
+                    .findFirst();
+            if (candidato.isEmpty()) {
+                log.warn("Datos de prueba: ningún apartamento puede quedar fuera de servicio sin chocar con reservas");
+                return;
+            }
+            IdentificacionApartamento id = candidato.get().getIdentificacion();
+            if (!candidato.get().estaBloqueadoEn(hoy)) {
+                registrarBloqueo.registrarBloqueo(id, rango, MOTIVO_FUERA_DE_SERVICIO);
+            }
+            Apartamento fueraDeServicio = apartamentos.buscarPorIdentificacion(id).orElseThrow();
+            fueraDeServicio.ponerFueraDeServicio();
+            apartamentos.guardar(fueraDeServicio);
+            log.info("Datos de prueba: {} quedó fuera de servicio", id.codigo());
+        }
+
+        /** 12.3: si no hay ningún bloqueo vigente que no haya terminado, registra uno en noches sin reservas. */
+        private void completarBloqueoVigente() {
+            List<Apartamento> vigentes = apartamentos.listarNoEliminados();
+            boolean hayBloqueo = vigentes.stream()
+                    .flatMap(a -> bloqueos.listarVigentesPorApartamento(a.getIdentificacion()).stream())
+                    .anyMatch(b -> b.getRango().fechaFin().isAfter(hoy));
+            if (hayBloqueo) {
+                return;
+            }
+            for (int inicio = 20; inicio <= 120; inicio += 7) {
+                RangoFechas rango = new RangoFechas(hoy.plusDays(inicio), hoy.plusDays(inicio + 5));
+                Estancia noches = new Estancia(rango.fechaInicio(), rango.fechaFin());
+                Optional<Apartamento> libre = vigentes.stream()
+                        .filter(a -> reservas.listarActivasQueSeSolapan(a.getIdentificacion(), noches).isEmpty())
+                        .findFirst();
+                if (libre.isPresent()) {
+                    registrarBloqueo.registrarBloqueo(libre.get().getIdentificacion(), rango,
+                            "Mantenimiento preventivo");
+                    log.info("Datos de prueba: bloqueo vigente en {}", libre.get().getIdentificacion().codigo());
+                    return;
+                }
+            }
+        }
+    }
+
+    /** 12.3: apartamento de los datos iniciales que queda fuera de servicio, con su bloqueo desde hoy */
+    static final String APARTAMENTO_FUERA_DE_SERVICIO = "APT-202";
+    static final String MOTIVO_FUERA_DE_SERVICIO = "Fuera de servicio: reparación de la cocina integral";
+
+    /** Temporadas de los datos iniciales, en el orden de las tarifas de {@link #INVENTARIO} */
+    static final List<String> TEMPORADAS = List.of(BASE, MEDIA, ALTA);
+
+    /** A.2: un apartamento de los datos iniciales, con sus tarifas Base, Media y Alta por ocupante facturable */
+    record ApartamentoInicial(String id, String nombre, String descripcion, int dormitorios, int capacidad,
+                              List<Long> tarifas) {
+    }
+
+    /** A.2 Inventario y tarifas de A.3; también sirven para completar una base que ya existe */
+    static final List<ApartamentoInicial> INVENTARIO = List.of(
+            new ApartamentoInicial("APT-101", "Coral Luminoso", "Pensado para parejas o viajes de descanso individual.",
+                    1, 2, List.of(310_000L, 430_000L, 620_000L)),
+            new ApartamentoInicial("APT-102", "Arrecife Rosado", "Orientado a parejas jóvenes o profesionales.",
+                    1, 2, List.of(330_000L, 460_000L, 660_000L)),
+            new ApartamentoInicial("APT-201", "Marea Dorada", "Diseñado para familias o pequeños grupos.",
+                    2, 4, List.of(270_000L, 380_000L, 560_000L)),
+            new ApartamentoInicial("APT-202", "Bahía Cristal", "Distribución funcional para grupos familiares.",
+                    2, 4, List.of(280_000L, 390_000L, 580_000L)),
+            new ApartamentoInicial("APT-301", "Gran Coral Imperial", "La unidad insignia de máxima capacidad.",
+                    3, 6, List.of(250_000L, 350_000L, 520_000L)));
 
     /** 7.3: imágenes de cada apartamento en el servicio externo (Cloudinary); la primera es la principal. */
     private static final Map<String, List<String>> IMAGENES = Map.of(
@@ -203,14 +345,16 @@ public class DatosInicialesCoralConfig {
             "APT-202", List.of("Balcón"),
             "APT-301", List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto"));
 
-    private static Apartamento apartamento(String id, String nombre, String descripcion, int dormitorios,
-                                           int capacidad, long tarifaBase, long tarifaMedia, long tarifaAlta) {
-        Apartamento apartamento = Apartamento.crear(new IdentificacionApartamento(id), nombre, descripcion,
-                dormitorios, new Capacidad(capacidad), new Dotacion(DOTACION.get(id)), imagenes(id));
+    /** Apartamento de los datos iniciales, inactivo, con su dotación, características, imágenes y tarifas */
+    static Apartamento apartamentoInicial(ApartamentoInicial datos) {
+        String id = datos.id();
+        Apartamento apartamento = Apartamento.crear(new IdentificacionApartamento(id), datos.nombre(),
+                datos.descripcion(), datos.dormitorios(), new Capacidad(datos.capacidad()),
+                new Dotacion(DOTACION.get(id)), imagenes(id));
         apartamento.definirCaracteristicas(new Caracteristicas(CARACTERISTICAS.get(id)));
-        apartamento.definirTarifa(new Tarifa(BASE, Dinero.de(tarifaBase)));
-        apartamento.definirTarifa(new Tarifa(MEDIA, Dinero.de(tarifaMedia)));
-        apartamento.definirTarifa(new Tarifa(ALTA, Dinero.de(tarifaAlta)));
+        for (int i = 0; i < TEMPORADAS.size(); i++) {
+            apartamento.definirTarifa(new Tarifa(TEMPORADAS.get(i), Dinero.de(datos.tarifas().get(i))));
+        }
         return apartamento;
     }
 

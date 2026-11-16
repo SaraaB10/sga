@@ -526,7 +526,9 @@ paths:
       description: |
         Apartamentos libres en todas las noches de la estancia y con capacidad para el grupo
         (RN-01, RN-02, RN-07, RN-20, RP-01). La disponibilidad la decide `DisponibilidadApartamentoService`;
-        sobre ese resultado se aplican los filtros opcionales y luego la paginación (10 por página, 7.5, 12.4).
+        sobre ese resultado se aplican los filtros opcionales, el orden y luego la paginación (10 por página, 7.5,
+        12.4). Orden: primero los apartamentos cuya capacidad se acerca más al tamaño del grupo, después el valor
+        estimado de la estancia de menor a mayor y, en empate, la identificación.
         Solo consulta. Mapea a `BuscarApartamentoDisponibleUseCase.buscar`.
 
         - **valorEstimado** es el valor de toda la estancia para el grupo (RN-05, RN-06). Si no se envían
@@ -723,6 +725,9 @@ paths:
         activo, sin bloqueos (RN-07) ni reservas activas (RN-01) y con el tiempo de preparación (RN-20). Las noches
         anteriores a hoy no están libres (RN-04). No incluye datos de las reservas ni de los bloqueos. Máximo 62
         noches por consulta. Un apartamento retirado de la venta responde 404.
+        Con `excluirReserva` (al modificar una reserva, RN-14) las noches de esa reserva y su tiempo de preparación
+        no cuentan como ocupados; ese parámetro solo lo pueden usar la recepción, el administrador o el titular de la
+        reserva (sin token u otro huésped: 403).
         Mapea a `ConsultarDisponibilidadApartamentoUseCase`.
       operationId: consultarDisponibilidadApartamento
       security: []
@@ -734,6 +739,12 @@ paths:
           description: Primera noche que ya no se incluye
           schema: { type: string, format: date }
           example: '2027-01-01'
+        - name: excluirReserva
+          in: query
+          required: false
+          description: Código de la reserva que se está modificando; sus noches salen libres
+          schema: { type: string }
+          example: RES-2026-00005
       responses:
         '200':
           description: Disponibilidad noche por noche
@@ -743,10 +754,16 @@ paths:
                 $ref: '#/components/schemas/DisponibilidadApartamentoResponse'
         '400':
           $ref: '#/components/responses/DatosInvalidos'
+        '403':
+          description: '`excluirReserva` sin token o de una reserva que no es del huésped'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NoEncontrado'
         '409':
-          description: '`desde` no es anterior a `hasta` o el rango supera 62 noches'
+          description: '`desde` no es anterior a `hasta`, el rango supera 62 noches o el código de reserva está mal formado'
           content:
             application/json:
               schema:

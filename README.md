@@ -112,10 +112,10 @@ Cuando la base está vacía (el primer arranque, después de borrar `sga/data/` 
 
 | Apartamento | Nombre | Capacidad | Estado al arrancar |
 |---|---|---|---|
-| APT-101 | Coral Luminoso | 2 | PREPARADO |
+| APT-101 | Coral Luminoso | 2 | PREPARADO, con un bloqueo de hoy+4 a hoy+7 |
 | APT-102 | Arrecife Rosado | 2 | PREPARADO |
 | APT-201 | Marea Dorada | 4 | OCUPADO (tiene la reserva EN_CURSO) |
-| APT-202 | Bahía Cristal | 4 | FUERA_DE_SERVICIO, con un bloqueo de hoy+3 a hoy+15 |
+| APT-202 | Bahía Cristal | 4 | FUERA_DE_SERVICIO, con un bloqueo de hoy a hoy+15 |
 | APT-301 | Gran Coral Imperial | 6 | PREPARADO, con un bloqueo de hoy+20 a hoy+25 |
 
 - 7 reservas en todos los estados y por los tres canales, cada una con su folio:
@@ -129,6 +129,10 @@ Cuando la base está vacía (el primer arranque, después de borrar `sga/data/` 
 | CONFIRMADA | APT-102 | hoy+12 a hoy+15 | DIRECTO |
 | CANCELADA | APT-101 | hoy+20 a hoy+22 | PORTAL |
 | PENDIENTE | APT-201 | hoy+15 a hoy+18 | EXTERNO (sin hora de llegada) |
+
+- Al menos un usuario por rol (administrador, recepción, personal de servicio y dos huéspedes).
+
+Si la base ya existe, los cargadores no duplican nada y solo completan lo mínimo que le falte: los apartamentos del inventario y sus tarifas, un usuario por cada rol sin ninguno, un apartamento FUERA_DE_SERVICIO con su bloqueo, un bloqueo vigente y una reserva por cada estado y canal que no tenga ninguna, siempre en noches libres.
 
 ## Endpoints
 

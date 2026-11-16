@@ -15,10 +15,11 @@
 # Si lo ejecuta dos veces sin reiniciar, fallan las que cambian estado (la reserva ya existe, etc.).
 #
 # Datos iniciales que se evitan (DatosInicialesCoralConfig y DatosInicialesReservasConfig):
-#   APT-101  PENDIENTE hoy+10→hoy+12 (PORTAL), CANCELADA hoy+20→hoy+22, FINALIZADA hoy-10→hoy-7
+#   APT-101  PENDIENTE hoy+10→hoy+12 (PORTAL), CANCELADA hoy+20→hoy+22, FINALIZADA hoy-10→hoy-7,
+#            bloqueo hoy+4→hoy+7
 #   APT-102  CONFIRMADA hoy+12→hoy+15, NO_SHOW hoy-5→hoy-3
 #   APT-201  EN_CURSO hoy-1→hoy+2 (OCUPADO), PENDIENTE hoy+15→hoy+18 (EXTERNO, sin hora de llegada)
-#   APT-202  FUERA_DE_SERVICIO con bloqueo hoy+3→hoy+15
+#   APT-202  FUERA_DE_SERVICIO con bloqueo hoy→hoy+15
 #   APT-301  bloqueo hoy+20→hoy+25
 # El flujo principal usa APT-301 de hoy a hoy+3, libre y PREPARADO al arrancar.
 # ====================================================================================================
@@ -388,11 +389,27 @@ GET {{host}}/api/apartamentos/filtros
     });
 %}
 
-### 3.2c Detalle público: las características van aparte de la dotación
+### 3.2c Orden de la búsqueda: primero la capacidad más cercana al grupo y después el precio
+GET {{host}}/api/apartamentos/disponibles?entrada={{hoyMas40}}&salida={{hoyMas43}}&ocupantes=2
+
+> {%
+    client.test("3.2c 200 ordenados por capacidad cercana y precio", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var c = response.body.contenido;
+        for (var i = 1; i < c.length; i++) {
+            var antes = Math.abs(c[i - 1].capacidadMaxima - 2), ahora = Math.abs(c[i].capacidadMaxima - 2);
+            client.assert(antes < ahora || (antes === ahora && c[i - 1].valorEstimado <= c[i].valorEstimado),
+                "Orden: " + c.map(function (a) { return a.identificacion + "(" + a.capacidadMaxima + ", " + a.valorEstimado + ")"; }).join(" "));
+        }
+        client.assert(c[0].capacidadMaxima === 2, "Primero uno de capacidad 2: " + c[0].identificacion);
+    });
+%}
+
+### 3.2d Detalle público: las características van aparte de la dotación
 GET {{host}}/api/apartamentos/APT-101
 
 > {%
-    client.test("3.2c 200 características de APT-101", function () {
+    client.test("3.2d 200 características de APT-101", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.caracteristicas.join(",") === "Vista al mar,Frente a la playa,Balcón", "Características: " + response.body.caracteristicas);
         client.assert(response.body.dotacion.indexOf("Tina de hidromasaje privada") >= 0, "Dotación: " + response.body.dotacion);
@@ -4936,6 +4953,37 @@ GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta
         client.assert(response.body.apartamento === "APT-102", "apartamento: " + response.body.apartamento);
         client.assert(libres === "true,false,false,false,true", "noches: " + libres);
         client.assert(JSON.stringify(response.body).indexOf("RES-") < 0, "No debía traer códigos de reserva");
+    });
+%}
+
+### 17.3b RN-14 Al modificar la reserva CONFIRMADA de APT-102, sus propias noches cuentan como libres (recepción)
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}&excluirReserva={{confirmadaInicial}}
+Authorization: Bearer {{tokenRecepcion}}
+
+> {%
+    client.test("17.3b 200 sin contar la reserva que se modifica", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var libres = response.body.noches.map(function (n) { return n.libre; }).join();
+        client.assert(libres === "true,true,true,true,true", "noches: " + libres);
+    });
+%}
+
+### 17.3c excluirReserva sin token: 403 (no revela las fechas de una reserva ajena)
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}&excluirReserva={{confirmadaInicial}}
+
+> {%
+    client.test("17.3c 403 excluirReserva sin token", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 17.3d excluirReserva de una reserva de otro titular: 403
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}&excluirReserva={{confirmadaInicial}}
+Authorization: Bearer {{tokenHuesped2}}
+
+> {%
+    client.test("17.3d 403 excluirReserva de una reserva ajena", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
     });
 %}
 

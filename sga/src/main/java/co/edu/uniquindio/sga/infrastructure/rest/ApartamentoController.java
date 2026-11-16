@@ -37,6 +37,7 @@ import co.edu.uniquindio.sga.domain.entity.Novedad;
 import co.edu.uniquindio.sga.domain.repository.Pagina;
 import co.edu.uniquindio.sga.domain.valueobject.ApartamentoDisponible;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.CriterioBusqueda;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
@@ -105,7 +106,8 @@ public class ApartamentoController {
                     + "característica del apartamento (por ejemplo \"Vista al mar\"), servicios de su dotación (se "
                     + "repite el parámetro; el apartamento debe ofrecerlos todos) y rango de precio del valor estimado "
                     + "de la estancia. Las opciones de dormitorios, características y servicios las da "
-                    + "GET /api/apartamentos/filtros. 10 resultados por página")
+                    + "GET /api/apartamentos/filtros. Ordenados primero por la capacidad más cercana al tamaño del "
+                    + "grupo y después por el valor estimado, de menor a mayor. 10 resultados por página")
     @ApiResponse(responseCode = "200", description = "Página de apartamentos disponibles (puede venir vacía)")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
     @ApiResponse(responseCode = "409", description = "Estancia o filtros inválidos (RN-03, RN-04, RP-01, 7.5)")
@@ -193,21 +195,31 @@ public class ApartamentoController {
 
     /** GET /api/apartamentos/{id}/disponibilidad?desde=&hasta=: calendario público de disponibilidad. */
     @GetMapping("/{id}/disponibilidad")
-    @PreAuthorize("permitAll()")
+    // Público; excluir una reserva solo lo puede hacer el personal o el titular de esa reserva (no revela sus fechas)
+    @PreAuthorize("#excluirReserva == null or hasAnyAuthority('RECEPCIONISTA', 'ADMINISTRADOR') "
+            + "or (hasAuthority('HUESPED') and @propietarioReserva.esTitular(#excluirReserva, authentication))")
     @Operation(summary = "Calendario de disponibilidad de un apartamento",
             description = "Por cada noche entre desde (incluida) y hasta (excluida) dice si está libre para reservar, "
                     + "con las mismas reglas de la búsqueda (bloqueos, reservas activas y tiempo de preparación). "
-                    + "Las noches anteriores a hoy no están libres. No incluye datos de las reservas. Máximo 62 noches")
+                    + "Las noches anteriores a hoy no están libres. No incluye datos de las reservas. Máximo 62 noches. "
+                    + "Con excluirReserva (al modificar una reserva, RN-14) sus noches no cuentan como ocupadas; ese "
+                    + "parámetro solo lo pueden usar la recepción, el administrador o el titular de la reserva")
     @ApiResponse(responseCode = "200", description = "Disponibilidad noche por noche")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
+    @ApiResponse(responseCode = "403", description = "excluirReserva sin token o de una reserva que no es del usuario")
     @ApiResponse(responseCode = "404", description = "No existe o fue retirado de la venta")
-    @ApiResponse(responseCode = "409", description = "desde no es anterior a hasta o el rango supera 62 noches")
+    @ApiResponse(responseCode = "409", description = "desde no es anterior a hasta, el rango supera 62 noches o el "
+            + "código de reserva está mal formado")
     public ResponseEntity<DisponibilidadApartamentoResponse> disponibilidad(@PathVariable String id,
                                                                             @RequestParam LocalDate desde,
-                                                                            @RequestParam LocalDate hasta) {
+                                                                            @RequestParam LocalDate hasta,
+                                                                            @RequestParam(required = false)
+                                                                            String excluirReserva) {
         IdentificacionApartamento identificacion = new IdentificacionApartamento(id);
+        CodigoReserva excluida = excluirReserva == null || excluirReserva.isBlank() ? null
+                : new CodigoReserva(excluirReserva.trim());
         List<DisponibilidadApartamentoResponse.Noche> noches = consultarDisponibilidadUseCase
-                .ejecutar(identificacion, desde, hasta).stream()
+                .ejecutar(identificacion, desde, hasta, excluida).stream()
                 .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre(), noche.bloqueada()))
                 .toList();
         return ResponseEntity.ok(new DisponibilidadApartamentoResponse(identificacion.codigo(), desde, hasta, noches));

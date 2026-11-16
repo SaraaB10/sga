@@ -94,7 +94,7 @@ export default function DetalleApartamento() {
           <h1 className="font-titulo text-3xl font-semibold">{a.nombre}</h1>
           <span className="text-lg text-muted-foreground">{a.identificacion}</span>
           <EstadoOperativo estado={a.estadoOperativo} />
-          <EtiquetaActivo activo={a.activo} />
+          <EtiquetaActivo apartamento={a} />
         </div>
 
         {esAdmin && (

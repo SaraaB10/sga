@@ -328,6 +328,23 @@ class ApartamentoControllerIntegracionTest {
     }
 
     @Test
+    @DisplayName("7.5: primero la capacidad más cercana al grupo y después el precio, de menor a mayor")
+    void ordenPorCapacidadCercanaYPrecio() throws Exception {
+        LocalDate entrada = LocalDate.now(BOGOTA).plusDays(40);
+        // Grupo de 2: los de capacidad 2 (101 más barato que 102), luego los de 4 (201 más barato que 202) y al final
+        // APT-301 (capacidad 6), aunque por ocupante sea el más barato
+        String respuesta = get(disponibles(entrada, 2, "")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(List.of("APT-101", "APT-102", "APT-201", "APT-202", "APT-301"),
+                JsonPath.read(respuesta, "$.contenido[*].identificacion"));
+        List<Number> valores = JsonPath.read(respuesta, "$.contenido[*].valorEstimado");
+        assertTrue(valores.get(0).longValue() <= valores.get(1).longValue(), "Con la misma capacidad, el más barato primero");
+        // Grupo de 4: los de capacidad 4 primero y después APT-301
+        get(disponibles(entrada, 4, ""))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-201", "APT-202", "APT-301")));
+    }
+
+    @Test
     @DisplayName("7.5: filtro por número de dormitorios, aparte de las características")
     void filtroPorDormitorios() throws Exception {
         get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&dormitorios=2"))
@@ -433,7 +450,7 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estadoOperativo").value("FUERA_DE_SERVICIO"))
                 .andExpect(jsonPath("$.bloqueosVigentes", hasSize(1)))
-                .andExpect(jsonPath("$.bloqueosVigentes[0].fechaInicio").value(hoy.plusDays(3).toString()))
+                .andExpect(jsonPath("$.bloqueosVigentes[0].fechaInicio").value(hoy.toString()))
                 .andExpect(jsonPath("$.bloqueosVigentes[0].fechaFin").value(hoy.plusDays(15).toString()));
     }
 
@@ -733,7 +750,7 @@ class ApartamentoControllerIntegracionTest {
     @DisplayName("Calendario público de disponibilidad: libre o no por noche, sin datos de las reservas")
     void calendarioPublicoDeDisponibilidad() throws Exception {
         LocalDate hoy = LocalDate.now(BOGOTA);
-        // APT-202 está bloqueado de hoy+3 a hoy+15 en los datos iniciales
+        // APT-202 está bloqueado de hoy a hoy+15 en los datos iniciales
         String url = "/api/apartamentos/APT-202/disponibilidad?desde=" + hoy.minusDays(1) + "&hasta=" + hoy.plusDays(17);
         mvc.perform(MockMvcRequestBuilders.get(url).with(anonymous()))
                 .andExpect(status().isOk())
@@ -741,8 +758,9 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(jsonPath("$.noches", hasSize(18)))
                 .andExpect(jsonPath("$.noches[0].fecha").value(hoy.minusDays(1).toString()))
                 .andExpect(jsonPath("$.noches[0].libre").value(false))     // noche pasada
-                .andExpect(jsonPath("$.noches[2].libre").value(true))      // hoy+1
-                .andExpect(jsonPath("$.noches[2].bloqueada").value(false))
+                .andExpect(jsonPath("$.noches[0].bloqueada").value(false))
+                .andExpect(jsonPath("$.noches[1].libre").value(false))     // hoy, bloqueada
+                .andExpect(jsonPath("$.noches[1].bloqueada").value(true))
                 .andExpect(jsonPath("$.noches[4].libre").value(false))     // hoy+3, bloqueada
                 .andExpect(jsonPath("$.noches[4].bloqueada").value(true))
                 .andExpect(jsonPath("$.noches[15].libre").value(false))    // hoy+14, bloqueada
@@ -752,13 +770,28 @@ class ApartamentoControllerIntegracionTest {
 
         // Una reserva activa ocupa sus noches; la respuesta no dice de quién es ni por qué
         LocalDate entrada = hoy.plusDays(95);
-        post("/api/reservas", reserva("APT-102", entrada, entrada.plusDays(2))).andExpect(status().isCreated());
-        String calendario = mvc.perform(MockMvcRequestBuilders.get("/api/apartamentos/APT-102/disponibilidad?desde="
-                        + entrada.minusDays(1) + "&hasta=" + entrada.plusDays(4)).with(anonymous()))
+        String codigo = JsonPath.read(post("/api/reservas", reserva("APT-102", entrada, entrada.plusDays(2)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.codigo");
+        String rango = "/api/apartamentos/APT-102/disponibilidad?desde=" + entrada.minusDays(1) + "&hasta="
+                + entrada.plusDays(4);
+        String calendario = mvc.perform(MockMvcRequestBuilders.get(rango).with(anonymous()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         List<Boolean> libres = JsonPath.read(calendario, "$.noches[*].libre");
         assertEquals(List.of(true, false, false, true, true), libres);
+
+        // RN-14: al modificar esa reserva, sus propias noches cuentan como libres (solo personal o el titular)
+        String sinElla = mvc.perform(MockMvcRequestBuilders.get(rango + "&excluirReserva=" + codigo)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("RECEPCIONISTA"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(List.of(true, true, true, true, true), JsonPath.read(sinElla, "$.noches[*].libre"));
+        mvc.perform(MockMvcRequestBuilders.get(rango + "&excluirReserva=" + codigo).with(anonymous()))
+                .andExpect(status().isForbidden());
+        mvc.perform(MockMvcRequestBuilders.get(rango + "&excluirReserva=" + codigo)
+                        .with(jwt().jwt(j -> j.claim("documento", "999999999"))
+                                .authorities(new SimpleGrantedAuthority("HUESPED"))))
+                .andExpect(status().isForbidden());
         // Las noches de una reserva no salen como bloqueadas: solo como no libres
         List<Boolean> bloqueadas = JsonPath.read(calendario, "$.noches[*].bloqueada");
         assertEquals(List.of(false, false, false, false, false), bloqueadas);
