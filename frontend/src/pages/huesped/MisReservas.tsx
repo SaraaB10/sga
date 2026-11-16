@@ -113,7 +113,10 @@ export default function MisReservas() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <Dinero valor={r.valorTotal} className="font-semibold" />
+                      <span className="flex flex-col items-end leading-tight">
+                        <span className="text-xs text-muted-foreground">Estancia</span>
+                        <Dinero valor={r.valorTotal} className="font-semibold" />
+                      </span>
                       <ChevronRight aria-hidden="true" className="size-5 text-muted-foreground" />
                     </div>
                   </Link>
