@@ -18,6 +18,9 @@ public interface UsuarioJpaDataRepository extends JpaRepository<UsuarioEntity, L
 
     boolean existsByDocumento(String documento);
 
+    /** Datos de prueba: hay al menos un usuario con ese rol */
+    boolean existsByRol(RolUsuario rol);
+
     /** Listado del administrador (7.2): rol y activo son opcionales, un null no filtra */
     @Query("select u from UsuarioEntity u where (:rol is null or u.rol = :rol) and (:activo is null or u.activo = :activo)")
     Page<UsuarioEntity> buscar(RolUsuario rol, Boolean activo, Pageable pageable);

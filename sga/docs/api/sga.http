@@ -15,10 +15,11 @@
 # Si lo ejecuta dos veces sin reiniciar, fallan las que cambian estado (la reserva ya existe, etc.).
 #
 # Datos iniciales que se evitan (DatosInicialesCoralConfig y DatosInicialesReservasConfig):
-#   APT-101  PENDIENTE hoy+10→hoy+12 (PORTAL), CANCELADA hoy+20→hoy+22, FINALIZADA hoy-10→hoy-7
+#   APT-101  PENDIENTE hoy+10→hoy+12 (PORTAL), CANCELADA hoy+20→hoy+22, FINALIZADA hoy-10→hoy-7,
+#            bloqueo hoy+4→hoy+7
 #   APT-102  CONFIRMADA hoy+12→hoy+15, NO_SHOW hoy-5→hoy-3
 #   APT-201  EN_CURSO hoy-1→hoy+2 (OCUPADO), PENDIENTE hoy+15→hoy+18 (EXTERNO, sin hora de llegada)
-#   APT-202  FUERA_DE_SERVICIO con bloqueo hoy+3→hoy+15
+#   APT-202  FUERA_DE_SERVICIO con bloqueo hoy→hoy+15
 #   APT-301  bloqueo hoy+20→hoy+25
 # El flujo principal usa APT-301 de hoy a hoy+3, libre y PREPARADO al arrancar.
 # ====================================================================================================

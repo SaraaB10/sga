@@ -450,7 +450,7 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estadoOperativo").value("FUERA_DE_SERVICIO"))
                 .andExpect(jsonPath("$.bloqueosVigentes", hasSize(1)))
-                .andExpect(jsonPath("$.bloqueosVigentes[0].fechaInicio").value(hoy.plusDays(3).toString()))
+                .andExpect(jsonPath("$.bloqueosVigentes[0].fechaInicio").value(hoy.toString()))
                 .andExpect(jsonPath("$.bloqueosVigentes[0].fechaFin").value(hoy.plusDays(15).toString()));
     }
 
@@ -750,7 +750,7 @@ class ApartamentoControllerIntegracionTest {
     @DisplayName("Calendario público de disponibilidad: libre o no por noche, sin datos de las reservas")
     void calendarioPublicoDeDisponibilidad() throws Exception {
         LocalDate hoy = LocalDate.now(BOGOTA);
-        // APT-202 está bloqueado de hoy+3 a hoy+15 en los datos iniciales
+        // APT-202 está bloqueado de hoy a hoy+15 en los datos iniciales
         String url = "/api/apartamentos/APT-202/disponibilidad?desde=" + hoy.minusDays(1) + "&hasta=" + hoy.plusDays(17);
         mvc.perform(MockMvcRequestBuilders.get(url).with(anonymous()))
                 .andExpect(status().isOk())
@@ -758,8 +758,9 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(jsonPath("$.noches", hasSize(18)))
                 .andExpect(jsonPath("$.noches[0].fecha").value(hoy.minusDays(1).toString()))
                 .andExpect(jsonPath("$.noches[0].libre").value(false))     // noche pasada
-                .andExpect(jsonPath("$.noches[2].libre").value(true))      // hoy+1
-                .andExpect(jsonPath("$.noches[2].bloqueada").value(false))
+                .andExpect(jsonPath("$.noches[0].bloqueada").value(false))
+                .andExpect(jsonPath("$.noches[1].libre").value(false))     // hoy, bloqueada
+                .andExpect(jsonPath("$.noches[1].bloqueada").value(true))
                 .andExpect(jsonPath("$.noches[4].libre").value(false))     // hoy+3, bloqueada
                 .andExpect(jsonPath("$.noches[4].bloqueada").value(true))
                 .andExpect(jsonPath("$.noches[15].libre").value(false))    // hoy+14, bloqueada
