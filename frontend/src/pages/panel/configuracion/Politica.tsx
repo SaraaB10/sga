@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { entero, erroresDelServidor, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
+import { entero, erroresDelServidor, MAXIMO_MOTIVO, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 
@@ -179,7 +179,11 @@ const esquemaPolitica = z.object({
       else if (!antelaciones.includes(0))
         contexto.addIssue({ code: 'custom', message: 'Debe haber un tramo desde 0 días.' })
     }),
-  consecuencia: textoObligatorio('Describe qué pasa si el huésped no se presenta'),
+  consecuencia: textoObligatorio(
+    'Describe qué pasa si el huésped no se presenta',
+    MAXIMO_MOTIVO,
+    'La consecuencia del no-show admite máximo 250 caracteres',
+  ),
 })
 
 interface TramoEditable {

@@ -4,7 +4,7 @@ import { usePoliticaVigente } from '@/api/publico'
 import { useCancelarReserva, type ReservaDetalleResponse, type RetencionResponse } from '@/api/reservas'
 import { AvisoError, ConfirmarDialogo, Dinero } from '@/components/coral'
 import { Label } from '@/components/ui/label'
-import { erroresDelServidor, esErrorDeCampos, textoObligatorio, useValidacion } from '@/lib/validacion'
+import { erroresDelServidor, esErrorDeCampos, MAXIMO_MOTIVO, textoObligatorio, useValidacion } from '@/lib/validacion'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 import { retencionEstimada } from '@/pages/publico/comun/reglas'
 
@@ -16,7 +16,9 @@ interface Props {
 }
 
 // CancelarReservaRequest: el motivo es obligatorio
-const esquema = z.object({ motivo: textoObligatorio('Escribe el motivo de la cancelación.') })
+const esquema = z.object({
+  motivo: textoObligatorio('Escribe el motivo de la cancelación.', MAXIMO_MOTIVO, 'El motivo admite máximo 250 caracteres'),
+})
 
 /** Pide el motivo y muestra la retención estimada antes de cancelar */
 export function DialogoCancelar({ reserva, abierto, alCambiar, alCancelar }: Props) {

@@ -139,9 +139,9 @@ export default function DetalleReserva() {
               <CircleX aria-hidden="true" /> Cancelar
             </Button>
           )}
-          <Button variant="ghost" asChild>
+          <Button variant="outline" asChild>
             <Link to={`/panel/reservas/${encodeURIComponent(r.codigo)}/folio`}>
-              <Receipt aria-hidden="true" /> Folio
+              <Receipt aria-hidden="true" /> Ver folio
             </Link>
           </Button>
           {/* Va al final para que su ayuda quede justo debajo */}
@@ -182,7 +182,7 @@ export default function DetalleReserva() {
               to={`/panel/reservas/${encodeURIComponent(r.codigo)}/folio`}
               className="text-sm font-medium text-primary hover:underline"
             >
-              Abrir
+              Ver folio
             </Link>
           </div>
           <FolioSoloLectura folio={folio.data} error={folio.error} />

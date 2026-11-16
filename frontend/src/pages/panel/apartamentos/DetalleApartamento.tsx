@@ -148,6 +148,18 @@ export default function DetalleApartamento() {
             <Dato icono={<BedDouble aria-hidden="true" className="size-4" />} etiqueta="Dormitorios" valor={a.dormitorios} />
             <Dato icono={<Users aria-hidden="true" className="size-4" />} etiqueta="Capacidad" valor={`${a.capacidadMaxima} ${a.capacidadMaxima === 1 ? 'persona' : 'personas'}`} />
           </dl>
+          <h3 className="mt-5 text-sm font-semibold">Características</h3>
+          {(a.caracteristicas ?? []).length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">Sin características registradas.</p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {a.caracteristicas.map((c) => (
+                <li key={c} className="rounded-full bg-crema px-3 py-1 text-xs">
+                  {c}
+                </li>
+              ))}
+            </ul>
+          )}
           <h3 className="mt-5 text-sm font-semibold">Dotación</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {a.dotacion.map((d) => (

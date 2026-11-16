@@ -1,10 +1,7 @@
 package co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity;
 
-import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,9 +21,9 @@ public class PagoEmbedable {
     @Column(nullable = false)
     private BigDecimal valor;
 
-    @Enumerated(EnumType.STRING)
+    /** Código del medio (MedioPago): el mismo texto que guardaba el enum, así las bases existentes siguen sirviendo */
     @Column(nullable = false)
-    private MedioPago medio;
+    private String medio;
 
     @Column(nullable = false)
     private LocalDate fecha;

@@ -268,9 +268,9 @@ class CanalExternoControllerIntegracionTest {
     private static String reserva(String idExterno, String apartamento, LocalDate entrada, LocalDate salida) {
         return """
                 {"identificadorExterno":"%s","identificacionApartamento":"%s","fechaEntrada":"%s","fechaSalida":"%s",
-                 "titular":{"nombre":"Carlos Ruiz","tipoDocumento":"PASAPORTE","numeroDocumento":"X1234567",
+                 "titular":{"nombre":"Carlos Ruiz","tipoDocumento":"PASAPORTE","numeroDocumento":"81234567",
                             "email":"carlos@correo.com","telefono":"3109876543"},
-                 "ocupantes":[{"nombre":"Carlos Ruiz","tipoDocumento":"PASAPORTE","numeroDocumento":"X1234567",
+                 "ocupantes":[{"nombre":"Carlos Ruiz","tipoDocumento":"PASAPORTE","numeroDocumento":"81234567",
                                "fechaNacimiento":"1985-02-11"}]}
                 """.formatted(idExterno, apartamento, entrada, salida);
     }

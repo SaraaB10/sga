@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BedDouble, CalendarCheck, Clock, Dog, ShieldCheck, Users } from 'lucide-react'
+import { ArrowLeft, BedDouble, CalendarCheck, Check, Clock, CreditCard, Dog, ScrollText, ShieldCheck, Users } from 'lucide-react'
 import { z } from 'zod'
-import { useApartamento } from '@/api/publico'
+import { useApartamento, useMediosPago, usePoliticaVigente } from '@/api/publico'
 import { useAuth } from '@/auth/AuthContext'
 import { ROLES_PANEL, tieneAlgunRol } from '@/auth/roles'
 import { AvisoError, Campo, Dinero, Fecha, FotoApartamento, Vacio } from '@/components/coral'
@@ -22,6 +22,7 @@ import {
   ocupantesParaCotizar,
 } from './comun/estancia'
 import { iconoDotacion } from './comun/iconos'
+import { ListaPolitica } from './comun/ListaPolitica'
 import { MapaAlojamiento } from './MapaAlojamiento'
 import { PildoraTemporada } from './comun/PildoraTemporada'
 import {
@@ -131,6 +132,25 @@ export default function DetalleApartamento() {
             </section>
           )}
 
+          {(apto.caracteristicas ?? []).length > 0 && (
+            <section aria-labelledby="titulo-caracteristicas">
+              <h2 id="titulo-caracteristicas" className="font-titulo text-2xl font-semibold">
+                Características
+              </h2>
+              <ul className="mt-4 flex flex-wrap gap-2">
+                {apto.caracteristicas.map((c) => (
+                  <li
+                    key={c}
+                    className="flex items-center gap-1.5 rounded-full border border-coral/40 bg-crema px-3 py-1.5 text-sm"
+                  >
+                    <Check aria-hidden="true" className="size-4 text-coral" />
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {apto.dotacion.length > 0 && (
             <section aria-labelledby="titulo-dotacion">
               <h2 id="titulo-dotacion" className="font-titulo text-2xl font-semibold">
@@ -233,6 +253,8 @@ export default function DetalleApartamento() {
             </div>
           </section>
 
+          <PoliticaYPagos />
+
           <CalendarioDisponibilidad identificacion={apto.identificacion} />
 
           <MapaAlojamiento />
@@ -251,6 +273,51 @@ const MAXIMO_FOTOS_GALERIA = 5
  * ancho. Desde md: 1 foto ocupa todo; 2 van lado a lado; 3 o más, la principal ocupa la mitad izquierda y las
  * demás se reparten a la derecha en dos filas.
  */
+/** Política de cancelación vigente y, junto a ella, los medios de pago que acepta el alojamiento (L-18) */
+function PoliticaYPagos() {
+  const politica = usePoliticaVigente()
+  const medios = useMediosPago()
+  return (
+    <section aria-labelledby="titulo-politica" className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+      <div className="rounded-tarjeta border border-border bg-card p-4">
+        <h2 id="titulo-politica" className="flex items-center gap-2 text-sm font-semibold">
+          <ScrollText aria-hidden="true" className="size-5 text-coral" /> Política de cancelación
+        </h2>
+        {politica.error ? (
+          <AvisoError className="mt-3" error={politica.error} />
+        ) : !politica.data ? (
+          <Skeleton className="mt-3 h-20" />
+        ) : (
+          <>
+            <ListaPolitica className="mt-3" politica={politica.data} />
+            {politica.data.consecuenciaNoShow && (
+              <p className="mt-3 text-sm text-muted-foreground">Si no te presentas: {politica.data.consecuenciaNoShow}</p>
+            )}
+          </>
+        )}
+      </div>
+      <div className="rounded-tarjeta border border-border bg-card p-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <CreditCard aria-hidden="true" className="size-5 text-coral" /> Medios de pago
+        </h2>
+        {medios.error ? (
+          <AvisoError className="mt-3" error={medios.error} />
+        ) : !medios.data ? (
+          <Skeleton className="mt-3 h-16" />
+        ) : medios.data.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Consulta los medios de pago con recepción.</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-1.5 text-sm" aria-label="Medios de pago aceptados">
+            {medios.data.map((m) => (
+              <li key={m.codigo}>{m.nombre}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function claseCuadricula(total: number): string {
   if (total === 1) return 'grid-cols-1 md:h-[28rem]'
   if (total === 2) return 'grid-cols-2 md:h-[28rem]'

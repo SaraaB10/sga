@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.application.usecase;
 
 import co.edu.uniquindio.sga.application.exception.ServicioAdicionalNoEncontradoException;
+import co.edu.uniquindio.sga.domain.entity.Alojamiento;
 import co.edu.uniquindio.sga.domain.entity.ServicioAdicional;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
@@ -9,6 +10,7 @@ import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.RoundingMode;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -69,6 +71,13 @@ public class ServiciosAdicionalesUseCase {
     /** Por qué el servicio no puede desactivarse ni dejar de generar cargo; vacío si se puede. */
     public Optional<String> motivoObligatorio(String id) {
         return gestionService.motivoObligatorio(id);
+    }
+
+    /** RP-03: valor del recargo de recepción nocturna en pesos; vacío si el servicio no existe. */
+    public Optional<Long> recargoRecepcionNocturna(Alojamiento alojamiento) {
+        return gestionService.recargoRecepcionNocturna(alojamiento)
+                .filter(Objects::nonNull)
+                .map(valor -> valor.monto().setScale(0, RoundingMode.HALF_UP).longValueExact());
     }
 
     private void validarQueExiste(String id) {

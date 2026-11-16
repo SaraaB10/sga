@@ -9,6 +9,7 @@ import co.edu.uniquindio.sga.application.dto.request.SugerirGravedadRequest;
 import co.edu.uniquindio.sga.application.dto.response.ActualizacionApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDetalleResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDisponibleResponse;
+import co.edu.uniquindio.sga.application.dto.response.OpcionesFiltroResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.BloqueoResponse;
 import co.edu.uniquindio.sga.application.dto.response.DisponibilidadApartamentoResponse;
@@ -38,6 +39,7 @@ import co.edu.uniquindio.sga.domain.valueobject.ApartamentoDisponible;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
 import co.edu.uniquindio.sga.domain.valueobject.CriterioBusqueda;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.RegistroTarifa;
@@ -99,9 +101,11 @@ public class ApartamentoController {
     @PreAuthorize("permitAll()")
     @Operation(summary = "Buscar apartamentos disponibles",
             description = "Apartamentos libres en todas las noches de la estancia y con capacidad para el grupo "
-                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, característica de la dotación, "
-                    + "servicios (se repite el parámetro; el apartamento debe ofrecerlos todos según su dotación y "
-                    + "sus características) y rango de precio del valor estimado de la estancia. 10 resultados por página")
+                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, número de dormitorios, "
+                    + "característica del apartamento (por ejemplo \"Vista al mar\"), servicios de su dotación (se "
+                    + "repite el parámetro; el apartamento debe ofrecerlos todos) y rango de precio del valor estimado "
+                    + "de la estancia. Las opciones de dormitorios, características y servicios las da "
+                    + "GET /api/apartamentos/filtros. 10 resultados por página")
     @ApiResponse(responseCode = "200", description = "Página de apartamentos disponibles (puede venir vacía)")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
     @ApiResponse(responseCode = "409", description = "Estancia o filtros inválidos (RN-03, RN-04, RP-01, 7.5)")
@@ -115,14 +119,30 @@ public class ApartamentoController {
             @RequestParam(required = false) Long precioMaximo,
             @RequestParam(required = false) String caracteristica,
             @RequestParam(required = false) List<String> servicios,
+            @RequestParam(required = false) Integer dormitorios,
             @RequestParam(defaultValue = "0") @Min(0) int pagina) {
         CriterioBusqueda criterio = new CriterioBusqueda(capacidadMinima,
                 precioMinimo == null ? null : Dinero.de(precioMinimo),
                 precioMaximo == null ? null : Dinero.de(precioMaximo),
-                caracteristica, servicios);
+                caracteristica, servicios, dormitorios);
         Pagina<ApartamentoDisponible> disponibles = buscarApartamentoDisponibleUseCase.buscar(entrada, salida,
                 ocupantes, fechasNacimiento, criterio, pagina);
         return ResponseEntity.ok(PaginaMapper.aResponse(disponibles, mapper::aDisponibleResponse));
+    }
+
+    /** 7.5. GET /api/apartamentos/filtros. Ruta fija declarada antes de /{id} */
+    @GetMapping("/filtros")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Opciones de los filtros de búsqueda",
+            description = "Números de dormitorios, características (rasgos del apartamento, por ejemplo \"Vista al "
+                    + "mar\") y servicios (los elementos de su dotación) de los apartamentos activos, sin repetir. Son "
+                    + "las opciones de los filtros dormitorios, caracteristica y servicios de "
+                    + "GET /api/apartamentos/disponibles")
+    @ApiResponse(responseCode = "200", description = "Opciones de los filtros")
+    public ResponseEntity<OpcionesFiltroResponse> opcionesDeFiltro() {
+        ConsultarApartamentosUseCase.OpcionesFiltro opciones = consultarApartamentosUseCase.opcionesDeFiltro();
+        return ResponseEntity.ok(new OpcionesFiltroResponse(opciones.dormitorios(), opciones.caracteristicas(),
+                opciones.servicios()));
     }
 
     /** CU-20. GET /api/apartamentos?pagina= */
@@ -188,7 +208,7 @@ public class ApartamentoController {
         IdentificacionApartamento identificacion = new IdentificacionApartamento(id);
         List<DisponibilidadApartamentoResponse.Noche> noches = consultarDisponibilidadUseCase
                 .ejecutar(identificacion, desde, hasta).stream()
-                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre()))
+                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre(), noche.bloqueada()))
                 .toList();
         return ResponseEntity.ok(new DisponibilidadApartamentoResponse(identificacion.codigo(), desde, hasta, noches));
     }
@@ -391,7 +411,8 @@ public class ApartamentoController {
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
     @Operation(summary = "Registrar un apartamento",
-            description = "Crea el apartamento con datos, dotación, imágenes (1 a 10, una principal) y, opcionalmente, "
+            description = "Crea el apartamento con datos, dotación, características (opcionales), imágenes (1 a 10, "
+                    + "una principal) y, opcionalmente, "
                     + "tarifas por temporada. Nace PREPARADO e INACTIVO hasta que se active (7.3, 7.4)")
     @ApiResponse(responseCode = "201", description = "Apartamento registrado; Location apunta a su detalle")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos")
@@ -403,7 +424,8 @@ public class ApartamentoController {
         Apartamento apartamento = registrarApartamentoUseCase.ejecutar(
                 new IdentificacionApartamento(request.identificacion()), request.nombre(), request.descripcion(),
                 request.dormitorios(), new Capacidad(request.capacidadMaxima()), new Dotacion(request.dotacion()),
-                mapper.aImagenes(request.imagenes()), mapper.aTarifas(request.tarifas()));
+                new Caracteristicas(request.caracteristicas()), mapper.aImagenes(request.imagenes()),
+                mapper.aTarifas(request.tarifas()));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(apartamento.getIdentificacion().codigo())
@@ -415,7 +437,8 @@ public class ApartamentoController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
     @Operation(summary = "Actualizar un apartamento",
-            description = "Nombre, descripción, dormitorios, dotación y capacidad. Cambiar la capacidad no afecta las "
+            description = "Nombre, descripción, dormitorios, dotación, características y capacidad. Cambiar la "
+                    + "capacidad no afecta las "
                     + "reservas ya creadas; la respuesta lista las activas o futuras que la superan (7.3)")
     @ApiResponse(responseCode = "200", description = "Apartamento actualizado, con la advertencia de capacidad")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos")
@@ -427,7 +450,8 @@ public class ApartamentoController {
             @PathVariable String id, @Valid @RequestBody ActualizarApartamentoRequest request) {
         ResultadoActualizacionApartamento resultado = actualizarApartamentoUseCase.ejecutar(
                 new IdentificacionApartamento(id), request.nombre(), request.descripcion(), request.dormitorios(),
-                new Dotacion(request.dotacion()), new Capacidad(request.capacidadMaxima()));
+                new Dotacion(request.dotacion()), new Caracteristicas(request.caracteristicas()),
+                new Capacidad(request.capacidadMaxima()));
         return ResponseEntity.ok(mapper.aActualizacionResponse(resultado));
     }
 

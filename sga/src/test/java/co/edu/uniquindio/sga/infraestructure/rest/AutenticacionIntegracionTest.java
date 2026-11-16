@@ -102,23 +102,39 @@ class AutenticacionIntegracionTest {
     }
 
     @Test
-    @DisplayName("Registro: un teléfono con letras o con menos de 7 dígitos responde 400 sobre telefono; vacío, el obligatorio")
+    @DisplayName("Registro: un teléfono con símbolos o sin 10 dígitos responde 400 sobre telefono; vacío, el obligatorio")
     void registroValidaElTelefono() throws Exception {
-        registrar(registro("telefono.letras@correo.co", "1095000020").replace("3160000000", "316-ABC-0000"))
-                .andExpect(CuerpoError.validacion("/api/auth/registro", Map.of("telefono",
-                        "El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, "
-                                + "paréntesis y el signo + al inicio")));
-        registrar(registro("telefono.corto@correo.co", "1095000021").replace("3160000000", "(316) 12"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errores.telefono", startsWith("El teléfono debe tener al menos 7 dígitos")));
+        registrar(registro("telefono.simbolos@correo.co", "1095000020").replace("3160000000", "316-000-0000"))
+                .andExpect(CuerpoError.validacion("/api/auth/registro",
+                        Map.of("telefono", "El teléfono debe tener 10 dígitos, solo números")));
+        registrar(registro("telefono.corto@correo.co", "1095000021").replace("3160000000", "316000000"))
+                .andExpect(jsonPath("$.errores.telefono").value("El teléfono debe tener 10 dígitos, solo números"));
+        registrar(registro("telefono.largo@correo.co", "1095000024").replace("3160000000", "+573160000000"))
+                .andExpect(jsonPath("$.errores.telefono").value("El teléfono debe tener 10 dígitos, solo números"));
         registrar(registro("telefono.vacio@correo.co", "1095000022").replace("3160000000", ""))
                 .andExpect(jsonPath("$.errores.telefono").value("El teléfono es obligatorio"));
-        assertTrue(usuarios.findByCorreo("telefono.letras@correo.co").isEmpty());
+        assertTrue(usuarios.findByCorreo("telefono.simbolos@correo.co").isEmpty());
 
-        registrar(registro("telefono.valido@correo.co", "1095000023").replace("3160000000", "+57 (316) 000-0000"))
+        registrar(registro("telefono.valido@correo.co", "1095000023").replace("3160000000", "3170000000"))
                 .andExpect(status().isCreated());
-        assertEquals("+57 (316) 000-0000",
-                usuarios.findByCorreo("telefono.valido@correo.co").orElseThrow().getTelefono());
+        assertEquals("3170000000", usuarios.findByCorreo("telefono.valido@correo.co").orElseThrow().getTelefono());
+    }
+
+    @Test
+    @DisplayName("Registro: un documento con símbolos o fuera de 6 a 10 dígitos responde 400 sobre documento")
+    void registroValidaElDocumento() throws Exception {
+        String mensaje = "El documento debe tener entre 6 y 10 dígitos, solo números";
+        registrar(registro("documento.letras@correo.co", "PA123456"))
+                .andExpect(CuerpoError.validacion("/api/auth/registro", Map.of("documento", mensaje)));
+        registrar(registro("documento.corto@correo.co", "12345"))
+                .andExpect(jsonPath("$.errores.documento").value(mensaje));
+        registrar(registro("documento.largo@correo.co", "10950000301"))
+                .andExpect(jsonPath("$.errores.documento").value(mensaje));
+        registrar(registro("documento.puntos@correo.co", "1.095.030"))
+                .andExpect(jsonPath("$.errores.documento").value(mensaje));
+        assertTrue(usuarios.findByCorreo("documento.letras@correo.co").isEmpty());
+
+        registrar(registro("documento.valido@correo.co", "109503")).andExpect(status().isCreated());
     }
 
     @Test

@@ -18,7 +18,9 @@ import {
 } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useNombreMedio } from '@/lib/mediosPago'
 import { cn } from '@/lib/utils'
+import { anticipoPendiente, reglasDe, type AnticipoPendiente } from '@/pages/publico/comun/reglas'
 import { DialogoAutorizarCierre } from './DialogoAutorizarCierre'
 import { DialogoCorreccion, DialogoPago, DialogoServicio } from './DialogosFolio'
 import { cargosCorregibles, movimientosDe, type ClaseMovimiento, type Movimiento } from './movimientos'
@@ -38,6 +40,7 @@ export default function Folio() {
   const apartamento = useApartamento(reserva.data?.identificacionApartamento)
   const alojamiento = useAlojamiento()
   const { roles, usuario } = useAuth()
+  const nombreMedio = useNombreMedio()
   const esAdministrador = roles.includes('ADMINISTRADOR')
   const cerrar = useCerrarFolio(codigo)
 
@@ -80,7 +83,8 @@ export default function Folio() {
   }
 
   const r = reserva.data
-  const movimientos = movimientosDe(f)
+  const movimientos = movimientosDe(f, nombreMedio)
+  const anticipo = f.cerrado ? null : anticipoPendiente(r?.estado, r?.valorTotal, f.totalPagado, reglasDe(alojamiento.data))
   const corregibles = cargosCorregibles(movimientos)
   const abierto = !f.cerrado
 
@@ -193,6 +197,7 @@ export default function Folio() {
         {/* ---------- Saldo y acciones ---------- */}
         <aside className="order-1 flex flex-col gap-4 2xl:order-2">
           <Saldo folio={f} />
+          {anticipo && <TarjetaAnticipo anticipo={anticipo} />}
 
           {abierto ? (
             <div className="grid grid-cols-2 gap-2 2xl:grid-cols-1">
@@ -234,7 +239,13 @@ export default function Folio() {
       </div>
 
       {/* ---------- Diálogos ---------- */}
-      <DialogoPago codigo={codigo} saldo={f.saldo} abierto={dialogo === 'pago'} alCambiar={alCambiar} />
+      <DialogoPago
+        codigo={codigo}
+        saldo={f.saldo}
+        anticipo={anticipo}
+        abierto={dialogo === 'pago'}
+        alCambiar={alCambiar}
+      />
       <DialogoServicio
         codigo={codigo}
         servicios={alojamiento.data?.serviciosAdicionales}
@@ -323,6 +334,34 @@ function ConceptoMovimiento({ movimiento: m }: { movimiento: Movimiento }) {
       <span>{m.concepto}</span>
       {m.corregidoPor && <span className="text-xs text-muted-foreground">Corregido por {m.corregidoPor}</span>}
     </span>
+  )
+}
+
+/** L-11: cuánto falta para el anticipo que confirma la reserva PENDIENTE */
+function TarjetaAnticipo({ anticipo }: { anticipo: AnticipoPendiente }) {
+  const cubierto = anticipo.falta === 0
+  return (
+    <div
+      role="status"
+      aria-label="Anticipo para confirmar"
+      className={cn(
+        'flex flex-col gap-1.5 rounded-tarjeta border p-4 text-sm',
+        cubierto ? 'border-[#9fd4bd] bg-[#DDF2EA] text-[#1C5E45]' : 'border-[#f0c987] bg-[#FFF4DF] text-[#6B4A0B]',
+      )}
+    >
+      <p className="font-semibold">
+        Anticipo para confirmar ({anticipo.porcentaje} %): <Dinero valor={anticipo.valor} />
+      </p>
+      <p>
+        {cubierto ? (
+          'Cubierto: ya se puede confirmar la reserva.'
+        ) : (
+          <>
+            Falta <Dinero valor={anticipo.falta} /> para cubrirlo.
+          </>
+        )}
+      </p>
+    </div>
   )
 }
 

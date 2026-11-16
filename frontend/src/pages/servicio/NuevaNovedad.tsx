@@ -8,7 +8,15 @@ import { useAuth } from '@/auth/AuthContext'
 import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { erroresDelServidor, esErrorDeCampos, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
+import {
+  erroresDelServidor,
+  esErrorDeCampos,
+  MAXIMO_DESCRIPCION,
+  nombrePersona,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/panel/calendario/estilos'
 import { GRAVEDADES } from './gravedades'
 import { useSugerenciaGravedad } from './useSugerenciaGravedad'
@@ -16,8 +24,8 @@ import { useSugerenciaGravedad } from './useSugerenciaGravedad'
 // RegistrarNovedadRequest: apartamento, autor, descripción y una de las gravedades
 const esquema = z.object({
   apartamento: z.string().min(1, 'Elige el apartamento'),
-  autor: textoObligatorio('Falta el autor de la novedad'),
-  descripcion: textoObligatorio('Cuenta qué pasó'),
+  autor: nombrePersona('Falta el autor de la novedad'),
+  descripcion: textoObligatorio('Cuenta qué pasó', MAXIMO_DESCRIPCION, 'La descripción admite máximo 1000 caracteres'),
   gravedad: z.enum(['BAJA', 'MEDIA', 'ALTA'], 'Elige la gravedad'),
 })
 

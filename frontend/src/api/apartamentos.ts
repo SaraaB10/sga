@@ -63,6 +63,8 @@ export interface RegistrarApartamentoRequest {
   dormitorios: number
   capacidadMaxima: number
   dotacion: string[]
+  /** Rasgos del apartamento (Vista al mar, Balcón...), aparte de la dotación */
+  caracteristicas: string[]
   imagenes: ImagenRequest[]
   tarifas?: TarifaRequest[] | null
 }
@@ -73,6 +75,7 @@ export interface ActualizarApartamentoRequest {
   dormitorios: number
   capacidadMaxima: number
   dotacion: string[]
+  caracteristicas: string[]
 }
 
 export interface ActualizacionApartamentoResponse {

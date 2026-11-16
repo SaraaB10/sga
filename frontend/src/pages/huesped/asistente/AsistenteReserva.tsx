@@ -8,19 +8,24 @@ import { useApartamento, usePoliticaVigente } from '@/api/publico'
 import { useCrearReserva, type CanalOrigen, type ReservaDetalleResponse } from '@/api/reservas'
 import type { OcupanteRequest } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
-import { AvisoError, Campo, Fecha } from '@/components/coral'
+import { AvisoError, Campo, Fecha, InputDigitos } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import {
   correo,
+  DIGITOS_TELEFONO,
+  documento,
   erroresDelServidor,
   fecha,
   fechaNoFutura,
   finDespuesDeInicio,
+  fechaMinimaNacimiento,
+  MAXIMO_DIGITOS_DOCUMENTO,
+  MAXIMO_NOMBRE_PERSONA,
+  nombrePersona,
   telefono,
-  textoObligatorio,
   validar,
   type Errores,
 } from '@/lib/validacion'
@@ -97,13 +102,8 @@ const PASOS: { numero: Paso; titulo: string }[] = [
   { numero: 3, titulo: 'Confirmar' },
 ]
 
-const TIPOS_DOCUMENTO = [
-  { valor: 'CC', texto: 'Cédula de ciudadanía' },
-  { valor: 'CE', texto: 'Cédula de extranjería' },
-  { valor: 'TI', texto: 'Tarjeta de identidad' },
-  { valor: 'PA', texto: 'Pasaporte' },
-  { valor: 'PPT', texto: 'Permiso de protección temporal' },
-]
+/** El titular de una reserva de recepción se identifica solo con cédula de ciudadanía (número de 6 a 10 dígitos) */
+const TIPO_DOCUMENTO_TITULAR = { valor: 'CC', texto: 'Cédula de ciudadanía' } as const
 
 const NOMBRE_CANAL: Record<CanalOrigen, string> = { PORTAL: 'Portal web', DIRECTO: 'Directo (recepción)', EXTERNO: 'Externo' }
 
@@ -127,17 +127,17 @@ const esquemaEstancia = z
 
 /** Titular que escribe la recepción: todos los datos obligatorios, con correo y teléfono válidos */
 const esquemaTitular = z.object({
-  nombre: textoObligatorio('Escribe el nombre del titular.'),
-  tipoDocumento: z.string().min(1, 'Elige el tipo de documento.'),
-  numeroDocumento: textoObligatorio('Escribe el número de documento.', 15, 'El documento admite máximo 15 caracteres'),
+  nombre: nombrePersona('Escribe el nombre del titular.'),
+  tipoDocumento: z.literal(TIPO_DOCUMENTO_TITULAR.valor, 'El titular se identifica con cédula de ciudadanía.'),
+  numeroDocumento: documento('Escribe el número de cédula.'),
   email: correo(),
-  telefono: telefono(),
+  telefono: telefono('Escribe el teléfono.'),
   fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
 })
 
 /** Acompañante: nombre y fecha de nacimiento no futura; el tipo se revisa aparte */
 const esquemaAcompanante = z.object({
-  nombre: textoObligatorio('Escribe el nombre.'),
+  nombre: nombrePersona('Escribe el nombre.'),
   fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
 })
 
@@ -256,7 +256,7 @@ export function AsistenteReserva({ modo }: Props) {
   const [canal, setCanal] = useState<CanalOrigen>(modo === 'huesped' ? 'PORTAL' : 'DIRECTO')
   const [titular, setTitular] = useState<TitularFormulario>({
     nombre: '',
-    tipoDocumento: 'CC',
+    tipoDocumento: TIPO_DOCUMENTO_TITULAR.valor,
     numeroDocumento: '',
     email: '',
     telefono: '',
@@ -347,7 +347,7 @@ export function AsistenteReserva({ modo }: Props) {
     modo === 'huesped' && usuario
       ? {
           nombre: usuario.nombre,
-          tipoDocumento: 'CC',
+          tipoDocumento: TIPO_DOCUMENTO_TITULAR.valor,
           numeroDocumento: usuario.documento,
           email: usuario.correo,
           telefono: usuario.telefono,
@@ -614,26 +614,18 @@ export function AsistenteReserva({ modo }: Props) {
                     <Campo id="tit-nombre" etiqueta="Nombre completo" error={errores.titularNombre} className="sm:col-span-2">
                       <Input
                         autoComplete="off"
+                        maxLength={MAXIMO_NOMBRE_PERSONA}
                         value={titular.nombre}
                         onChange={(e) => setTitular({ ...titular, nombre: e.target.value })}
                       />
                     </Campo>
                     <Campo id="tit-tipo" etiqueta="Tipo de documento" error={errores.titularTipo}>
-                      <select
-                        className={claseSelect}
-                        value={titular.tipoDocumento}
-                        onChange={(e) => setTitular({ ...titular, tipoDocumento: e.target.value })}
-                      >
-                        {TIPOS_DOCUMENTO.map((t) => (
-                          <option key={t.valor} value={t.valor}>
-                            {t.texto}
-                          </option>
-                        ))}
-                      </select>
+                      {/* Sin selector: el titular de recepción se identifica solo con cédula de ciudadanía */}
+                      <Input value={TIPO_DOCUMENTO_TITULAR.texto} readOnly aria-readonly="true" tabIndex={-1} />
                     </Campo>
-                    <Campo id="tit-documento" etiqueta="Número de documento" error={errores.titularDocumento}>
-                      <Input
-                        inputMode="numeric"
+                    <Campo id="tit-documento" etiqueta="Número de cédula" error={errores.titularDocumento}>
+                      <InputDigitos
+                        maximo={MAXIMO_DIGITOS_DOCUMENTO}
                         value={titular.numeroDocumento}
                         onChange={(e) => setTitular({ ...titular, numeroDocumento: e.target.value })}
                       />
@@ -646,8 +638,8 @@ export function AsistenteReserva({ modo }: Props) {
                       />
                     </Campo>
                     <Campo id="tit-telefono" etiqueta="Teléfono" error={errores.titularTelefono}>
-                      <Input
-                        type="tel"
+                      <InputDigitos
+                        maximo={DIGITOS_TELEFONO}
                         value={titular.telefono}
                         onChange={(e) => setTitular({ ...titular, telefono: e.target.value })}
                       />
@@ -655,6 +647,7 @@ export function AsistenteReserva({ modo }: Props) {
                     <Campo id="tit-fecha" etiqueta="Fecha de nacimiento" error={errores.titularFecha}>
                       <Input
                         type="date"
+                        min={fechaMinimaNacimiento()}
                         max={hoyISO()}
                         value={titular.fechaNacimiento}
                         onChange={(e) => setTitular({ ...titular, fechaNacimiento: e.target.value })}
@@ -706,6 +699,7 @@ export function AsistenteReserva({ modo }: Props) {
                         >
                           <Input
                             placeholder="Nombre completo"
+                            maxLength={MAXIMO_NOMBRE_PERSONA}
                             value={a.nombre}
                             onChange={(e) =>
                               setAcompanantes(acompanantes.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))
@@ -743,7 +737,7 @@ export function AsistenteReserva({ modo }: Props) {
                         >
                           <Input
                             type="date"
-                            min={rango.min}
+                            min={rango.min ?? fechaMinimaNacimiento()}
                             max={rango.max}
                             disabled={sinTipo}
                             value={a.fechaNacimiento}

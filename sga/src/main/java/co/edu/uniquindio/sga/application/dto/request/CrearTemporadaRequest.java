@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.domain.valueobject.TipoTemporada;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
@@ -15,9 +16,11 @@ import java.util.List;
  */
 public record CrearTemporadaRequest(
         @NotBlank(message = "El id de la temporada es obligatorio")
+        @Size(max = 40, message = "El id admite máximo 40 caracteres")
         String id,
 
         @NotBlank(message = "El nombre de la temporada es obligatorio")
+        @Size(max = ReglaTexto.MAXIMO_NOMBRE, message = "El nombre admite máximo 100 caracteres")
         String nombre,
 
         @NotNull(message = "El tipo de temporada es obligatorio")

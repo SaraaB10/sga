@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useReglasAlojamiento } from './comun/consultas'
+import { RAYAS_BLOQUEO } from './comun/estilos'
 import { hoyISO } from './comun/reglas'
 
 /** Meses hacia adelante que se pueden consultar desde el mes actual */
@@ -28,7 +29,8 @@ function inicioDeMes(anio: number, mes: number): string {
 }
 
 /**
- * Calendario mensual de disponibilidad del apartamento: cada noche aparece libre u ocupada, sin decir por qué.
+ * Calendario mensual de disponibilidad del apartamento: cada noche aparece libre, bloqueada (mantenimiento) o
+ * no disponible, sin datos de las reservas.
  * Se navega mes a mes, desde el mes actual hasta doce meses adelante.
  */
 export function CalendarioDisponibilidad({ identificacion }: { identificacion: string }) {
@@ -47,6 +49,7 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
   const consulta = useDisponibilidadApartamento(identificacion, desde, hasta)
   const { reglas } = useReglasAlojamiento()
   const libres = new Map((consulta.data?.noches ?? []).map((n) => [n.fecha, n.libre]))
+  const bloqueadas = new Set((consulta.data?.noches ?? []).filter((n) => n.bloqueada).map((n) => n.fecha))
   const titulo = formatearFecha(desde, "MMMM 'de' yyyy")
 
   return (
@@ -105,10 +108,15 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
               const fecha = `${desde.slice(0, 8)}${String(i + 1).padStart(2, '0')}`
               const pasada = fecha < hoy
               const libre = libres.get(fecha) === true
-              const estado = pasada ? 'pasada' : libre ? 'libre' : 'ocupada'
+              const estado = pasada ? 'pasada' : libre ? 'libre' : bloqueadas.has(fecha) ? 'bloqueada' : 'ocupada'
               // Viernes y sábado: en temporada media o alta piden la estancia mínima
               const finDeSemana = estado === 'libre' && esNocheDeFinDeSemana(anio, mes, i + 1)
-              const textoEstado = estado === 'libre' ? 'libre' : estado === 'ocupada' ? 'no disponible' : 'ya pasó'
+              const textoEstado = {
+                libre: 'libre',
+                ocupada: 'no disponible',
+                bloqueada: 'bloqueada por mantenimiento',
+                pasada: 'ya pasó',
+              }[estado]
               return (
                 <div
                   key={fecha}
@@ -121,9 +129,11 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
                     estado === 'libre' && 'border-coral/40 font-semibold text-foreground',
                     estado === 'libre' && (finDeSemana ? CLASE_FIN_DE_SEMANA : 'bg-crema'),
                     estado === 'ocupada' && 'border-transparent bg-muted text-muted-foreground line-through',
+                    estado === 'bloqueada' && 'border-transparent font-medium',
                     estado === 'pasada' && 'border-transparent text-muted-foreground/50',
                     fecha === hoy && 'ring-2 ring-coral/60',
                   )}
+                  style={estado === 'bloqueada' ? RAYAS_BLOQUEO : undefined}
                 >
                   {i + 1}
                 </div>
@@ -154,7 +164,11 @@ export function CalendarioDisponibilidad({ identificacion }: { identificacion: s
             >
               9
             </span>
-            No disponible: ya reservada o bloqueada
+            No disponible: ya reservada
+          </li>
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className="size-4 shrink-0 rounded-sm" style={RAYAS_BLOQUEO} />
+            Bloqueada: fuera de la venta por mantenimiento
           </li>
           <li className="flex items-center gap-2">
             <span

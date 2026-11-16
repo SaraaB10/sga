@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { format } from 'date-fns'
+import { format, subYears } from 'date-fns'
 import { z } from 'zod'
 import { esErrorApi } from '@/api/cliente'
 
@@ -16,14 +16,33 @@ export type Errores = Record<string, string | undefined>
 
 /** Al menos una mayúscula y un número, como el @Pattern de las contraseñas del backend */
 const PATRON_CONTRASENA = /^(?=.*\p{Lu})(?=.*\d).*$/u
+/** Teléfono: exactamente 10 dígitos, sin espacios ni símbolos. Mismo patrón y mensaje de ReglaTelefono del backend */
+export const DIGITOS_TELEFONO = 10
+const PATRON_TELEFONO = /^\d{10}$/
+export const MENSAJE_TELEFONO = 'El teléfono debe tener 10 dígitos, solo números'
+/** Documento: de 6 a 10 dígitos, sin espacios ni símbolos. Mismo patrón y mensaje de ReglaDocumento del backend */
+export const MAXIMO_DIGITOS_DOCUMENTO = 10
+const PATRON_DOCUMENTO = /^\d{6,10}$/
+export const MENSAJE_DOCUMENTO = 'El documento debe tener entre 6 y 10 dígitos, solo números'
+/** URL de una imagen: https:// y la dirección, sin espacios. Mismo patrón y mensaje del backend (ReglaTexto) */
+const PATRON_URL = /^https:\/\/\S+$/
+export const MENSAJE_URL_IMAGEN = 'La URL de la imagen debe empezar por https:// y no tener espacios'
+/** Correo con usuario, dominio y extensión, como ReglaTexto.PATRON_CORREO del backend */
+const PATRON_CORREO = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/
 /**
- * Teléfono: + opcional al inicio y al menos 7 dígitos, con espacios, guiones o paréntesis entre ellos. Es el mismo
- * patrón y el mismo mensaje de ReglaTelefono en el backend.
+ * Nombre de una persona: solo letras (con tildes y ñ) y espacios, de 3 a 80 caracteres, sin espacios al inicio ni al
+ * final. Mismo patrón y mensaje de ReglaNombre del backend
  */
-const PATRON_TELEFONO = /^\+?(?:[ ()-]*\d){7,}[ ()-]*$/
-const MENSAJE_TELEFONO =
-  'El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, paréntesis y el signo + al inicio'
-const PATRON_URL = /^https?:\/\/\S+$/i
+const PATRON_NOMBRE = /^(?=.{3,80}$)\p{L}(?:[\p{L} ]*\p{L})?$/u
+export const MENSAJE_NOMBRE =
+  'El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final'
+export const MAXIMO_NOMBRE_PERSONA = 80
+/** Edad máxima que se admite en una fecha de nacimiento, como @FechaNacimientoRazonable del backend */
+export const ANIOS_MAXIMOS_NACIMIENTO = 110
+export const MENSAJE_NACIMIENTO_ANTIGUO = `La fecha de nacimiento no puede ser de hace más de ${ANIOS_MAXIMOS_NACIMIENTO} años`
+/** Largos máximos de los textos libres, los mismos del backend (ReglaTexto) */
+export const MAXIMO_MOTIVO = 250
+export const MAXIMO_DESCRIPCION = 1000
 const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/
 
 export const AYUDA_CONTRASENA = 'Mínimo 8 caracteres, con al menos una mayúscula y un número.'
@@ -59,22 +78,45 @@ export function textoOpcional(maximo: number, mensajeMaximo?: string) {
     .max(maximo, mensajeMaximo ?? `Admite máximo ${maximo} caracteres`)
 }
 
-export function correo(maximo = 120) {
+export function correo(mensajeVacio = 'Escribe el correo', maximo = 120) {
   return z
     .string()
     .trim()
-    .min(1, 'Escribe el correo')
+    .min(1, mensajeVacio)
+    .regex(PATRON_CORREO, 'El correo no tiene un formato válido')
     .email('El correo no tiene un formato válido')
     .max(maximo, `El correo admite máximo ${maximo} caracteres`)
 }
 
-export function telefono(maximo = 20) {
+/**
+ * Nombre de una persona (registro, perfil, usuarios, titular, acompañantes, ocupantes, autor de una novedad y quien
+ * autoriza un cierre). Sin trim: un espacio al inicio o al final es un error que se le muestra a la persona
+ */
+export function nombrePersona(mensajeVacio = 'Escribe el nombre') {
   return z
     .string()
-    .trim()
-    .min(1, 'Escribe el teléfono')
-    .max(maximo, `El teléfono admite máximo ${maximo} caracteres`)
-    .regex(PATRON_TELEFONO, MENSAJE_TELEFONO)
+    .refine((valor) => valor.trim() !== '', mensajeVacio)
+    .refine((valor) => valor.trim() === '' || PATRON_NOMBRE.test(valor), MENSAJE_NOMBRE)
+}
+
+/** Deja solo los dígitos de un texto, hasta `maximo` (lo usan los campos de teléfono y documento) */
+export function soloDigitos(valor: string, maximo: number): string {
+  return valor.replace(/\D/g, '').slice(0, maximo)
+}
+
+/** Teléfono obligatorio: 10 dígitos, solo números. Sin trim: un espacio también es un símbolo */
+export function telefono(mensajeVacio = 'Escribe el teléfono') {
+  return z.string().min(1, mensajeVacio).regex(PATRON_TELEFONO, MENSAJE_TELEFONO)
+}
+
+/** Número de documento obligatorio: de 6 a 10 dígitos, solo números */
+export function documento(mensajeVacio = 'Escribe el documento') {
+  return z.string().min(1, mensajeVacio).regex(PATRON_DOCUMENTO, MENSAJE_DOCUMENTO)
+}
+
+/** Número de documento opcional (ocupantes): vacío, o de 6 a 10 dígitos */
+export function documentoOpcional() {
+  return z.string().refine((valor) => valor === '' || PATRON_DOCUMENTO.test(valor), MENSAJE_DOCUMENTO)
 }
 
 /** Contraseña nueva: 8 a 72 caracteres, con una mayúscula y un número */
@@ -87,17 +129,26 @@ export function contrasenaNueva(mensajeVacio = 'Escribe la contraseña') {
     .regex(PATRON_CONTRASENA, 'La contraseña debe tener al menos una mayúscula y un número')
 }
 
-/** URL opcional que empieza por http:// o https:// */
+/** La URL de una imagen es válida: https:// y sin espacios */
+export const esUrlImagen = (valor: string) => PATRON_URL.test(valor)
+
+/** URL de imagen opcional (foto del perfil): vacía, o https:// sin espacios */
 export function urlOpcional(maximo = 500) {
   return z
     .string()
     .trim()
     .max(maximo, `La URL admite máximo ${maximo} caracteres`)
-    .refine((valor) => valor === '' || PATRON_URL.test(valor), 'La URL debe empezar por http:// o https://')
+    .refine((valor) => valor === '' || PATRON_URL.test(valor), MENSAJE_URL_IMAGEN)
 }
 
-export function urlObligatoria(mensaje = 'Escribe la URL') {
-  return z.string().trim().min(1, mensaje).regex(PATRON_URL, 'La URL debe empezar por http:// o https://')
+/** URL de imagen obligatoria (imágenes del apartamento): https:// sin espacios */
+export function urlObligatoria(mensaje = 'Escribe la URL', maximo = 500) {
+  return z
+    .string()
+    .trim()
+    .min(1, mensaje)
+    .max(maximo, `La URL admite máximo ${maximo} caracteres`)
+    .regex(PATRON_URL, MENSAJE_URL_IMAGEN)
 }
 
 // ---------- Fechas ----------
@@ -107,14 +158,23 @@ export function fecha(mensaje: string) {
   return z.string().min(1, mensaje).refine(esFechaISO, 'Escribe una fecha válida')
 }
 
-/** Fecha de nacimiento: obligatoria y pasada */
-export function fechaPasada(mensaje: string) {
-  return fecha(mensaje).refine((valor) => valor < hoy(), 'La fecha de nacimiento debe ser pasada')
+/** Fecha más antigua que se admite como nacimiento ("yyyy-MM-dd"): hoy hace 110 años */
+export function fechaMinimaNacimiento(): string {
+  return format(subYears(new Date(), ANIOS_MAXIMOS_NACIMIENTO), 'yyyy-MM-dd')
 }
 
-/** Fecha de nacimiento de un ocupante: obligatoria y no futura */
+/** Fecha de nacimiento: obligatoria, pasada y de hace 110 años o menos */
+export function fechaPasada(mensaje: string) {
+  return fecha(mensaje)
+    .refine((valor) => valor < hoy(), 'La fecha de nacimiento debe ser pasada')
+    .refine((valor) => valor >= fechaMinimaNacimiento(), MENSAJE_NACIMIENTO_ANTIGUO)
+}
+
+/** Fecha de nacimiento de un ocupante: obligatoria, no futura y de hace 110 años o menos */
 export function fechaNoFutura(mensaje: string) {
-  return fecha(mensaje).refine((valor) => valor <= hoy(), 'La fecha de nacimiento no puede ser futura')
+  return fecha(mensaje)
+    .refine((valor) => valor <= hoy(), 'La fecha de nacimiento no puede ser futura')
+    .refine((valor) => valor >= fechaMinimaNacimiento(), MENSAJE_NACIMIENTO_ANTIGUO)
 }
 
 /**

@@ -25,6 +25,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
@@ -57,6 +58,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ApartamentoControllerIntegracionTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
+    /** Apellidos de los ocupantes de reservaDeGrupo: los nombres solo admiten letras y espacios */
+    private static final List<String> NOMBRES_GRUPO = List.of("Uno", "Dos", "Tres", "Cuatro", "Cinco", "Seis");
 
     @Autowired
     private MockMvc mvc;
@@ -311,14 +314,71 @@ class ApartamentoControllerIntegracionTest {
     }
 
     @Test
-    @DisplayName("7.5: filtro por característica de la dotación, sin distinguir mayúsculas")
+    @DisplayName("7.5: filtro por característica del apartamento, sin distinguir mayúsculas ni tildes")
     void filtroPorCaracteristica() throws Exception {
-        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=HIDROMASAJE"))
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=VISTA AL MAR"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-201")));
-        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=helipuerto"))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-301")));
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=balcon"))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-202")));
+        // La dotación no es una característica: eso es el filtro de servicios
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=hidromasaje"))
                 .andExpect(jsonPath("$.contenido", hasSize(0)))
                 .andExpect(jsonPath("$.totalElementos").value(0));
+    }
+
+    @Test
+    @DisplayName("7.5: filtro por número de dormitorios, aparte de las características")
+    void filtroPorDormitorios() throws Exception {
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&dormitorios=2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-201", "APT-202")));
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&dormitorios=1&caracteristica=Terraza"))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-102")));
+    }
+
+    @Test
+    @DisplayName("7.5: las opciones de los filtros salen de los apartamentos activos, sin repetir")
+    void opcionesDeFiltro() throws Exception {
+        get("/api/apartamentos/filtros")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dormitorios", contains(1, 2, 3)))
+                .andExpect(jsonPath("$.caracteristicas", hasItems("Vista al mar", "Frente a la playa", "Balcón",
+                        "Terraza", "Piso alto")))
+                .andExpect(jsonPath("$.caracteristicas", hasSize(7)))               // sin repetir
+                // Las mascotas las admite la política del alojamiento (L-16), no un rasgo del apartamento
+                .andExpect(jsonPath("$.caracteristicas", not(hasItem("Admite mascotas"))))
+                .andExpect(jsonPath("$.servicios", hasItem("Cava refrigerada de vinos")))
+                .andExpect(jsonPath("$.servicios", hasItem("Hamaca artesanal de San Jacinto")))
+                .andExpect(jsonPath("$.servicios", not(hasItem("Vista frontal al mar Caribe"))));
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    @DisplayName("7.3: las características se registran y se actualizan aparte de la dotación")
+    void caracteristicasDelApartamento() throws Exception {
+        get("/api/apartamentos/APT-101")
+                .andExpect(jsonPath("$.caracteristicas", contains("Vista al mar", "Frente a la playa", "Balcón")))
+                .andExpect(jsonPath("$.dotacion", not(hasItem("Vista frontal al mar Caribe"))));
+        mvc.perform(MockMvcRequestBuilders.put("/api/apartamentos/APT-102")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ADMINISTRADOR")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Arrecife Rosado","descripcion":"Para parejas","dormitorios":1,
+                                 "capacidadMaxima":2,"dotacion":["Cama extragrande"],
+                                 "caracteristicas":["Vista a la bahía","Piso alto"]}"""))
+                .andExpect(status().isOk());
+        get("/api/apartamentos/APT-102")
+                .andExpect(jsonPath("$.caracteristicas", contains("Vista a la bahía", "Piso alto")))
+                .andExpect(jsonPath("$.dotacion", contains("Cama extragrande")));
+        // Repetidas sin distinguir mayúsculas: regla del dominio, 409
+        mvc.perform(MockMvcRequestBuilders.put("/api/apartamentos/APT-102")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ADMINISTRADOR")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Arrecife Rosado","dormitorios":1,"capacidadMaxima":2,
+                                 "dotacion":["Cama extragrande"],"caracteristicas":["Balcón","balcon"]}"""))
+                .andExpect(status().isConflict());
     }
 
     @Test
@@ -644,21 +704,24 @@ class ApartamentoControllerIntegracionTest {
     }
 
     @Test
-    @DisplayName("Filtro por servicios: varios valores se aplican juntos sobre la dotación y las características")
+    @DisplayName("Filtro por servicios: varios valores se aplican juntos sobre la dotación (no sobre las características)")
     void filtrarDisponiblesPorServicios() throws Exception {
         LocalDate entrada = LocalDate.now(BOGOTA).plusDays(40);
         // Un servicio: el hidromasaje está en la dotación de APT-101 y APT-201
         mvc.perform(MockMvcRequestBuilders.get(disponibles(entrada, 1, "&servicios=HIDROMASAJE")).with(anonymous()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-201")));
-        // Dos servicios juntos: solo APT-101 tiene hidromasaje y vista al mar
-        get(disponibles(entrada, 1, "&servicios=hidromasaje&servicios=mar"))
+        // Dos servicios juntos: solo APT-101 tiene hidromasaje y cocina integral
+        get(disponibles(entrada, 1, "&servicios=hidromasaje&servicios=cocina integral"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101")));
-        // También separados por coma, y sin distinguir tildes
-        get(disponibles(entrada, 1, "&servicios=cocina,terraza,bahia"))
+        // También separados por coma, y sin distinguir tildes: cocina, cava y cama balinesa solo en APT-102
+        get(disponibles(entrada, 1, "&servicios=cocina,cava,balinesa"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-102")));
+        // "Vista al mar" es una característica, no un servicio de la dotación
+        get(disponibles(entrada, 1, "&servicios=vista"))
+                .andExpect(jsonPath("$.contenido", hasSize(0)));
         // Ninguno ofrece sauna
         get(disponibles(entrada, 1, "&servicios=cocina&servicios=sauna"))
                 .andExpect(status().isOk())
@@ -679,9 +742,13 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(jsonPath("$.noches[0].fecha").value(hoy.minusDays(1).toString()))
                 .andExpect(jsonPath("$.noches[0].libre").value(false))     // noche pasada
                 .andExpect(jsonPath("$.noches[2].libre").value(true))      // hoy+1
+                .andExpect(jsonPath("$.noches[2].bloqueada").value(false))
                 .andExpect(jsonPath("$.noches[4].libre").value(false))     // hoy+3, bloqueada
+                .andExpect(jsonPath("$.noches[4].bloqueada").value(true))
                 .andExpect(jsonPath("$.noches[15].libre").value(false))    // hoy+14, bloqueada
-                .andExpect(jsonPath("$.noches[16].libre").value(true));    // hoy+15, ya libre
+                .andExpect(jsonPath("$.noches[15].bloqueada").value(true))
+                .andExpect(jsonPath("$.noches[16].libre").value(true))     // hoy+15, ya libre
+                .andExpect(jsonPath("$.noches[16].bloqueada").value(false));
 
         // Una reserva activa ocupa sus noches; la respuesta no dice de quién es ni por qué
         LocalDate entrada = hoy.plusDays(95);
@@ -692,6 +759,9 @@ class ApartamentoControllerIntegracionTest {
                 .andReturn().getResponse().getContentAsString();
         List<Boolean> libres = JsonPath.read(calendario, "$.noches[*].libre");
         assertEquals(List.of(true, false, false, true, true), libres);
+        // Las noches de una reserva no salen como bloqueadas: solo como no libres
+        List<Boolean> bloqueadas = JsonPath.read(calendario, "$.noches[*].bloqueada");
+        assertEquals(List.of(false, false, false, false, false), bloqueadas);
         assertFalse(calendario.contains("RES-"));
         assertFalse(calendario.contains("Ana"));
 
@@ -745,13 +815,13 @@ class ApartamentoControllerIntegracionTest {
         for (int i = 0; i < ocupantes; i++) {
             if (i > 0) grupo.append(',');
             grupo.append("""
-                    {"nombre":"Ocupante %d","tipoDocumento":"CC","numeroDocumento":"10940002%02d",
-                     "fechaNacimiento":"1990-05-20"}""".formatted(i + 1, i));
+                    {"nombre":"Ocupante %s","tipoDocumento":"CC","numeroDocumento":"10940002%02d",
+                     "fechaNacimiento":"1990-05-20"}""".formatted(NOMBRES_GRUPO.get(i), i));
         }
         return """
                 {"identificacionApartamento":"%s","fechaEntrada":"%s","fechaSalida":"%s",
                  "horaEstimadaLlegada":"16:00","canalOrigen":"PORTAL",
-                 "titular":{"nombre":"Ocupante 1","tipoDocumento":"CC","numeroDocumento":"1094000200",
+                 "titular":{"nombre":"Ocupante Uno","tipoDocumento":"CC","numeroDocumento":"1094000200",
                             "email":"grupo@correo.co","telefono":"3001234567"},
                  "ocupantes":[%s]}
                 """.formatted(apartamento, entrada, salida, grupo);

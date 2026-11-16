@@ -101,6 +101,8 @@ export interface ApartamentoResponse {
   dormitorios: number
   capacidadMaxima: number
   dotacion: string[]
+  /** Rasgos del apartamento (Vista al mar, Balcón...), aparte de la dotación */
+  caracteristicas: string[]
   imagenes: string[]
   estadoOperativo: EstadoOperativo
 }
@@ -142,6 +144,8 @@ export interface ApartamentoDetalleResponse {
   dormitorios: number
   capacidadMaxima: number
   dotacion: string[]
+  /** Rasgos del apartamento (Vista al mar, Balcón...), aparte de la dotación */
+  caracteristicas: string[]
   imagenes: ImagenResponse[]
   imagenPrincipal: string | null
   estadoOperativo: EstadoOperativo
@@ -160,16 +164,19 @@ export interface FiltrosDisponibles {
   capacidadMinima?: number
   precioMinimo?: number
   precioMaximo?: number
-  /** Texto que debe aparecer en la dotación, por ejemplo "hidromasaje" */
+  /** Número exacto de dormitorios */
+  dormitorios?: number
+  /** Una de las características del apartamento, por ejemplo "Vista al mar" */
   caracteristica?: string
-  /** Servicios que el apartamento debe ofrecer todos, según su dotación y sus características */
+  /** Servicios que el apartamento debe ofrecer todos, según su dotación */
   servicios?: string[]
 }
 
-/** Calendario público de disponibilidad: solo dice si cada noche está libre */
+/** Calendario público de disponibilidad: si cada noche está libre y si la retira un bloqueo (sin datos de reservas) */
 export interface NocheDisponibilidad {
   fecha: FechaISO
   libre: boolean
+  bloqueada: boolean
 }
 
 export interface DisponibilidadApartamentoResponse {
@@ -209,6 +216,11 @@ export interface ParametrosAlojamientoResponse {
   pesoMaximoMascotaKg: number
   /** RP-02: depósito de garantía reembolsable, el mismo que se asienta en el folio */
   depositoGarantia: number | null
+  conceptoDepositoGarantia: string | null
+  /** RP-03: valor del recargo por llegada nocturna */
+  recargoRecepcionNocturna: number | null
+  /** Edad mínima para crear una cuenta y para ser titular de una reserva de recepción */
+  edadMinimaCuenta: number | null
 }
 
 export interface AlojamientoResponse {

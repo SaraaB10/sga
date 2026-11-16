@@ -114,6 +114,30 @@ public class GestionServiciosAdicionalesService {
         return Optional.empty();
     }
 
+    /** RP-03: valor vigente del recargo de llegada nocturna; vacío si el servicio no existe o no tiene valor. */
+    public Optional<Dinero> recargoRecepcionNocturna(Alojamiento alojamiento) {
+        return servicioRecepcionNocturna(alojamiento).map(ServicioAdicional::getValor);
+    }
+
+    /**
+     * RP-03: cambia el valor del recargo de llegada nocturna (mayor que cero) sin tocar el nombre ni la descripción.
+     * Guarda el alojamiento quien llama, junto con los demás parámetros.
+     */
+    public void definirRecargoRecepcionNocturna(Alojamiento alojamiento, Dinero valor) {
+        if (valor == null || !valor.esPositivo()) {
+            throw new ReglaDominioException("RP-03: el recargo de recepción nocturna debe ser mayor que cero");
+        }
+        ServicioAdicional servicio = servicioRecepcionNocturna(alojamiento)
+                .orElseThrow(() -> new ReglaDominioException("RP-03: no existe el servicio de recepción nocturna "
+                        + idServicioRecepcionNocturna));
+        servicio.actualizar(servicio.getNombre(), servicio.getDescripcion(), true, valor);
+    }
+
+    private Optional<ServicioAdicional> servicioRecepcionNocturna(Alojamiento alojamiento) {
+        return idServicioRecepcionNocturna == null ? Optional.empty()
+                : alojamiento.buscarServicioAdicional(idServicioRecepcionNocturna);
+    }
+
     private boolean esRecepcionNocturna(ServicioAdicional servicio) {
         return servicio.getId().equals(idServicioRecepcionNocturna);
     }

@@ -59,8 +59,9 @@ public record Dotacion(List<String> elementos) {
         return Arrays.stream(normalizar(buscado.trim()).split("\\s+")).allMatch(normalizado::contains);
     }
 
-    private static String normalizar(String texto) {
-        return Normalizer.normalize(texto, Normalizer.Form.NFD)
+    /** Texto sin tildes, en minúsculas y sin espacios a los lados, para comparar sin distinguirlos */
+    public static String normalizar(String texto) {
+        return Normalizer.normalize(texto.trim(), Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT);
     }

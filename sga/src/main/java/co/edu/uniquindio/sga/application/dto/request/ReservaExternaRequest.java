@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -17,6 +18,7 @@ import java.util.List;
  */
 public record ReservaExternaRequest(
         @NotBlank(message = "El identificador de la reserva en el canal es obligatorio")
+        @Size(max = 100, message = "El identificador de la reserva en el canal admite máximo 100 caracteres")
         String identificadorExterno,
 
         @NotBlank(message = "La identificación del apartamento es obligatoria")

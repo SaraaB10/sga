@@ -1,7 +1,5 @@
 package co.edu.uniquindio.sga.application.dto.response;
 
-import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +17,6 @@ public record ReporteIngresosResponse(
 ) {
 
     /** Una fila por medio de pago; porcentaje es su participación en el total, con dos decimales. */
-    public record Medio(MedioPago medio, int cantidadPagos, long total, BigDecimal porcentaje) {
+    public record Medio(String medio, int cantidadPagos, long total, BigDecimal porcentaje) {
     }
 }

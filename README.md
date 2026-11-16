@@ -192,8 +192,10 @@ Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (v
 - `GET /api/canales/eventos?canal=&desde=&hasta=` bitácora de mensajes con los canales (7.8)
 
 **Configuración del alojamiento**
-- `GET /api/alojamiento` y `PUT /api/alojamiento` consultar y actualizar los datos del alojamiento (los parámetros son de solo lectura)
-- `POST /api/alojamiento/servicios` crear un servicio adicional (201 con `Location`), `GET` y `PUT /api/alojamiento/servicios/{id}` consultarlo y editar su nombre, descripción, si genera cargo y su valor, y `PUT /api/alojamiento/servicios/{id}/desactivar` y `/activar` (eliminación lógica). La recepción nocturna no se puede desactivar ni dejar sin cargo, porque RP-03 la cobra a las llegadas desde las 20:00; la respuesta lo explica en `motivoObligatorio` y el panel **Administración → Alojamiento** lo muestra
+- `GET /api/alojamiento` y `PUT /api/alojamiento` consultar y actualizar los datos del alojamiento
+- `GET /api/medios-pago` medios de pago aceptados y activos (público); el administrador los gestiona con `GET /api/medios-pago/todos`, `POST /api/medios-pago` y `PUT /api/medios-pago/{codigo}/activar` y `/desactivar`. Solo con un medio activo se registra un pago
+- `PUT /api/alojamiento/parametros` el administrador cambia los parámetros (umbral de edad facturable, tiempo de preparación, plazo de confirmación y del anticipo, hora límite de no-show, hora y recargo de la recepción nocturna, estancia mínima, anticipo, depósito de garantía, mascotas y edad mínima de la cuenta). Se guardan en la base, nacen con los valores de `application.properties` y rigen de inmediato, sin reiniciar
+- `POST /api/alojamiento/servicios` crear un servicio adicional (201 con `Location`), `GET` y `PUT /api/alojamiento/servicios/{id}` consultarlo y editar su nombre, descripción, si genera cargo y su valor, y `PUT /api/alojamiento/servicios/{id}/desactivar` y `/activar` (eliminación lógica). La recepción nocturna no se puede desactivar ni dejar sin cargo, porque RP-03 la cobra a las llegadas desde la hora configurada; la respuesta lo explica en `motivoObligatorio` y el panel **Administración → Alojamiento** lo muestra
 - `GET /api/temporadas`, `GET /api/temporadas/{id}` y `POST /api/temporadas` listar, consultar y crear temporadas (201 con `Location`)
 - `POST /api/temporadas/{id}/rangos` agregar un rango a una temporada (201 con `Location`)
 - `GET /api/politica-cancelacion` política vigente

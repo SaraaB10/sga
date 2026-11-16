@@ -27,6 +27,7 @@ import {
   esErrorDeCampos,
   fecha,
   finDespuesDeInicio,
+  MAXIMO_MOTIVO,
   textoObligatorio,
   unirErrores,
   useValidacion,
@@ -48,7 +49,7 @@ const esquemaBloqueo = z
   .object({
     fechaInicio: fecha('Elige la primera noche'),
     fechaFin: fecha('Elige el día en que vuelve a la venta'),
-    motivo: textoObligatorio('Escribe el motivo'),
+    motivo: textoObligatorio('Escribe el motivo', MAXIMO_MOTIVO, 'El motivo admite máximo 250 caracteres'),
   })
   .superRefine(finDespuesDeInicio('fechaInicio', 'fechaFin', 'Debe ser posterior a la primera noche'))
 

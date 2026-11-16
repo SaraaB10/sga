@@ -105,7 +105,14 @@ export interface RetencionResponse {
   retencion: number
 }
 
-export type MedioPago = 'TARJETA_DEBITO_CREDITO' | 'TRANSFERENCIA_BANCARIA'
+/** Código de un medio del catálogo (L-18), por ejemplo TARJETA_DEBITO_CREDITO; el nombre viene de GET /api/medios-pago */
+export type MedioPago = string
+
+export interface MedioPagoResponse {
+  codigo: MedioPago
+  nombre: string
+  activo: boolean
+}
 
 export type TipoCargo = 'ALOJAMIENTO' | 'SERVICIO_ADICIONAL' | 'AJUSTE_MODIFICACION' | 'PENALIDAD_CANCELACION_NOSHOW'
 

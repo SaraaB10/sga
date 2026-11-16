@@ -7,7 +7,7 @@ import { useActualizarMiPerfil, useCambiarMiContrasena } from '@/api/usuarios'
 import type { UsuarioResponse } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { AvisoError, Campo, InputContrasena } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,10 +15,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   AYUDA_CONTRASENA,
   contrasenaNueva,
+  DIGITOS_TELEFONO,
   erroresDelServidor,
   esErrorDeCampos,
+  esUrlImagen,
+  MAXIMO_NOMBRE_PERSONA,
+  nombrePersona,
   telefono,
-  textoObligatorio,
   unirErrores,
   urlOpcional,
   useValidacion,
@@ -66,14 +69,15 @@ function iniciales(nombre: string): string {
   return ((partes[0][0] ?? '') + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase()
 }
 
-const esUrlFoto = (texto: string) => /^https?:\/\/\S+$/i.test(texto)
 
 // ActualizarPerfilRequest: nombre y teléfono obligatorios; la foto es opcional
 const esquemaPerfil = z.object({
-  nombre: textoObligatorio('Escribe tu nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  nombre: nombrePersona('Escribe tu nombre'),
   telefono: telefono(),
   fotoUrl: urlOpcional(),
 })
+
+const MENSAJE_CONTRASENA_REPETIDA = 'La contraseña nueva debe ser distinta de la actual'
 
 // CambioContrasenaRequest, más la confirmación que solo pide la pantalla
 const esquemaContrasena = z
@@ -85,6 +89,11 @@ const esquemaContrasena = z
   .refine((datos) => datos.confirmacion === datos.nueva, {
     path: ['confirmacion'],
     message: 'Las contraseñas no coinciden',
+  })
+  // El backend lo confirma con el hash guardado (400 sobre contrasenaNueva, con el mismo mensaje)
+  .refine((datos) => datos.actual === '' || datos.nueva !== datos.actual, {
+    path: ['nueva'],
+    message: MENSAJE_CONTRASENA_REPETIDA,
   })
 
 // ---------- Datos ----------
@@ -98,7 +107,7 @@ function DatosPerfil({ usuario }: { usuario: UsuarioResponse }) {
   const errores = unirErrores(validacion.errores, erroresDelServidor(actualizar.error))
 
   const foto = fotoUrl.trim()
-  const vistaPrevia = esUrlFoto(foto) ? foto : undefined
+  const vistaPrevia = esUrlImagen(foto) ? foto : undefined
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
@@ -129,16 +138,15 @@ function DatosPerfil({ usuario }: { usuario: UsuarioResponse }) {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo id="perfil-nombre" etiqueta="Nombre" error={errores.nombre} className="sm:col-span-2">
-            <Input autoComplete="name" maxLength={100} value={nombre} onChange={(e) => setNombre(e.target.value)} />
+            <Input autoComplete="name" maxLength={MAXIMO_NOMBRE_PERSONA} value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </Campo>
           <Campo id="perfil-correo" etiqueta="Correo" ayuda="El correo no se puede cambiar.">
             <Input type="email" value={usuario.correo} readOnly disabled />
           </Campo>
           <Campo id="perfil-telefono" etiqueta="Teléfono" error={errores.telefono}>
-            <Input
-              type="tel"
-              autoComplete="tel"
-              maxLength={20}
+            <InputDigitos
+              maximo={DIGITOS_TELEFONO}
+              autoComplete="tel-national"
               value={telefonoActual}
               onChange={(e) => setTelefono(e.target.value)}
             />
@@ -235,7 +243,15 @@ function CambioContrasena() {
         </Campo>
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo id="contrasena-nueva" etiqueta="Contraseña nueva" ayuda={AYUDA_CONTRASENA} error={errores.nueva ?? deServidor?.nueva}>
-            <InputContrasena autoComplete="new-password" maxLength={72} value={nueva} onChange={(e) => setNueva(e.target.value)} />
+            <InputContrasena
+              autoComplete="new-password"
+              maxLength={72}
+              value={nueva}
+              onChange={(e) => {
+                setNueva(e.target.value)
+                if (deServidor?.nueva) cambiar.reset()
+              }}
+            />
           </Campo>
           <Campo id="contrasena-confirmacion" etiqueta="Repite la contraseña nueva" error={errores.confirmacion}>
             <InputContrasena

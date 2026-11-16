@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,25 +42,50 @@ class CriterioBusquedaTest {
     }
 
     @Test
-    @DisplayName("7.5: la característica se busca dentro de la dotación sin distinguir mayúsculas ni tildes")
-    void buscarCaracteristicaEnLaDotacion() {
-        Dotacion dotacion = new Dotacion(List.of("Balcón con tina de hidromasaje privada", "Cocina integral"));
+    @DisplayName("7.5: la característica es una de las del apartamento, sin distinguir mayúsculas ni tildes")
+    void buscarCaracteristicaDelApartamento() {
+        Caracteristicas caracteristicas = new Caracteristicas(List.of("Vista al mar", "Balcón"));
 
-        assertTrue(new CriterioBusqueda(null, null, null, "HIDROMASAJE").cumpleCaracteristica(dotacion));
-        assertTrue(new CriterioBusqueda(null, null, null, "balcon").cumpleCaracteristica(dotacion));
-        assertFalse(new CriterioBusqueda(null, null, null, "piscina").cumpleCaracteristica(dotacion));
+        assertTrue(new CriterioBusqueda(null, null, null, "Vista al mar").cumpleCaracteristica(caracteristicas));
+        assertTrue(new CriterioBusqueda(null, null, null, " BALCON ").cumpleCaracteristica(caracteristicas));
+        assertFalse(new CriterioBusqueda(null, null, null, "Terraza").cumpleCaracteristica(caracteristicas));
+        // La característica no se busca en la dotación: eso es el filtro de servicios
+        assertFalse(new CriterioBusqueda(null, null, null, "hidromasaje").cumpleCaracteristica(caracteristicas));
+        assertTrue(CriterioBusqueda.sinFiltros().cumpleCaracteristica(caracteristicas));
+        assertFalse(new CriterioBusqueda(null, null, null, "Balcón").cumpleCaracteristica(Caracteristicas.ninguna()));
     }
 
     @Test
-    @DisplayName("Servicios: varios se aplican juntos y se buscan en la dotación y en la descripción")
+    @DisplayName("7.5: los dormitorios son un filtro aparte, por número exacto")
+    void filtrarPorDormitorios() {
+        CriterioBusqueda dos = new CriterioBusqueda(null, null, null, null, List.of(), 2);
+        assertTrue(dos.cumpleDormitorios(2));
+        assertFalse(dos.cumpleDormitorios(1));
+        assertTrue(CriterioBusqueda.sinFiltros().cumpleDormitorios(3));
+        assertThrows(ReglaDominioException.class, () -> new CriterioBusqueda(null, null, null, null, List.of(), 0));
+    }
+
+    @Test
+    @DisplayName("7.3: las características no se repiten, no están vacías y tienen de 2 a 60 caracteres")
+    void reglasDeLasCaracteristicas() {
+        assertEquals(List.of("Vista al mar", "Balcón"),
+                new Caracteristicas(List.of(" Vista al mar ", "Balcón")).elementos());
+        assertThrows(ReglaDominioException.class, () -> new Caracteristicas(List.of("Balcón", "balcon")));
+        assertThrows(ReglaDominioException.class, () -> new Caracteristicas(List.of(" ")));
+        assertThrows(ReglaDominioException.class, () -> new Caracteristicas(List.of("x".repeat(61))));
+        assertTrue(new Caracteristicas(null).elementos().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Servicios: varios se aplican juntos y se buscan solo en la dotación")
     void filtrarPorVariosServicios() {
         Dotacion dotacion = new Dotacion(List.of("Balcón con tina de hidromasaje privada", "Cocina integral"));
-        String descripcion = "Frente al mar, con vista a la bahía";
 
-        assertTrue(servicios("hidromasaje").cumpleServicios(dotacion, descripcion));
-        assertTrue(servicios("COCINA", "Bahia").cumpleServicios(dotacion, descripcion));     // dotación + descripción
-        assertFalse(servicios("cocina", "piscina").cumpleServicios(dotacion, descripcion));  // falta uno: no cumple
-        assertFalse(servicios("piscina").cumpleServicios(dotacion, null));
+        assertTrue(servicios("hidromasaje").cumpleServicios(dotacion));
+        assertTrue(servicios("COCINA", "Balcon").cumpleServicios(dotacion));
+        assertTrue(servicios("Cocina integral").cumpleServicios(dotacion));                  // un elemento completo
+        assertFalse(servicios("cocina", "piscina").cumpleServicios(dotacion));              // falta uno: no cumple
+        assertFalse(servicios("bahia").cumpleServicios(dotacion));                          // no está en la dotación
     }
 
     @Test
@@ -67,10 +93,10 @@ class CriterioBusquedaTest {
     void servicioDeVariasPalabras() {
         Dotacion dotacion = new Dotacion(List.of("Vista frontal al mar Caribe", "Cocina integral"));
 
-        assertTrue(servicios("Vista al mar").cumpleServicios(dotacion, null));
-        assertTrue(servicios("mar vista").cumpleServicios(dotacion, null));
+        assertTrue(servicios("Vista al mar").cumpleServicios(dotacion));
+        assertTrue(servicios("mar vista").cumpleServicios(dotacion));
         // "vista" y "cocina" están en elementos distintos: no es un servicio "vista cocina"
-        assertFalse(servicios("vista cocina").cumpleServicios(dotacion, null));
+        assertFalse(servicios("vista cocina").cumpleServicios(dotacion));
     }
 
     @Test
@@ -78,10 +104,10 @@ class CriterioBusquedaTest {
     void serviciosVaciosNoFiltran() {
         Dotacion dotacion = new Dotacion(List.of("Cocina integral"));
 
-        assertTrue(CriterioBusqueda.sinFiltros().cumpleServicios(dotacion, null));
+        assertTrue(CriterioBusqueda.sinFiltros().cumpleServicios(dotacion));
         assertTrue(new CriterioBusqueda(null, null, null, null, null).servicios().isEmpty());
         CriterioBusqueda conVacios = servicios(" ", "", " cocina ", "cocina");
-        assertTrue(conVacios.cumpleServicios(dotacion, null));
+        assertTrue(conVacios.cumpleServicios(dotacion));
         assertTrue(conVacios.servicios().equals(List.of("cocina")));
     }
 

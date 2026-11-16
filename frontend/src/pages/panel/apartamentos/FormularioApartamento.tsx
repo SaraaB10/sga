@@ -23,12 +23,22 @@ import {
   entero,
   erroresDelServidor,
   esErrorDeCampos,
+  MAXIMO_DESCRIPCION,
   pesosOpcional,
   textoObligatorio,
+  textoOpcional,
   urlObligatoria,
 } from '@/lib/validacion'
 
 const MAXIMO_IMAGENES = 10
+const MAXIMO_CARACTERISTICAS = 20
+
+/** Para comparar sin distinguir mayúsculas ni tildes, como el servidor */
+const sinTildes = (texto: string) =>
+  texto
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
 
 /*
  * RegistrarApartamentoRequest y ActualizarApartamentoRequest: identificación (solo al registrar), nombre,
@@ -37,11 +47,26 @@ const MAXIMO_IMAGENES = 10
  */
 const base = z.object({
   identificacion: z.string().trim(),
-  nombre: textoObligatorio('Escribe el nombre'),
-  descripcion: z.string(),
+  nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  descripcion: textoOpcional(MAXIMO_DESCRIPCION, 'La descripción admite máximo 1000 caracteres'),
   dormitorios: entero('Escribe un número entero de 1 o más dormitorios', { minimo: 1 }),
   capacidadMaxima: entero('Escribe una capacidad entera de 1 o más personas', { minimo: 1 }),
-  dotacion: z.string().refine((v) => lineas(v).length > 0, 'Escribe al menos un elemento'),
+  dotacion: z
+    .string()
+    .refine((v) => lineas(v).length > 0, 'Escribe al menos un elemento')
+    .refine((v) => lineas(v).every((l) => l.length <= 100), 'Cada elemento de la dotación admite máximo 100 caracteres'),
+  // Opcionales: rasgos del apartamento, aparte de la dotación (las mismas reglas que valida el servidor)
+  caracteristicas: z
+    .string()
+    .refine((v) => lineas(v).length <= MAXIMO_CARACTERISTICAS, `Máximo ${MAXIMO_CARACTERISTICAS} características`)
+    .refine(
+      (v) => lineas(v).every((l) => l.length >= 2 && l.length <= 60),
+      'Cada característica debe tener entre 2 y 60 caracteres',
+    )
+    .refine((v) => {
+      const claves = lineas(v).map(sinTildes)
+      return new Set(claves).size === claves.length
+    }, 'Hay características repetidas'),
   imagenes: z.array(z.object({ url: z.string() })),
   principal: z.string(),
   tarifas: z.record(z.string(), z.string()),
@@ -50,7 +75,11 @@ const base = z.object({
 const esquemaEdicion = base
 
 const esquemaRegistro = base.extend({
-  identificacion: textoObligatorio('Escribe la identificación, por ejemplo APT-401'),
+  identificacion: textoObligatorio(
+    'Escribe la identificación, por ejemplo APT-401',
+    20,
+    'La identificación admite máximo 20 caracteres',
+  ),
   imagenes: z
     .array(z.object({ url: urlObligatoria('Escribe la URL de la imagen') }))
     .min(1, 'Agrega al menos una imagen')
@@ -74,6 +103,7 @@ const VACIO: Datos = {
   dormitorios: '1',
   capacidadMaxima: '2',
   dotacion: '',
+  caracteristicas: '',
   imagenes: [{ url: '' }],
   principal: '0',
   tarifas: {},
@@ -115,6 +145,7 @@ export default function FormularioApartamento() {
       dormitorios: String(datosActuales.dormitorios),
       capacidadMaxima: String(datosActuales.capacidadMaxima),
       dotacion: datosActuales.dotacion.join('\n'),
+      caracteristicas: (datosActuales.caracteristicas ?? []).join('\n'),
       // Las imágenes no se editan aquí
       imagenes: [],
     })
@@ -127,6 +158,7 @@ export default function FormularioApartamento() {
       dormitorios: Number(datos.dormitorios),
       capacidadMaxima: Number(datos.capacidadMaxima),
       dotacion: lineas(datos.dotacion),
+      caracteristicas: lineas(datos.caracteristicas),
     }
 
     if (editando) {
@@ -264,14 +296,20 @@ export default function FormularioApartamento() {
           <legend className="sr-only">Datos</legend>
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo id="identificacion" etiqueta="Identificación" error={errors.identificacion?.message}>
-              <Input placeholder="APT-401" disabled={editando} autoCapitalize="characters" {...register('identificacion')} />
+              <Input
+                placeholder="APT-401"
+                maxLength={20}
+                disabled={editando}
+                autoCapitalize="characters"
+                {...register('identificacion')}
+              />
             </Campo>
             <Campo id="nombre" etiqueta="Nombre" error={errors.nombre?.message}>
-              <Input placeholder="Coral Esmeralda" {...register('nombre')} />
+              <Input placeholder="Coral Esmeralda" maxLength={100} {...register('nombre')} />
             </Campo>
           </div>
           <Campo id="descripcion" etiqueta="Descripción (opcional)" error={errors.descripcion?.message}>
-            <textarea className={claseTextarea} {...register('descripcion')} />
+            <textarea className={claseTextarea} maxLength={MAXIMO_DESCRIPCION} {...register('descripcion')} />
           </Campo>
           <div className="grid grid-cols-2 gap-4">
             <Campo id="dormitorios" etiqueta="Dormitorios" error={errors.dormitorios?.message}>
@@ -286,11 +324,28 @@ export default function FormularioApartamento() {
               <Input type="number" min={1} inputMode="numeric" {...register('capacidadMaxima')} />
             </Campo>
           </div>
-          <Campo id="dotacion" etiqueta="Dotación" ayuda="Un elemento por línea" error={errors.dotacion?.message}>
+          <Campo
+            id="dotacion"
+            etiqueta="Dotación"
+            ayuda="Lo que trae el apartamento, un elemento por línea"
+            error={errors.dotacion?.message}
+          >
             <textarea
               className={claseTextarea}
-              placeholder={'Cama extragrande\nCocina integral\nBalcón con vista al mar'}
+              placeholder={'Cama extragrande\nCocina integral\nTina de hidromasaje'}
               {...register('dotacion')}
+            />
+          </Campo>
+          <Campo
+            id="caracteristicas"
+            etiqueta="Características (opcional)"
+            ayuda={`Rasgos del apartamento, una por línea (máximo ${MAXIMO_CARACTERISTICAS}). Se ofrecen en el filtro de la búsqueda.`}
+            error={errors.caracteristicas?.message}
+          >
+            <textarea
+              className={claseTextarea}
+              placeholder={'Vista al mar\nFrente a la playa\nBalcón\nPiso alto'}
+              {...register('caracteristicas')}
             />
           </Campo>
         </fieldset>

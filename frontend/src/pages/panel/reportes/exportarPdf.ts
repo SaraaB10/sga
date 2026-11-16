@@ -7,7 +7,6 @@ import type {
 } from '@/api/reportes'
 import { formatearDinero, formatearFecha } from '@/components/coral'
 import { NOMBRE_CANAL } from '@/pages/huesped/reserva/formato'
-import { NOMBRE_MEDIO } from '@/pages/panel/folio/movimientos'
 import { formatearPorcentaje } from './formato'
 
 export interface DatosReportePdf {
@@ -16,6 +15,8 @@ export interface DatosReportePdf {
   ocupacion: ReporteOcupacionResponse
   ingresos: ReporteIngresosResponse
   canales: ReporteReservasPorCanalResponse
+  /** Nombre de cada medio de pago por su código (catálogo del administrador) */
+  nombreMedio: (codigo: string) => string
 }
 
 // Color de la marca (#8e3b6f, el mismo del mapa) para los encabezados de las tablas
@@ -36,7 +37,7 @@ const porcentaje = (valor: number) => texto(formatearPorcentaje(valor))
  */
 export async function descargarReportePdf(datos: DatosReportePdf): Promise<void> {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
-  const { alojamiento, periodo, ocupacion, ingresos, canales } = datos
+  const { alojamiento, periodo, ocupacion, ingresos, canales, nombreMedio } = datos
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 
   doc.setFontSize(18)
@@ -105,7 +106,7 @@ export async function descargarReportePdf(datos: DatosReportePdf): Promise<void>
     startY: seccion('Ingresos', `${ingresos.cantidadPagos} ${ingresos.cantidadPagos === 1 ? 'pago' : 'pagos'} en el periodo`),
     head: [['Medio de pago', 'Pagos', 'Total', 'Participación']],
     body: ingresos.medios.map((m) => [
-      NOMBRE_MEDIO[m.medio],
+      nombreMedio(m.medio),
       String(m.cantidadPagos),
       dinero(m.total),
       porcentaje(m.porcentaje),

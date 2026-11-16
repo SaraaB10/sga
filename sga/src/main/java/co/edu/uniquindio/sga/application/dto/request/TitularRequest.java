@@ -10,20 +10,23 @@ import jakarta.validation.constraints.Size;
  */
 public record TitularRequest(
     @NotBlank(message = "El nombre del titular es obligatorio")
+    @Pattern(regexp = ReglaNombre.PATRON, message = ReglaNombre.MENSAJE)
     String nombre,
 
     @NotBlank(message = "El tipo de documento del titular es obligatorio")
+    @Size(max = 20, message = "El tipo de documento admite máximo 20 caracteres")
     String tipoDocumento,
 
     @NotBlank(message = "El número de documento del titular es obligatorio")
+    @Pattern(regexp = ReglaDocumento.PATRON, message = ReglaDocumento.MENSAJE)
     String numeroDocumento,
 
     @NotBlank(message = "El email del titular es obligatorio")
-    @Email(message = "El email del titular no tiene un formato válido")
+    @Email(regexp = ReglaTexto.PATRON_CORREO, message = "El email del titular no tiene un formato válido")
+    @Size(max = 120, message = "El email del titular admite máximo 120 caracteres")
     String email,
 
     @NotBlank(message = "El teléfono del titular es obligatorio")
-    @Size(max = ReglaTelefono.MAXIMO, message = ReglaTelefono.MENSAJE_MAXIMO)
     @Pattern(regexp = ReglaTelefono.PATRON, message = ReglaTelefono.MENSAJE)
     String telefono
 ) {

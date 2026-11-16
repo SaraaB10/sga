@@ -39,9 +39,18 @@ public class RegistrarBloqueoService {
         Apartamento apartamento = buscarApartamento(aptoId);
         Bloqueo bloqueo = Bloqueo.registrar("BLQ-" + UUID.randomUUID(), aptoId, rango, motivo);
 
-        List<Estancia> estanciasActivas = reservaRepository.listarActivasPorApartamento(aptoId).stream()
-                .map(Reserva::getEstancia)
-                .toList();
+        List<Reserva> activas = reservaRepository.listarActivasPorApartamento(aptoId);
+        // RN-01: el mensaje dice qué reserva ocupa esas noches, para que la recepción sepa qué revisar
+        activas.stream()
+                .filter(reserva -> bloqueo.seSolapaCon(reserva.getEstancia()))
+                .findFirst()
+                .ifPresent(reserva -> {
+                    throw new ReglaDominioException("RN-01: No se puede bloquear el apartamento " + aptoId.codigo()
+                            + ": la reserva " + reserva.getCodigo().valor() + " (" + reserva.getEstado()
+                            + ", del " + reserva.getEstancia().fechaEntrada() + " al "
+                            + reserva.getEstancia().fechaSalida() + ") ocupa esas noches");
+                });
+        List<Estancia> estanciasActivas = activas.stream().map(Reserva::getEstancia).toList();
         apartamento.registrarBloqueo(bloqueo, estanciasActivas);
 
         bloqueoRepository.guardar(bloqueo);

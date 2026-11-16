@@ -6,6 +6,9 @@ import co.edu.uniquindio.sga.application.exception.ConflictoCanalNoEncontradoExc
 import co.edu.uniquindio.sga.application.exception.CodigoRecuperacionInvalidoException;
 import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
+import co.edu.uniquindio.sga.application.exception.ContrasenaNuevaIgualALaActualException;
+import co.edu.uniquindio.sga.application.exception.MedioPagoNoEncontradoException;
+import co.edu.uniquindio.sga.application.exception.RolPropioNoModificableException;
 import co.edu.uniquindio.sga.application.exception.BloqueoNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.FolioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.NovedadNoEncontradaException;
@@ -89,6 +92,14 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), req, null);
     }
 
+    /** 400: la contraseña nueva es la misma que la actual; se reporta sobre el campo contrasenaNueva. */
+    @ExceptionHandler(ContrasenaNuevaIgualALaActualException.class)
+    public ResponseEntity<ErrorResponse> contrasenaNuevaIgual(ContrasenaNuevaIgualALaActualException ex,
+                                                              HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
+                Map.of("contrasenaNueva", ex.getMessage()));
+    }
+
     /**
      * 400: el grupo no tiene ningún ocupante facturable. Es una regla del dominio, pero lo que llega mal es la
      * composición del grupo, no un conflicto con el estado del sistema. Gana sobre el 409 de ReglaDominioException
@@ -128,7 +139,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({ReservaNoEncontradaException.class, ApartamentoNoEncontradoException.class,
             FolioNoEncontradoException.class, TemporadaNoEncontradaException.class, BloqueoNoEncontradoException.class,
             NovedadNoEncontradaException.class, CanalVentaNoEncontradoException.class,
-            ConflictoCanalNoEncontradoException.class, ServicioAdicionalNoEncontradoException.class})
+            ConflictoCanalNoEncontradoException.class, ServicioAdicionalNoEncontradoException.class,
+            MedioPagoNoEncontradoException.class})
     public ResponseEntity<ErrorResponse> noEncontrado(RuntimeException ex, HttpServletRequest req) {
         return construir(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
     }
@@ -151,10 +163,12 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
     }
 
-    /** 409: el usuario es titular de reservas vigentes o el administrador intenta desactivarse (Guía 12, 7.2). */
-    @ExceptionHandler(UsuarioNoDesactivableException.class)
-    public ResponseEntity<ErrorResponse> usuarioNoDesactivable(UsuarioNoDesactivableException ex,
-                                                               HttpServletRequest req) {
+    /**
+     * 409: el usuario es titular de reservas vigentes, o el administrador intenta desactivarse o cambiar su propio
+     * rol (Guía 12, 7.2).
+     */
+    @ExceptionHandler({UsuarioNoDesactivableException.class, RolPropioNoModificableException.class})
+    public ResponseEntity<ErrorResponse> cuentaNoModificable(RuntimeException ex, HttpServletRequest req) {
         return construir(HttpStatus.CONFLICT, ex.getMessage(), req, null);
     }
 

@@ -12,6 +12,8 @@ export interface AuthContexto {
   autenticado: boolean
   /** El servidor rechazó el token: se cerró la sesión por vencimiento */
   vencida: boolean
+  /** La persona acaba de cerrar sesión y se va al inicio: las rutas protegidas no redirigen al login */
+  saliendo: boolean
   /** Inicia sesión y devuelve la sesión creada; si falla, lanza el ErrorApi */
   login: (correo: string, contrasena: string) => Promise<Sesion>
   /** Cierra la sesión por decisión del usuario y vuelve al inicio */

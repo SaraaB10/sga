@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.application.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * CU-09. PUT /api/reservas/{codigo}/cancelar
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record CancelarReservaRequest(
         @NotBlank(message = "El motivo de la cancelación es obligatorio")
+        @Size(max = ReglaTexto.MAXIMO_MOTIVO, message = "El motivo admite máximo 250 caracteres")
         String motivo
 ) {
 }

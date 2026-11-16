@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 /** DTO de entrada del inicio de sesión (Guía 12) */
 public record LoginRequest(
         @NotBlank(message = "El correo es obligatorio")
-        @Email(message = "El correo no tiene un formato válido")
+        @Email(regexp = ReglaTexto.PATRON_CORREO, message = "El correo no tiene un formato válido")
         String correo,
 
         @NotBlank(message = "La contraseña es obligatoria")

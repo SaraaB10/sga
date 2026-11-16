@@ -94,15 +94,16 @@ public class DatosInicialesReservasConfig {
      * @param cargarPoliticaCancelacion el runner de la política de cancelación. Se invoca primero porque cada
      *                                  reserva congela la versión vigente (RN-22); es idempotente, así que cuando ya
      *                                  corrió (@Order(0)) la llamada no hace nada.
-     * @param cargarDatosCoral el runner del alojamiento. Se invoca primero porque sin alojamiento, temporadas y
-     *                         tarifas no hay reservas posibles (F-13); es idempotente, así que cuando ya corrió
-     *                         (@Order(1)) la llamada no hace nada.
+     * @param cargarParametrosAlojamiento el runner de los parámetros, que antes carga el alojamiento. Se invoca
+     *                         primero porque sin alojamiento, temporadas, tarifas y parámetros (umbral, depósito)
+     *                         no hay reservas posibles (F-13); es idempotente, así que cuando ya corrió (@Order(1))
+     *                         la llamada no hace nada.
      */
     @Bean
     @Order(2)
     public CommandLineRunner cargarReservasDePrueba(
             @Qualifier("cargarPoliticaCancelacion") CommandLineRunner cargarPoliticaCancelacion,
-            @Qualifier("cargarDatosCoral") CommandLineRunner cargarDatosCoral,
+            @Qualifier("cargarParametrosAlojamiento") CommandLineRunner cargarParametrosAlojamiento,
             ReservaRepository reservaRepository,
             FolioRepository folioRepository,
             ApartamentoRepository apartamentoRepository,
@@ -112,20 +113,19 @@ public class DatosInicialesReservasConfig {
             CancelarReservaService cancelarReservaService,
             CotizadorEstanciaService cotizadorEstanciaService,
             PoliticaCancelacionService politicaCancelacionService,
-            DepositoGarantia depositoGarantia,
             Clock reloj) {
         return args -> {
             if (!reservaRepository.listarTodas().isEmpty()) {
                 return;                                          // no duplicar si ya hay reservas
             }
             cargarPoliticaCancelacion.run(args);
-            cargarDatosCoral.run(args);
+            cargarParametrosAlojamiento.run(args);
             Alojamiento coral = alojamientoRepository.obtener()
                     .orElseThrow(() -> new ReglaDominioException("F-13: No hay un alojamiento configurado"));
 
             Cargador cargador = new Cargador(coral, reservaRepository, folioRepository, apartamentoRepository,
                     creacionReservaService, confirmacionReservaService, cancelarReservaService,
-                    cotizadorEstanciaService, politicaCancelacionService.vigente(), depositoGarantia,
+                    cotizadorEstanciaService, politicaCancelacionService.vigente(), coral.getDepositoGarantia(),
                     LocalDateTime.now(reloj));
             cargador.cargar();
             log.info("Datos de prueba de reservas cargados: {} reservas", reservaRepository.listarTodas().size());
@@ -207,7 +207,7 @@ public class DatosInicialesReservasConfig {
 
             // EXTERNO: llega de una plataforma de terceros con su identificador (RN-19) y sin hora de llegada.
             nueva("APT-201", hoy.plusDays(15), hoy.plusDays(18),
-                    titular("Emily Johnson", "PA", "PA5550123", "emily.johnson@mail.com", "+15555550707"),
+                    titular("Emily Johnson", "PA", "55501230", "emily.johnson@mail.com", "3165550707"),
                     CanalOrigen.EXTERNO, null, "BK-DEMO-000123");
         }
 

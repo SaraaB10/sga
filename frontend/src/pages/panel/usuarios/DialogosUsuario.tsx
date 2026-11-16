@@ -3,10 +3,20 @@ import { toast } from 'sonner'
 import { useCambiarRolUsuario, useCrearUsuario, type CrearUsuarioRequest } from '@/api/usuarios'
 import type { Rol, UsuarioResponse } from '@/api/tipos'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { Campo, InputContrasena } from '@/components/coral'
+import { Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Input } from '@/components/ui/input'
-import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
-import { AYUDA_CONTRASENA, erroresDelServidor, unirErrores, useValidacion } from '@/lib/validacion'
+import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, mensajeEdadMinima } from '@/lib/edadMinima'
+import { useReglasAlojamiento } from '@/pages/publico/comun/consultas'
+import {
+  AYUDA_CONTRASENA,
+  DIGITOS_TELEFONO,
+  erroresDelServidor,
+  fechaMinimaNacimiento,
+  MAXIMO_DIGITOS_DOCUMENTO,
+  MAXIMO_NOMBRE_PERSONA,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
 import { useAlAbrir } from '@/pages/panel/folio/useAlAbrir'
 import { claseSelect } from '@/pages/publico/comun/estilos'
@@ -36,7 +46,8 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
   const [datos, setDatos] = useState<Datos>(VACIO)
   // La edad mínima se avisa en cuanto la fecha está completa, sin esperar al envío
   const [avisoEdad, setAvisoEdad] = useState<string>()
-  const validacion = useValidacion(esquemaCrearUsuario, datos)
+  const edadMinima = useReglasAlojamiento().reglas.edadMinimaCuenta
+  const validacion = useValidacion(esquemaCrearUsuario(edadMinima), datos)
 
   useAlAbrir(abierto, () => {
     setDatos(VACIO)
@@ -83,7 +94,7 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo id="usuario-nombre" etiqueta="Nombre" error={error('nombre')} className="sm:col-span-2">
-          <Input autoComplete="off" maxLength={100} {...campo('nombre')} />
+          <Input autoComplete="off" maxLength={MAXIMO_NOMBRE_PERSONA} {...campo('nombre')} />
         </Campo>
         <Campo id="usuario-correo" etiqueta="Correo" error={error('correo')} className="sm:col-span-2">
           <Input type="email" autoComplete="off" maxLength={120} {...campo('correo')} />
@@ -92,20 +103,23 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
           <InputContrasena autoComplete="new-password" maxLength={72} {...campo('contrasena')} />
         </Campo>
         <Campo id="usuario-telefono" etiqueta="Teléfono" error={error('telefono')}>
-          <Input type="tel" maxLength={20} {...campo('telefono')} />
+          <InputDigitos maximo={DIGITOS_TELEFONO} {...campo('telefono')} />
         </Campo>
         <Campo id="usuario-documento" etiqueta="Documento" error={error('documento')}>
-          <Input inputMode="numeric" maxLength={15} {...campo('documento')} />
+          <InputDigitos maximo={MAXIMO_DIGITOS_DOCUMENTO} {...campo('documento')} />
         </Campo>
         <Campo id="usuario-nacimiento" etiqueta="Fecha de nacimiento" error={error('fechaNacimiento')}>
           <Input
             type="date"
-            max={fechaMaximaNacimientoCuenta()}
+            min={fechaMinimaNacimiento()}
+            max={fechaMaximaNacimientoCuenta(edadMinima)}
             value={datos.fechaNacimiento}
             onChange={(e) => {
               const valor = e.target.value
               setDatos((d) => ({ ...d, fechaNacimiento: valor }))
-              setAvisoEdad(esFechaCompleta(valor) && !cumpleEdadMinima(valor) ? MENSAJE_EDAD_MINIMA : undefined)
+              setAvisoEdad(
+                esFechaCompleta(valor) && !cumpleEdadMinima(valor, edadMinima) ? mensajeEdadMinima(edadMinima) : undefined,
+              )
             }}
           />
         </Campo>

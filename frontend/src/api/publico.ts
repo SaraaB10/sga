@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { cliente } from './cliente'
+import type { MedioPagoResponse } from './reservas'
 import type {
   AlojamientoResponse,
   ApartamentoDetalleResponse,
@@ -101,6 +102,36 @@ export const llavesPublicas = {
   temporadas: (pagina: number) => ['temporadas', 'lista', pagina] as const,
   temporada: (id: string) => ['temporadas', 'detalle', id] as const,
   politicaVigente: ['politica-cancelacion', 'vigente'] as const,
+  mediosPago: ['medios-pago', 'activos'] as const,
+  opcionesFiltro: ['apartamentos', 'filtros'] as const,
+}
+
+/** GET /api/apartamentos/filtros: opciones reales de los filtros "Dormitorios", "Características" y "Servicios" */
+export interface OpcionesFiltroResponse {
+  /** Números de dormitorios de los apartamentos activos */
+  dormitorios: number[]
+  /** Rasgos de los apartamentos activos, por ejemplo "Vista al mar" */
+  caracteristicas: string[]
+  /** Elementos de la dotación de los apartamentos activos */
+  servicios: string[]
+}
+
+export function useOpcionesFiltro() {
+  return useQuery({
+    queryKey: llavesPublicas.opcionesFiltro,
+    queryFn: async () => (await cliente.get<OpcionesFiltroResponse>('/api/apartamentos/filtros')).data,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** GET /api/medios-pago: medios aceptados y activos (L-18), públicos */
+export async function listarMediosPago(): Promise<MedioPagoResponse[]> {
+  const { data } = await cliente.get<MedioPagoResponse[]>('/api/medios-pago')
+  return data
+}
+
+export function useMediosPago() {
+  return useQuery({ queryKey: llavesPublicas.mediosPago, queryFn: listarMediosPago, staleTime: 5 * 60 * 1000 })
 }
 
 // ---------- Hooks ----------

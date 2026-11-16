@@ -16,6 +16,6 @@ public class UsuarioNoDesactivableException extends RuntimeException {
     }
 
     public static UsuarioNoDesactivableException porSerElMismo() {
-        return new UsuarioNoDesactivableException("No se puede desactivar a sí mismo");
+        return new UsuarioNoDesactivableException("El administrador no puede desactivar su propia cuenta");
     }
 }

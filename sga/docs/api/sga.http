@@ -360,14 +360,42 @@ Authorization: Bearer {{tokenAdmin}}
     });
 %}
 
-### 3.2 CU-01 con filtros de 7.5: capacidad mínima, característica de la dotación y rango de precio
-GET {{host}}/api/apartamentos/disponibles?entrada={{hoy}}&salida={{hoyMas3}}&ocupantes=2&capacidadMinima=4&caracteristica=piscina&precioMinimo=500000&precioMaximo=5000000&pagina=0
+### 3.2 CU-01 con filtros de 7.5: capacidad mínima, dormitorios, característica del apartamento, servicio de la dotación y precio
+GET {{host}}/api/apartamentos/disponibles?entrada={{hoy}}&salida={{hoyMas3}}&ocupantes=2&capacidadMinima=4&dormitorios=3&caracteristica=Vista%20al%20mar&servicios=piscina&precioMinimo=500000&precioMaximo=5000000&pagina=0
 Authorization: Bearer {{tokenAdmin}}
 
 > {%
     client.test("3.2 200 disponibles con filtros", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.contenido.every(function (a) { return a.capacidadMaxima >= 4; }), "Hay apartamentos con capacidad menor que 4");
+        client.assert(response.body.contenido.length === 1 && response.body.contenido[0].identificacion === "APT-301", "Solo APT-301 tiene 3 dormitorios, vista al mar y piscina: " + JSON.stringify(response.body.contenido.map(function (a) { return a.identificacion; })));
+    });
+%}
+
+### 3.2b Opciones reales de los filtros (sin token): dormitorios, características y servicios de los apartamentos activos
+GET {{host}}/api/apartamentos/filtros
+
+> {%
+    client.test("3.2b 200 opciones de filtro", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.dormitorios.join(",") === "1,2,3", "Dormitorios: " + response.body.dormitorios);
+        ["Vista al mar", "Frente a la playa", "Balcón", "Terraza", "Piso alto"].forEach(function (c) {
+            client.assert(response.body.caracteristicas.indexOf(c) >= 0, "Falta la característica " + c + ": " + response.body.caracteristicas);
+        });
+        client.assert(response.body.caracteristicas.indexOf("Admite mascotas") < 0, "Las mascotas las admite el alojamiento (L-16), no son característica: " + response.body.caracteristicas);
+        client.assert(response.body.servicios.indexOf("Cava refrigerada de vinos") >= 0, "Servicios: " + response.body.servicios);
+        client.assert(response.body.servicios.indexOf("Vista frontal al mar Caribe") < 0, "La vista no es dotación: " + response.body.servicios);
+    });
+%}
+
+### 3.2c Detalle público: las características van aparte de la dotación
+GET {{host}}/api/apartamentos/APT-101
+
+> {%
+    client.test("3.2c 200 características de APT-101", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.caracteristicas.join(",") === "Vista al mar,Frente a la playa,Balcón", "Características: " + response.body.caracteristicas);
+        client.assert(response.body.dotacion.indexOf("Tina de hidromasaje privada") >= 0, "Dotación: " + response.body.dotacion);
     });
 %}
 
@@ -805,7 +833,8 @@ Content-Type: application/json
     client.test("5.2 cuerpo del error", function () {
         var e = response.body;
         client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
-        client.assert(e.mensaje.indexOf("RN-01: No se puede bloquear el apartamento APT-101") === 0, "mensaje: " + e.mensaje);
+        client.assert(e.mensaje.indexOf("RN-01: No se puede bloquear el apartamento APT-101: la reserva RES-") === 0, "mensaje: " + e.mensaje);
+        client.assert(e.mensaje.indexOf("ocupa esas noches") > 0, "El mensaje debía decir qué reserva lo impide: " + e.mensaje);
         client.assert(e.path === "/api/apartamentos/APT-101/bloqueos", "path: " + e.path);
         client.assert(e.timestamp != null && e.errores == null, "timestamp o errores: " + JSON.stringify(e));
     });
@@ -2057,7 +2086,8 @@ Content-Type: application/json
   "descripcion": "Unidad nueva con vista a la bahía, pensada para familias pequeñas.",
   "dormitorios": 2,
   "capacidadMaxima": 4,
-  "dotacion": ["Cama extragrande", "Dormitorio con dos camas sencillas", "Cocina equipada", "Balcón con vista a la bahía"],
+  "dotacion": ["Cama extragrande", "Dormitorio con dos camas sencillas", "Cocina equipada"],
+  "caracteristicas": ["Vista a la bahía", "Balcón"],
   "imagenes": [
     { "url": "https://coral.co/img/apt-401-sala.jpg", "principal": true },
     { "url": "https://coral.co/img/apt-401-balcon.jpg", "principal": false }
@@ -2073,6 +2103,8 @@ Content-Type: application/json
         client.assert(response.headers.valueOf("Location") != null, "Falta la cabecera Location");
         client.assert(response.body.activo === false, "El apartamento nuevo debe nacer inactivo (7.4)");
         client.assert(response.body.estadoOperativo === "PREPARADO", "El apartamento nuevo nace PREPARADO");
+        client.assert(response.body.caracteristicas.join(",") === "Vista a la bahía,Balcón", "Características: " + response.body.caracteristicas);
+        client.assert(response.body.dotacion.indexOf("Balcón") < 0, "El balcón es característica, no dotación");
     });
     client.global.set("locationApt401", response.headers.valueOf("Location"));
 %}
@@ -2321,13 +2353,15 @@ Content-Type: application/json
   "descripcion": "Remodelado como suite para parejas.",
   "dormitorios": 1,
   "capacidadMaxima": 2,
-  "dotacion": ["Cama extragrande", "Cocina equipada", "Balcón con tina de hidromasaje"]
+  "dotacion": ["Cama extragrande", "Cocina equipada", "Tina de hidromasaje"],
+  "caracteristicas": ["Vista a la bahía", "Balcón", "Piso alto"]
 }
 
 > {%
     client.test("9.13 200 actualizado con advertencia de capacidad", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.apartamento.capacidadMaxima === 2, "La capacidad debía quedar en 2");
+        client.assert(response.body.apartamento.caracteristicas.join(",") === "Vista a la bahía,Balcón,Piso alto", "Características: " + response.body.apartamento.caracteristicas);
         client.assert(response.body.reservasSobreCapacidad.indexOf(client.global.get("codigoApt401")) >= 0,
             "Debía listar la reserva " + client.global.get("codigoApt401"));
         client.assert(response.body.advertencia.indexOf("7.3") === 0, "La advertencia debía citar 7.3");
@@ -2625,7 +2659,7 @@ Authorization: Bearer {{tokenAdmin}}
 
 # ====================================================================================================
 # 11. CU-28 a CU-30 (administrador)
-#     CU-28: consultar y actualizar el alojamiento (los parámetros de la sección 6 son de solo lectura).
+#     CU-28: consultar y actualizar el alojamiento (los parámetros de la sección 6 se editan aparte, en la 19).
 #     CU-29: listar temporadas, crear la temporada Festival (1 al 10 de marzo de 2027, fecha final excluida)
 #            con la tarifa de cada apartamento activo (7.4) y agregarle un rango.
 #     CU-30: reservar con la versión 1 de la política, publicar la versión 2 y reservar con ella; la primera
@@ -4047,6 +4081,24 @@ Content-Type: application/json
     });
 %}
 
+### 14.12b 400 La contraseña nueva es igual a la actual (se compara con el hash guardado)
+PUT {{host}}/api/usuarios/me/contrasena
+Authorization: Bearer {{tokenNuevo}}
+Content-Type: application/json
+
+{ "contrasenaActual": "Noche2026", "contrasenaNueva": "Noche2026" }
+
+> {%
+    client.test("14.12b cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/usuarios/me/contrasena", "path: " + e.path);
+        client.assert(e.timestamp != null, "timestamp: " + e.timestamp);
+        client.assert(e.errores.contrasenaNueva === "La contraseña nueva debe ser distinta de la actual", "errores: " + JSON.stringify(e.errores));
+    });
+%}
+
 ### 14.13 Cambio de contraseña con la actual correcta: 204
 PUT {{host}}/api/usuarios/me/contrasena
 Authorization: Bearer {{tokenNuevo}}
@@ -4171,13 +4223,41 @@ Authorization: Bearer {{tokenAdmin}}
     client.test("14.21 cuerpo del error", function () {
         var e = response.body;
         client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
-        client.assert(e.mensaje === "No se puede desactivar a sí mismo", "mensaje: " + e.mensaje);
+        client.assert(e.mensaje === "El administrador no puede desactivar su propia cuenta", "mensaje: " + e.mensaje);
         client.assert(e.path === "/api/usuarios/" + client.global.get("adminId") + "/desactivar", "path: " + e.path);
         client.assert(e.timestamp != null && e.errores == null, "timestamp o errores: " + JSON.stringify(e));
     });
     client.test("14.21 409 desactivarse a sí mismo", function () {
         client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
-        client.assert(response.body.mensaje === "No se puede desactivar a sí mismo", response.body.mensaje);
+        client.assert(response.body.mensaje === "El administrador no puede desactivar su propia cuenta", response.body.mensaje);
+    });
+%}
+
+### 14.21b 409 El administrador no puede cambiar su propio rol
+PUT {{host}}/api/usuarios/{{adminId}}/rol
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "rol": "RECEPCIONISTA" }
+
+> {%
+    client.test("14.21b cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "El administrador no puede cambiar su propio rol", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/usuarios/" + client.global.get("adminId") + "/rol", "path: " + e.path);
+        client.assert(e.timestamp != null && e.errores == null, "timestamp o errores: " + JSON.stringify(e));
+    });
+%}
+
+### 14.21c El administrador sigue siendo ADMINISTRADOR y activo
+GET {{host}}/api/usuarios/me
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("14.21c 200 cuenta sin cambios", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.rol === "ADMINISTRADOR" && response.body.activo === true, JSON.stringify(response.body));
     });
 %}
 
@@ -4857,21 +4937,32 @@ GET {{host}}/api/apartamentos/APT-999/disponibilidad?desde={{s17Hoy}}&hasta={{s1
     });
 %}
 
-### 17.7 Filtro por servicios (sin token): hidromasaje y vista al mar a la vez solo los tiene APT-101
-GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=hidromasaje&servicios=mar
+### 17.7 Filtro por servicios (sin token): hidromasaje y cocina integral a la vez solo los tiene APT-101
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=hidromasaje&servicios=cocina%20integral
 
 > {%
     client.test("17.7 200 los dos servicios se aplican juntos", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         var ids = response.body.contenido.map(function (a) { return a.identificacion; });
         client.assert(ids.indexOf("APT-101") >= 0, "Debía venir APT-101: " + ids);
-        client.assert(ids.indexOf("APT-201") < 0, "APT-201 tiene hidromasaje pero no vista al mar: " + ids);
+        client.assert(ids.indexOf("APT-201") < 0, "APT-201 tiene hidromasaje pero no cocina integral: " + ids);
         client.assert(ids.indexOf("APT-102") < 0, "APT-102 no tiene hidromasaje: " + ids);
     });
 %}
 
-### 17.8 Filtro por servicios separados por coma y sin tildes: cocina, terraza y bahía solo los tiene APT-102
-GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=cocina,terraza,bahia
+### 17.7b Filtro por característica (sin token): "vista al mar" es una característica, no un servicio de la dotación
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&caracteristica=vista%20al%20mar
+
+> {%
+    client.test("17.7b 200 solo los que tienen vista al mar", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var ids = response.body.contenido.map(function (a) { return a.identificacion; });
+        client.assert(ids.join() === "APT-101,APT-301", "Se esperaban APT-101 y APT-301: " + ids);
+    });
+%}
+
+### 17.8 Filtro por servicios separados por coma y sin tildes: cocina, cava y cama balinesa solo los tiene APT-102
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=cocina,cava,balinesa
 
 > {%
     client.test("17.8 200 solo APT-102", function () {
@@ -5046,5 +5137,570 @@ Content-Type: application/json
     client.test("17.19 200 un solo facturable", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 1; }), "Debía cobrar 1 persona por noche");
+    });
+%}
+
+### Sección 18: FORMATO DE LOS DATOS DE LAS PERSONAS Y REGLAS DE LA CUENTA
+
+# ====================================================================================================
+# 18. Teléfono (10 dígitos, solo números) y documento (de 6 a 10 dígitos, solo números) en el registro, la creación
+#     de usuarios, el perfil, el titular y los ocupantes de la reserva y el canal externo.
+# ====================================================================================================
+
+### 18.1 400 Registro con el teléfono con espacios y el documento con letras
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "316 000 0030",
+  "documento": "PA100030",
+  "fechaNacimiento": "1990-05-20"
+}
+
+> {%
+    client.test("18.1 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/auth/registro", "path: " + e.path);
+        client.assert(e.timestamp != null, "timestamp: " + e.timestamp);
+        client.assert(e.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + e.errores.telefono);
+        client.assert(e.errores.documento === "El documento debe tener entre 6 y 10 dígitos, solo números", "documento: " + e.errores.documento);
+    });
+%}
+
+### 18.2 400 Registro con el teléfono de 9 dígitos y el documento de 5
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "316000003",
+  "documento": "10003",
+  "fechaNacimiento": "1990-05-20"
+}
+
+> {%
+    client.test("18.2 400 longitudes", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + response.body.errores.telefono);
+        client.assert(response.body.errores.documento === "El documento debe tener entre 6 y 10 dígitos, solo números", "documento: " + response.body.errores.documento);
+    });
+%}
+
+### 18.3 400 El administrador crea un usuario con el teléfono con + y el documento de 11 dígitos
+POST {{host}}/api/usuarios
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "+573160000030",
+  "documento": "10000000300",
+  "fechaNacimiento": "1990-05-20",
+  "rol": "RECEPCIONISTA"
+}
+
+> {%
+    client.test("18.3 400 teléfono y documento", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.path === "/api/usuarios", "path: " + response.body.path);
+        client.assert(response.body.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + response.body.errores.telefono);
+        client.assert(response.body.errores.documento === "El documento debe tener entre 6 y 10 dígitos, solo números", "documento: " + response.body.errores.documento);
+    });
+%}
+
+### 18.4 Registro con el teléfono de 10 dígitos y el documento de 6: 201
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula Formato",
+  "correo": "paula.formato@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "3160000030",
+  "documento": "100030",
+  "fechaNacimiento": "1990-05-20"
+}
+
+> {%
+    client.test("18.4 201 cuenta creada", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.correo === "paula.formato@correo.co", "correo: " + response.body.correo);
+        client.assert(response.body.rol === "HUESPED", "rol: " + response.body.rol);
+    });
+%}
+
+### 18.5 400 Perfil con el teléfono con guiones
+PUT {{host}}/api/usuarios/me
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Administrador Coral", "telefono": "300-100-0001" }
+
+> {%
+    client.test("18.5 400 teléfono del perfil", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.telefono === "El teléfono debe tener 10 dígitos, solo números", "telefono: " + response.body.errores.telefono);
+    });
+%}
+
+### 18.6 400 Reserva con el teléfono del titular de 7 dígitos y el documento de un ocupante con puntos
+POST {{host}}/api/reservas
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "canalOrigen": "DIRECTO",
+  "titular": { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "email": "ana.gomez@correo.co", "telefono": "3005550" },
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094200300", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Luis Gómez", "tipoDocumento": "CC", "numeroDocumento": "1.094.200", "fechaNacimiento": "1989-01-10" }
+  ]
+}
+
+> {%
+    client.test("18.6 400 titular y ocupante", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores["titular.telefono"] === "El teléfono debe tener 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
+        client.assert(response.body.errores["ocupantes[1].numeroDocumento"] === "El documento debe tener entre 6 y 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### 18.7 400 Filtro del listado de reservas con un documento con letras
+GET {{host}}/api/reservas?titular=CC1094
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("18.7 400 documento del filtro", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.titular === "El documento debe tener entre 6 y 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+# ====================================================================================================
+# 18.8 a 18.13 Nombres de personas (solo letras y espacios, de 3 a 80), correo con extensión, fecha de nacimiento
+#     de hace 110 años o menos, URL de imagen con https:// y textos libres con largo máximo.
+# ====================================================================================================
+
+### 18.8 400 Registro con un nombre con dígitos, un correo sin extensión y una fecha de nacimiento de 1900
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula 2",
+  "correo": "paula.formato@correo",
+  "contrasena": "Segura2026",
+  "telefono": "3160000031",
+  "documento": "100031",
+  "fechaNacimiento": "1900-01-01"
+}
+
+> {%
+    client.test("18.8 400 nombre, correo y fecha", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e.nombre === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "nombre: " + e.nombre);
+        client.assert(e.correo === "El correo no tiene un formato válido", "correo: " + e.correo);
+        client.assert(e.fechaNacimiento === "La fecha de nacimiento no puede ser de hace más de 110 años", "fechaNacimiento: " + e.fechaNacimiento);
+    });
+%}
+
+### 18.9 400 Perfil con el nombre con un espacio al final y la foto con http://
+PUT {{host}}/api/usuarios/me
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Administrador Coral ", "telefono": "3001000001", "fotoUrl": "http://fotos.sga.local/admin.png" }
+
+> {%
+    client.test("18.9 400 nombre y foto", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e.nombre === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "nombre: " + e.nombre);
+        client.assert(e.fotoUrl === "La URL de la imagen debe empezar por https:// y no tener espacios", "fotoUrl: " + e.fotoUrl);
+    });
+%}
+
+### 18.10 400 Cotización con un acompañante de nombre con símbolos y nacido hace más de 110 años
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Luis_Gómez", "fechaNacimiento": "1901-02-03" }
+  ]
+}
+
+> {%
+    client.test("18.10 400 acompañante", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e["ocupantes[1].nombre"] === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "errores: " + JSON.stringify(e));
+        client.assert(e["ocupantes[1].fechaNacimiento"] === "La fecha de nacimiento no puede ser de hace más de 110 años", "errores: " + JSON.stringify(e));
+    });
+%}
+
+### 18.11 400 Apartamento nuevo con una imagen por http:// y una descripción solo de espacios
+POST {{host}}/api/apartamentos
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacion": "APT-499",
+  "nombre": "Coral Formato",
+  "descripcion": "   ",
+  "dormitorios": 1,
+  "capacidadMaxima": 2,
+  "dotacion": ["Cama doble"],
+  "imagenes": [ { "url": "http://fotos.sga.local/apt-499.jpg", "principal": true } ]
+}
+
+> {%
+    client.test("18.11 400 imagen y descripción", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e["imagenes[0].url"] === "La URL de la imagen debe empezar por https:// y no tener espacios", "errores: " + JSON.stringify(e));
+        client.assert(e.descripcion === "La descripción no puede quedar solo en espacios", "errores: " + JSON.stringify(e));
+    });
+%}
+
+### 18.12 400 Novedad con un autor que no es un nombre de persona
+POST {{host}}/api/apartamentos/APT-101/novedades
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "autor": "servicio@sga.local", "descripcion": "Fuga en el lavamanos", "gravedad": "MEDIA" }
+
+> {%
+    client.test("18.12 400 autor", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.autor === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### 18.13 400 Corrección del folio en una posición negativa
+POST {{host}}/api/reservas/RES-2000-00001/folio/correcciones
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "indiceCargo": -1, "motivo": "Cargo duplicado" }
+
+> {%
+    client.test("18.13 400 posición negativa", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.indiceCargo === "La posición del cargo no puede ser negativa", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### Sección 19: PARÁMETROS DEL ALOJAMIENTO EDITABLES DESDE LA APLICACIÓN
+
+# ====================================================================================================
+# 19. Los parámetros se guardan en la base y los edita el administrador (PUT /api/alojamiento/parametros).
+#     Rigen de inmediato: al subir el umbral de edad facturable, la misma cotización cobra a menos personas.
+#     Al final se restauran los valores iniciales.
+# ====================================================================================================
+
+### 19.0 Parámetros vigentes y fecha de nacimiento de un niño que tiene 9 años a la entrada de 17.18
+GET {{host}}/api/alojamiento
+
+> {%
+    client.test("19.0 parámetros iniciales", function () {
+        var p = response.body.parametros;
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(p.umbralEdadFacturable === 6, "umbral: " + p.umbralEdadFacturable);
+        client.assert(p.depositoGarantia === 250000, "depósito: " + p.depositoGarantia);
+        client.assert(p.recargoRecepcionNocturna === 70000, "recargo: " + p.recargoRecepcionNocturna);
+        client.assert(p.edadMinimaCuenta === 18, "edad mínima: " + p.edadMinimaCuenta);
+    });
+    // Cumple 9 años el día de la entrada: paga noche con el umbral de 6 y no con el de 10
+    var entrada = client.global.get("s17HoyMas200");
+    var nacio = (Number(entrada.substring(0, 4)) - 9) + entrada.substring(4);
+    client.global.set("nino9", nacio.endsWith("-02-29") ? nacio.replace("-02-29", "-02-28") : nacio);
+%}
+
+### 19.1 Cotización de un adulto y un niño de 9 años con el umbral de 6: pagan los dos
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Tomás Gómez", "fechaNacimiento": "{{nino9}}" }
+  ]
+}
+
+> {%
+    client.test("19.1 200 dos facturables", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 2; }), "Debían pagar 2 personas");
+    });
+    client.global.set("cotizacionUmbral6", response.body.valorTotal);
+%}
+
+### 19.2 403 La recepción no cambia los parámetros: solo el administrador
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 10, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.2 403 recepción", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 19.3 400 Umbral fuera de rango
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 30, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.3 400 umbral", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.umbralEdadFacturable === "El umbral de edad facturable debe estar entre 0 y 17 años", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### 19.4 El administrador sube el umbral de edad facturable a 10 años: 200
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 10, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.4 200 umbral cambiado", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.parametros.umbralEdadFacturable === 10, "umbral: " + response.body.parametros.umbralEdadFacturable);
+    });
+%}
+
+### 19.5 La misma cotización, sin reiniciar: el niño de 9 años ya no paga noche
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Tomás Gómez", "fechaNacimiento": "{{nino9}}" }
+  ]
+}
+
+> {%
+    client.test("19.5 200 un facturable", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 1; }), "Debía pagar 1 persona");
+        client.assert(response.body.valorTotal * 2 === client.global.get("cotizacionUmbral6"), "Total: " + response.body.valorTotal);
+    });
+%}
+
+### 19.6 Se restauran los valores iniciales
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 6, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.6 200 restaurados", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.parametros.umbralEdadFacturable === 6, "umbral: " + response.body.parametros.umbralEdadFacturable);
+    });
+%}
+
+### Sección 20: MEDIOS DE PAGO ACEPTADOS (L-18)
+
+# ====================================================================================================
+# 20. El administrador gestiona el catálogo de medios de pago: los activos son públicos y son los únicos con los
+#     que se registra un pago. Se usa el folio de la reserva PENDIENTE del huésped 1 (14.15).
+# ====================================================================================================
+
+### 20.1 Medios de pago activos (sin token): los dos iniciales
+GET {{host}}/api/medios-pago
+
+> {%
+    client.test("20.1 200 medios iniciales", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var codigos = response.body.map(function (m) { return m.codigo; });
+        client.assert(codigos.join(",") === "TARJETA_DEBITO_CREDITO,TRANSFERENCIA_BANCARIA", "Medios: " + codigos);
+    });
+%}
+
+### 20.2 403 La recepción no agrega medios de pago
+POST {{host}}/api/medios-pago
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "nombre": "Efectivo" }
+
+> {%
+    client.test("20.2 403 recepción", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 20.3 El administrador agrega "Efectivo": 201, código EFECTIVO y activo
+POST {{host}}/api/medios-pago
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Efectivo" }
+
+> {%
+    client.test("20.3 201 medio creado", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.codigo === "EFECTIVO" && response.body.activo === true, JSON.stringify(response.body));
+    });
+%}
+
+### 20.4 409 El mismo medio otra vez
+POST {{host}}/api/medios-pago
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "efectivo" }
+
+> {%
+    client.test("20.4 409 repetido", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje === "L-18: ya existe el medio de pago EFECTIVO", "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### 20.5 La recepción registra un pago en efectivo: 201
+POST {{host}}/api/reservas/{{reservaHuesped1}}/folio/pagos
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "valor": 1000, "medio": "EFECTIVO" }
+
+> {%
+    client.test("20.5 201 pago en efectivo", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        var ultimo = response.body.pagos[response.body.pagos.length - 1];
+        client.assert(ultimo.medio === "EFECTIVO" && ultimo.valor === 1000, JSON.stringify(ultimo));
+    });
+%}
+
+### 20.6 El administrador desactiva el efectivo: deja de ser público
+PUT {{host}}/api/medios-pago/EFECTIVO/desactivar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("20.6 200 desactivado", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.activo === false, "Debía quedar inactivo");
+    });
+%}
+
+### 20.7 409 Ya no se registran pagos en efectivo
+POST {{host}}/api/reservas/{{reservaHuesped1}}/folio/pagos
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "valor": 1000, "medio": "EFECTIVO" }
+
+> {%
+    client.test("20.7 409 medio inactivo", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje === "L-18: el medio de pago EFECTIVO no está entre los medios aceptados", "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### 20.8 El catálogo completo (administrador) conserva el efectivo, inactivo
+GET {{host}}/api/medios-pago/todos
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("20.8 200 catálogo completo", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var efectivo = response.body.filter(function (m) { return m.codigo === "EFECTIVO"; })[0];
+        client.assert(efectivo && efectivo.activo === false, "Efectivo: " + JSON.stringify(efectivo));
+    });
+%}
+
+### 20.9 404 Medio inexistente
+PUT {{host}}/api/medios-pago/CHEQUE/activar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("20.9 404 medio inexistente", function () {
+        client.assert(response.status === 404, "Se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.mensaje === "No se encontró el medio de pago con código: CHEQUE", "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### Sección 21: BLOQUEOS EN EL CALENDARIO PÚBLICO (RN-07)
+
+# ====================================================================================================
+# 21. Un bloqueo de APT-101 (de hoy+300 a hoy+302) sale en el calendario público como "bloqueada", sin datos de
+#     las reservas; las noches de una reserva solo salen como no libres.
+# ====================================================================================================
+
+### 21.0 Fechas de la sección
+GET {{host}}/api/apartamentos/APT-101
+
+> {%
+    client.test("21.0 la app responde", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+    });
+    var hoy = new Date(Date.now() - 5 * 3600000);
+    function fecha(dias) {
+        return new Date(hoy.getTime() + dias * 86400000).toISOString().substring(0, 10);
+    }
+    client.global.set("s21Inicio", fecha(300));
+    client.global.set("s21Fin", fecha(302));
+    client.global.set("s21Hasta", fecha(303));
+%}
+
+### 21.1 El administrador bloquea APT-101 dos noches: 201
+POST {{host}}/api/apartamentos/APT-101/bloqueos
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "fechaInicio": "{{s21Inicio}}", "fechaFin": "{{s21Fin}}", "motivo": "Cambio de la tina de hidromasaje" }
+
+> {%
+    client.test("21.1 201 bloqueo registrado", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+    });
+%}
+
+### 21.2 Calendario público (sin token): las dos noches bloqueadas y la siguiente libre
+GET {{host}}/api/apartamentos/APT-101/disponibilidad?desde={{s21Inicio}}&hasta={{s21Hasta}}
+
+> {%
+    client.test("21.2 200 noches bloqueadas", function () {
+        var n = response.body.noches;
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(n.length === 3, "Noches: " + n.length);
+        client.assert(n[0].bloqueada === true && n[0].libre === false, "Noche 1: " + JSON.stringify(n[0]));
+        client.assert(n[1].bloqueada === true && n[1].libre === false, "Noche 2: " + JSON.stringify(n[1]));
+        client.assert(n[2].bloqueada === false, "Noche 3: " + JSON.stringify(n[2]));
+        client.assert(JSON.stringify(response.body).indexOf("Cambio de la tina") < 0, "El calendario público no debe mostrar el motivo");
     });
 %}

@@ -1,6 +1,7 @@
-import type { FolioResponse, MedioPago, TipoCargo } from '@/api/reservas'
+import type { FolioResponse, TipoCargo } from '@/api/reservas'
 import { AvisoError, Dinero, Fecha } from '@/components/coral'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useNombreMedio } from '@/lib/mediosPago'
 import { cn } from '@/lib/utils'
 
 const NOMBRE_TIPO: Record<TipoCargo, string> = {
@@ -10,11 +11,6 @@ const NOMBRE_TIPO: Record<TipoCargo, string> = {
   PENALIDAD_CANCELACION_NOSHOW: 'Penalidad',
 }
 
-const NOMBRE_MEDIO: Record<MedioPago, string> = {
-  TARJETA_DEBITO_CREDITO: 'Tarjeta',
-  TRANSFERENCIA_BANCARIA: 'Transferencia',
-}
-
 interface Props {
   folio: FolioResponse | undefined
   error: unknown
@@ -22,6 +18,7 @@ interface Props {
 
 /** Cargos, pagos y saldo del folio, sin acciones */
 export function FolioSoloLectura({ folio, error }: Props) {
+  const nombreMedio = useNombreMedio()
   if (error) return <AvisoError error={error} />
   if (!folio) return <Skeleton className="h-40" />
 
@@ -56,7 +53,7 @@ export function FolioSoloLectura({ folio, error }: Props) {
             {folio.pagos.map((p, i) => (
               <li key={i} className="flex items-start justify-between gap-3 py-2">
                 <span>
-                  {NOMBRE_MEDIO[p.medio]}
+                  {nombreMedio(p.medio)}
                   <span className="block text-xs text-muted-foreground">
                     <Fecha valor={p.fecha} />
                   </span>

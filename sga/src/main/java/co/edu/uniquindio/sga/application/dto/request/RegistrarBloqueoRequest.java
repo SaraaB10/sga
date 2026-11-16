@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.application.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
@@ -18,6 +19,7 @@ public record RegistrarBloqueoRequest(
         LocalDate fechaFin,
 
         @NotBlank(message = "El motivo del bloqueo es obligatorio")
+        @Size(max = ReglaTexto.MAXIMO_MOTIVO, message = "El motivo admite máximo 250 caracteres")
         String motivo
 ) {
 }

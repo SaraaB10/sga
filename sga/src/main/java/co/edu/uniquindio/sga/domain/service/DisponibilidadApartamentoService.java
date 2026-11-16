@@ -87,8 +87,9 @@ public class DisponibilidadApartamentoService {
         Coordenada ubicacion = obtenerAlojamiento().getUbicacion();
         return buscarDisponibles(estancia, totalOcupantes).stream()
                 .filter(apartamento -> filtros.cumpleCapacidad(apartamento.getCapacidad()))
-                .filter(apartamento -> filtros.cumpleCaracteristica(apartamento.getDotacion()))
-                .filter(apartamento -> filtros.cumpleServicios(apartamento.getDotacion(), apartamento.getDescripcion()))
+                .filter(apartamento -> filtros.cumpleDormitorios(apartamento.getDormitorios()))
+                .filter(apartamento -> filtros.cumpleCaracteristica(apartamento.getCaracteristicas()))
+                .filter(apartamento -> filtros.cumpleServicios(apartamento.getDotacion()))
                 .map(apartamento -> new ApartamentoDisponible(apartamento,
                         cotizador.estimar(apartamento, estancia, totalOcupantes, fechasNacimiento).valorTotal(),
                         ubicacion))
@@ -121,8 +122,14 @@ public class DisponibilidadApartamentoService {
                     + " noches y se pidieron " + noches);
         }
         return new Estancia(desde, hasta).fechasDeNoches().stream()
-                .map(noche -> new NocheDisponibilidad(noche, !noche.isBefore(hoy)
-                        && estaDisponible(apartamento, new Estancia(noche, noche.plusDays(1)), 1, null)))
+                .map(noche -> {
+                    Estancia unaNoche = new Estancia(noche, noche.plusDays(1));
+                    // RN-07: se marca la noche bloqueada (también si ya pasó, para que el calendario lo muestre)
+                    boolean bloqueada = !bloqueoRepository
+                            .listarVigentesQueSeSolapan(apartamento.getIdentificacion(), unaNoche).isEmpty();
+                    boolean libre = !noche.isBefore(hoy) && !bloqueada && estaDisponible(apartamento, unaNoche, 1, null);
+                    return new NocheDisponibilidad(noche, libre, bloqueada);
+                })
                 .toList();
     }
 

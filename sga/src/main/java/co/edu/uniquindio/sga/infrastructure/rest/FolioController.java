@@ -14,6 +14,7 @@ import co.edu.uniquindio.sga.application.usecase.RegistrarPagoUseCase;
 import co.edu.uniquindio.sga.domain.entity.Folio;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
 import co.edu.uniquindio.sga.infrastructure.rest.mapper.FolioMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -80,11 +81,12 @@ public class FolioController {
     @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
     @ApiResponse(responseCode = "403", description = "El rol no lo permite")
     @ApiResponse(responseCode = "404", description = "No existe la reserva o su folio")
-    @ApiResponse(responseCode = "409", description = "El folio ya está cerrado")
+    @ApiResponse(responseCode = "409", description = "El folio ya está cerrado o el medio de pago no está aceptado "
+            + "(no existe o está desactivado)")
     public ResponseEntity<FolioResponse> registrarPago(@PathVariable String codigo,
                                                        @Valid @RequestBody RegistrarPagoRequest request) {
         Folio folio = registrarPagoUseCase.ejecutar(new CodigoReserva(codigo), Dinero.de(request.valor()),
-                request.medio());
+                new MedioPago(request.medio()));
         URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/api/reservas/{codigo}/folio")
                 .buildAndExpand(folio.getReserva().valor())

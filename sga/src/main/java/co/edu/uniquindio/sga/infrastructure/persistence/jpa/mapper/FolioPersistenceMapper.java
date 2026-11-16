@@ -6,6 +6,7 @@ import co.edu.uniquindio.sga.domain.valueobject.Cargo;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
 import co.edu.uniquindio.sga.domain.valueobject.Pago;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.AutorizacionCierreEmbedable;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.CargoEmbedable;
@@ -37,7 +38,7 @@ public class FolioPersistenceMapper {
                 .map(c -> new CargoEmbedable(c.tipo(), c.concepto(), c.valor().monto(), c.fecha()))
                 .toList()));
         e.setPagos(new ArrayList<>(f.getPagos().stream()
-                .map(p -> new PagoEmbedable(p.valor().monto(), p.medio(), p.fecha()))
+                .map(p -> new PagoEmbedable(p.valor().monto(), p.medio().codigo(), p.fecha()))
                 .toList()));
         e.setCerrado(f.isCerrado());
         e.setFechaCierre(f.getFechaCierre());
@@ -62,7 +63,7 @@ public class FolioPersistenceMapper {
                         .map(c -> new Cargo(c.getTipo(), c.getConcepto(), new Dinero(c.getValor()), c.getFecha()))
                         .toList(),
                 e.getPagos().stream()
-                        .map(p -> new Pago(new Dinero(p.getValor()), p.getMedio(), p.getFecha()))
+                        .map(p -> new Pago(new Dinero(p.getValor()), new MedioPago(p.getMedio()), p.getFecha()))
                         .toList(),
                 e.isCerrado(), e.getFechaCierre(),
                 autorizacion == null || autorizacion.getAutorizadoPor() == null ? null

@@ -124,7 +124,10 @@ class FolioControllerIntegracionTest {
         post(folio + "/pagos", "{\"valor\":5000}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.medio").exists());
-        post(folio + "/pagos", "{\"valor\":5000,\"medio\":\"EFECTIVO\"}").andExpect(status().isBadRequest());
+        // Un medio que no está en el catálogo (L-18) es una regla del negocio, no un mensaje mal formado: 409
+        post(folio + "/pagos", "{\"valor\":5000,\"medio\":\"EFECTIVO\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("L-18: el medio de pago EFECTIVO no está entre los medios aceptados"));
         post(folio + "/autorizacion-cierre", "{\"autorizadoPor\":\"Marta\"}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.motivo").exists());
@@ -230,9 +233,10 @@ class FolioControllerIntegracionTest {
         post(folio + "/correcciones", correccion(99, "No existe"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.mensaje", startsWith("RN-16")));
+        // Una posición negativa es un error de forma: 400 sobre el campo
         post(folio + "/correcciones", correccion(-1, "No existe"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.mensaje", startsWith("RN-16")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.indiceCargo").value("La posición del cargo no puede ser negativa"));
 
         cerrarConAutorizacion(folio);
         post(folio + "/correcciones", correccion(0, "Tarde"))

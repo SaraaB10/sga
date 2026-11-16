@@ -2,16 +2,26 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { useRegistrarCargoServicio, useRegistrarCorreccion, useRegistrarPago } from '@/api/folio'
+import { useMediosPago } from '@/api/publico'
 import type { MedioPago } from '@/api/reservas'
 import type { ServicioAdicionalResponse } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, formatearDinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { aPesos, erroresDelServidor, pesos, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
+import {
+  aPesos,
+  erroresDelServidor,
+  MAXIMO_MOTIVO,
+  pesos,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/publico/comun/estilos'
+import type { AnticipoPendiente } from '@/pages/publico/comun/reglas'
 import { DialogoFormulario } from './DialogoFormulario'
 import { erroresDe } from './erroresDe'
-import { NOMBRE_MEDIO, type Movimiento } from './movimientos'
+import { type Movimiento } from './movimientos'
 import { useAlAbrir } from './useAlAbrir'
 
 export interface BaseDialogoFolio {
@@ -22,24 +32,37 @@ export interface BaseDialogoFolio {
 
 // ---------- Registrar pago ----------
 
-const MEDIOS: MedioPago[] = ['TARJETA_DEBITO_CREDITO', 'TRANSFERENCIA_BANCARIA']
+// RegistrarPagoRequest: valor positivo en pesos enteros y uno de los medios activos del catálogo (L-18)
+function esquemaPago(activos: MedioPago[]) {
+  return z.object({
+    valor: pesos('El valor del pago debe ser mayor que cero, sin decimales'),
+    medio: z.string().refine((m) => activos.includes(m), 'Elige el medio de pago'),
+  })
+}
 
-// RegistrarPagoRequest: valor positivo en pesos enteros y uno de los medios
-const esquemaPago = z.object({
-  valor: pesos('El valor del pago debe ser mayor que cero, sin decimales'),
-  medio: z.enum(MEDIOS as [MedioPago, ...MedioPago[]], 'Elige el medio de pago'),
-})
-
-export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFolio & { saldo: number }) {
+export function DialogoPago({
+  codigo,
+  saldo,
+  anticipo,
+  abierto,
+  alCambiar,
+}: BaseDialogoFolio & { saldo: number; anticipo?: AnticipoPendiente | null }) {
   const pago = useRegistrarPago(codigo)
+  const mediosPago = useMediosPago()
+  const activos = (mediosPago.data ?? []).filter((m) => m.activo)
   const [valor, setValor] = useState('')
-  const [medio, setMedio] = useState<MedioPago>('TRANSFERENCIA_BANCARIA')
-  const validacion = useValidacion(esquemaPago, { valor, medio })
+  const [elegido, setMedio] = useState<MedioPago>('')
+  // Sin elección (o si el elegido se desactivó), el primero de los activos
+  const medio = activos.some((m) => m.codigo === elegido) ? elegido : (activos[0]?.codigo ?? '')
+  const validacion = useValidacion(
+    esquemaPago(activos.map((m) => m.codigo)),
+    { valor, medio },
+  )
   const errores = unirErrores(validacion.errores, erroresDe(pago.error))
 
   useAlAbrir(abierto, () => {
     setValor('')
-    setMedio('TRANSFERENCIA_BANCARIA')
+    setMedio('')
     validacion.reiniciar()
     pago.reset()
   })
@@ -78,23 +101,69 @@ export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFo
         etiqueta="Valor en pesos"
         error={errores.valor}
         ayuda={
-          saldo > 0 ? (
-            <>
-              Saldo pendiente: <Dinero valor={saldo} />.{' '}
-              <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setValor(String(saldo))}>
-                Usar el saldo
-              </Button>
-            </>
+          anticipo || saldo > 0 ? (
+            <span className="flex flex-col gap-1">
+              {/* L-11: una reserva PENDIENTE se confirma cuando lo pagado cubre el anticipo */}
+              {anticipo && (
+                <span>
+                  Anticipo para confirmar ({anticipo.porcentaje} %): <Dinero valor={anticipo.valor} />
+                  {anticipo.falta === 0 ? (
+                    ' · ya está cubierto.'
+                  ) : (
+                    <>
+                      {anticipo.falta < anticipo.valor && (
+                        <>
+                          {' '}
+                          (falta <Dinero valor={anticipo.falta} />)
+                        </>
+                      )}
+                      .{' '}
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto min-h-0 p-0 text-xs"
+                        onClick={() => setValor(String(anticipo.falta))}
+                      >
+                        Usar el anticipo
+                      </Button>
+                    </>
+                  )}
+                </span>
+              )}
+              {saldo > 0 && (
+                <span>
+                  Saldo pendiente: <Dinero valor={saldo} />.{' '}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto min-h-0 p-0 text-xs"
+                    onClick={() => setValor(String(saldo))}
+                  >
+                    Usar el saldo
+                  </Button>
+                </span>
+              )}
+            </span>
           ) : undefined
         }
       >
         <Input inputMode="numeric" placeholder="310000" value={valor} onChange={(e) => setValor(e.target.value)} />
       </Campo>
-      <Campo id="pago-medio" etiqueta="Medio de pago" error={errores.medio}>
-        <select className={claseSelect} value={medio} onChange={(e) => setMedio(e.target.value as MedioPago)}>
-          {MEDIOS.map((m) => (
-            <option key={m} value={m}>
-              {NOMBRE_MEDIO[m]}
+      <Campo
+        id="pago-medio"
+        etiqueta="Medio de pago"
+        error={errores.medio ?? (mediosPago.error ? 'No se pudieron consultar los medios de pago' : undefined)}
+      >
+        <select
+          className={claseSelect}
+          value={medio}
+          disabled={activos.length === 0}
+          onChange={(e) => setMedio(e.target.value)}
+        >
+          {activos.length === 0 && <option value="">{mediosPago.isPending ? 'Cargando…' : 'Sin medios activos'}</option>}
+          {activos.map((m) => (
+            <option key={m.codigo} value={m.codigo}>
+              {m.nombre}
             </option>
           ))}
         </select>
@@ -198,7 +267,7 @@ export function DialogoCorreccion({ codigo, cargos, indiceInicial, abierto, alCa
     indice: z
       .string()
       .refine((valor) => cargos.some((c) => String(c.indiceCargo) === valor), 'Elige el cargo que vas a corregir'),
-    motivo: textoObligatorio('Escribe el motivo de la corrección'),
+    motivo: textoObligatorio('Escribe el motivo de la corrección', MAXIMO_MOTIVO, 'El motivo admite máximo 250 caracteres'),
   })
   const validacion = useValidacion(esquema, { indice, motivo })
   const errores = unirErrores(
