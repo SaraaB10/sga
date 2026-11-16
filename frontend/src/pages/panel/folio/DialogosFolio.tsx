@@ -18,6 +18,7 @@ import {
   useValidacion,
 } from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/publico/comun/estilos'
+import type { AnticipoPendiente } from '@/pages/publico/comun/reglas'
 import { DialogoFormulario } from './DialogoFormulario'
 import { erroresDe } from './erroresDe'
 import { type Movimiento } from './movimientos'
@@ -39,7 +40,13 @@ function esquemaPago(activos: MedioPago[]) {
   })
 }
 
-export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFolio & { saldo: number }) {
+export function DialogoPago({
+  codigo,
+  saldo,
+  anticipo,
+  abierto,
+  alCambiar,
+}: BaseDialogoFolio & { saldo: number; anticipo?: AnticipoPendiente | null }) {
   const pago = useRegistrarPago(codigo)
   const mediosPago = useMediosPago()
   const activos = (mediosPago.data ?? []).filter((m) => m.activo)
@@ -94,13 +101,49 @@ export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFo
         etiqueta="Valor en pesos"
         error={errores.valor}
         ayuda={
-          saldo > 0 ? (
-            <>
-              Saldo pendiente: <Dinero valor={saldo} />.{' '}
-              <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setValor(String(saldo))}>
-                Usar el saldo
-              </Button>
-            </>
+          anticipo || saldo > 0 ? (
+            <span className="flex flex-col gap-1">
+              {/* L-11: una reserva PENDIENTE se confirma cuando lo pagado cubre el anticipo */}
+              {anticipo && (
+                <span>
+                  Anticipo para confirmar ({anticipo.porcentaje} %): <Dinero valor={anticipo.valor} />
+                  {anticipo.falta === 0 ? (
+                    ' · ya está cubierto.'
+                  ) : (
+                    <>
+                      {anticipo.falta < anticipo.valor && (
+                        <>
+                          {' '}
+                          (falta <Dinero valor={anticipo.falta} />)
+                        </>
+                      )}
+                      .{' '}
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto min-h-0 p-0 text-xs"
+                        onClick={() => setValor(String(anticipo.falta))}
+                      >
+                        Usar el anticipo
+                      </Button>
+                    </>
+                  )}
+                </span>
+              )}
+              {saldo > 0 && (
+                <span>
+                  Saldo pendiente: <Dinero valor={saldo} />.{' '}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto min-h-0 p-0 text-xs"
+                    onClick={() => setValor(String(saldo))}
+                  >
+                    Usar el saldo
+                  </Button>
+                </span>
+              )}
+            </span>
           ) : undefined
         }
       >

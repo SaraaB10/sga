@@ -17,6 +17,8 @@ import type {
 export interface ReglasAlojamiento {
   /** RN-06: los menores de esta edad no pagan noche */
   umbralEdad: number | null
+  /** L-11: el alojamiento exige anticipo para confirmar */
+  exigeAnticipo: boolean
   porcentajeAnticipo: number | null
   plazoConfirmacionHoras: number | null
   /** RP-03: desde esta hora la llegada es nocturna ("HH:mm") */
@@ -47,6 +49,7 @@ export function reglasDe(alojamiento: AlojamientoResponse | undefined): ReglasAl
   const p = alojamiento?.parametros
   return {
     umbralEdad: p?.umbralEdadFacturable ?? null,
+    exigeAnticipo: p?.exigeAnticipo ?? false,
     porcentajeAnticipo: p?.porcentajeAnticipo ?? null,
     plazoConfirmacionHoras: p?.plazoConfirmacionHoras ?? null,
     horaNocturna: hhmm(p?.horaInicioLlegadaNocturna),
@@ -237,6 +240,33 @@ export function retencionEstimada(
   if (!tramo) return null
   const porcentaje = tramo.porcentajeRetencion
   return { dias, porcentaje, valor: Math.round((valorTotal * porcentaje) / 100) }
+}
+
+/** Anticipo para confirmar una reserva PENDIENTE (L-11) y cuánto falta para cubrirlo */
+export interface AnticipoPendiente {
+  porcentaje: number
+  /** Porcentaje del valor total, redondeado al peso como lo hace el backend */
+  valor: number
+  /** Lo que falta pagar para cubrirlo; 0 si ya está cubierto */
+  falta: number
+}
+
+/**
+ * L-11: el anticipo que exige el alojamiento para confirmar, con el porcentaje de la configuración (nunca un valor
+ * escrito aquí). null si la reserva no está PENDIENTE o el alojamiento no exige anticipo. Cuenta todo lo pagado en el
+ * folio, igual que la confirmación en el backend.
+ */
+export function anticipoPendiente(
+  estado: string | undefined,
+  valorTotal: number | undefined,
+  totalPagado: number,
+  reglas: Pick<ReglasAlojamiento, 'exigeAnticipo' | 'porcentajeAnticipo'>,
+): AnticipoPendiente | null {
+  if (estado !== 'PENDIENTE' || valorTotal === undefined || !reglas.exigeAnticipo || !reglas.porcentajeAnticipo) {
+    return null
+  }
+  const valor = Math.round((valorTotal * reglas.porcentajeAnticipo) / 100)
+  return { porcentaje: reglas.porcentajeAnticipo, valor, falta: Math.max(0, valor - totalPagado) }
 }
 
 /** Tramos de la política, del de más antelación al de menos */
