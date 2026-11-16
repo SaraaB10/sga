@@ -226,7 +226,7 @@ En `sga/docs/api/sga.http` dejamos una colección de 261 peticiones que recorre 
     - Apartamentos y operación: operaciones del estado operativo en lugar del cambio genérico, cada una con su estado de origen, `Location` en bloqueos y novedades con su consulta por id, historial de novedades y apartamentos pendientes de preparación.
     - Folio y transversal: depósito como `AJUSTE_MODIFICACION`, consulta del folio, cargos de servicios adicionales y correcciones (RN-16), `Location` en pagos y temporadas, consulta de una temporada y disponibilidad del canal paginada.
     - Pruebas unitarias de las reglas de configuración (L-03, L-06, L-09, L-12, L-13, L-14 y L-17), del titular facturable (3.2), del apartamento activo (3.3) y del formato del código de reserva.
-- **Verificación:** las 453 pruebas pasan (`./gradlew clean test`), las 261 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada en limpio, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
+- **Verificación:** las 472 pruebas pasan (`./gradlew clean test`), las 261 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada en limpio, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
 
 ## Seguridad
 
@@ -255,7 +255,7 @@ La plantilla es `application-secrets.properties.example`. En despliegue y en Git
 **Login y registro**, ambos públicos:
 
 - `POST /api/auth/login` recibe `correo` y `contrasena` y devuelve el token, que dura 30 minutos.
-- `POST /api/auth/registro` crea un huésped (201) con `nombre`, `correo`, `contrasena`, `telefono`, `documento` y `fechaNacimiento`. Responde 409 si el correo o el documento ya existen.
+- `POST /api/auth/registro` crea un huésped (201) con `nombre`, `correo`, `contrasena`, `telefono`, `documento` y `fechaNacimiento`. El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, paréntesis y el signo + al inicio (la misma regla rige en el perfil, en los usuarios del panel y en el titular de una reserva, y el frontend la valida igual). Responde 409 si el correo o el documento ya existen.
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/json" \

@@ -30,7 +30,8 @@ public record RegistroUsuarioRequest(
         String contrasena,
 
         @NotBlank(message = "El teléfono es obligatorio")
-        @Size(max = 20, message = "El teléfono admite máximo 20 caracteres")
+        @Size(max = ReglaTelefono.MAXIMO, message = ReglaTelefono.MENSAJE_MAXIMO)
+        @Pattern(regexp = ReglaTelefono.PATRON, message = ReglaTelefono.MENSAJE)
         String telefono,
 
         @NotBlank(message = "El documento es obligatorio")

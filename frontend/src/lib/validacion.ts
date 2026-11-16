@@ -16,11 +16,15 @@ export type Errores = Record<string, string | undefined>
 
 /** Al menos una mayúscula y un número, como el @Pattern de las contraseñas del backend */
 const PATRON_CONTRASENA = /^(?=.*\p{Lu})(?=.*\d).*$/u
-/** Dígitos, espacios, guiones, paréntesis y un + inicial */
-const PATRON_TELEFONO = /^\+?[\d\s()-]+$/
+/**
+ * Teléfono: + opcional al inicio y al menos 7 dígitos, con espacios, guiones o paréntesis entre ellos. Es el mismo
+ * patrón y el mismo mensaje de ReglaTelefono en el backend.
+ */
+const PATRON_TELEFONO = /^\+?(?:[ ()-]*\d){7,}[ ()-]*$/
+const MENSAJE_TELEFONO =
+  'El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, paréntesis y el signo + al inicio'
 const PATRON_URL = /^https?:\/\/\S+$/i
 const PATRON_FECHA = /^\d{4}-\d{2}-\d{2}$/
-const MINIMO_DIGITOS_TELEFONO = 7
 
 export const AYUDA_CONTRASENA = 'Mínimo 8 caracteres, con al menos una mayúscula y un número.'
 
@@ -70,11 +74,7 @@ export function telefono(maximo = 20) {
     .trim()
     .min(1, 'Escribe el teléfono')
     .max(maximo, `El teléfono admite máximo ${maximo} caracteres`)
-    .regex(PATRON_TELEFONO, 'El teléfono solo admite números, espacios, guiones, paréntesis y el signo + al inicio')
-    .refine(
-      (valor) => valor.replace(/\D/g, '').length >= MINIMO_DIGITOS_TELEFONO,
-      `El teléfono debe tener al menos ${MINIMO_DIGITOS_TELEFONO} dígitos`,
-    )
+    .regex(PATRON_TELEFONO, MENSAJE_TELEFONO)
 }
 
 /** Contraseña nueva: 8 a 72 caracteres, con una mayúscula y un número */

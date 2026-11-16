@@ -3377,7 +3377,7 @@ components:
         tipoDocumento: { type: string, example: CC }
         numeroDocumento: { type: string }
         email: { type: string, format: email }
-        telefono: { type: string }
+        telefono: { type: string, maxLength: 20, pattern: '^\s*$|^\+?(?:[ ()-]*\d){7,}[ ()-]*$', description: 'Al menos 7 dígitos; solo números, espacios, guiones, paréntesis y + al inicio', example: '3001234567' }
 
     OcupanteRequest:
       type: object
@@ -4096,7 +4096,7 @@ components:
         nombre: { type: string, maxLength: 100, example: Laura Gómez }
         correo: { type: string, format: email, maxLength: 120, example: laura@correo.co }
         contrasena: { type: string, minLength: 8, maxLength: 72, description: Al menos una mayúscula y un número, example: Huesped2026 }
-        telefono: { type: string, maxLength: 20, example: '3135550404' }
+        telefono: { type: string, maxLength: 20, pattern: '^\s*$|^\+?(?:[ ()-]*\d){7,}[ ()-]*$', description: 'Al menos 7 dígitos; solo números, espacios, guiones, paréntesis y + al inicio', example: '3135550404' }
         documento: { type: string, maxLength: 15, example: '1094555666' }
         fechaNacimiento: { type: string, format: date, description: Debe ser pasada, example: '1995-01-30' }
 
@@ -4130,7 +4130,7 @@ components:
         nombre: { type: string, maxLength: 100, example: Recepción Noche }
         correo: { type: string, format: email, maxLength: 120, example: recepcion2@sga.local }
         contrasena: { type: string, minLength: 8, maxLength: 72, description: Al menos una mayúscula y un número, example: Recepcion2026 }
-        telefono: { type: string, maxLength: 20, example: '3001000009' }
+        telefono: { type: string, maxLength: 20, pattern: '^\s*$|^\+?(?:[ ()-]*\d){7,}[ ()-]*$', description: 'Al menos 7 dígitos; solo números, espacios, guiones, paréntesis y + al inicio', example: '3001000009' }
         documento: { type: string, maxLength: 15, example: '1000000009' }
         fechaNacimiento: { type: string, format: date, description: Debe ser pasada, example: '1993-06-18' }
         rol: { $ref: '#/components/schemas/RolUsuario' }
@@ -4147,7 +4147,7 @@ components:
       required: [ nombre, telefono ]
       properties:
         nombre: { type: string, maxLength: 100, example: Laura Gómez }
-        telefono: { type: string, maxLength: 20, example: '3135550404' }
+        telefono: { type: string, maxLength: 20, pattern: '^\s*$|^\+?(?:[ ()-]*\d){7,}[ ()-]*$', description: 'Al menos 7 dígitos; solo números, espacios, guiones, paréntesis y + al inicio', example: '3135550404' }
         fotoUrl: { type: string, maxLength: 500, description: 'Opcional; debe empezar por http:// o https://', example: 'https://fotos.sga.local/laura.png' }
 
     CambioContrasenaRequest:
