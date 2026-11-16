@@ -106,7 +106,8 @@ public class ApartamentoController {
                     + "característica del apartamento (por ejemplo \"Vista al mar\"), servicios de su dotación (se "
                     + "repite el parámetro; el apartamento debe ofrecerlos todos) y rango de precio del valor estimado "
                     + "de la estancia. Las opciones de dormitorios, características y servicios las da "
-                    + "GET /api/apartamentos/filtros. 10 resultados por página")
+                    + "GET /api/apartamentos/filtros. Ordenados primero por la capacidad más cercana al tamaño del "
+                    + "grupo y después por el valor estimado, de menor a mayor. 10 resultados por página")
     @ApiResponse(responseCode = "200", description = "Página de apartamentos disponibles (puede venir vacía)")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
     @ApiResponse(responseCode = "409", description = "Estancia o filtros inválidos (RN-03, RN-04, RP-01, 7.5)")

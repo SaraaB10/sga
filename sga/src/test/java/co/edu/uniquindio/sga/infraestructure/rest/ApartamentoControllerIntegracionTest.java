@@ -328,6 +328,23 @@ class ApartamentoControllerIntegracionTest {
     }
 
     @Test
+    @DisplayName("7.5: primero la capacidad más cercana al grupo y después el precio, de menor a mayor")
+    void ordenPorCapacidadCercanaYPrecio() throws Exception {
+        LocalDate entrada = LocalDate.now(BOGOTA).plusDays(40);
+        // Grupo de 2: los de capacidad 2 (101 más barato que 102), luego los de 4 (201 más barato que 202) y al final
+        // APT-301 (capacidad 6), aunque por ocupante sea el más barato
+        String respuesta = get(disponibles(entrada, 2, "")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(List.of("APT-101", "APT-102", "APT-201", "APT-202", "APT-301"),
+                JsonPath.read(respuesta, "$.contenido[*].identificacion"));
+        List<Number> valores = JsonPath.read(respuesta, "$.contenido[*].valorEstimado");
+        assertTrue(valores.get(0).longValue() <= valores.get(1).longValue(), "Con la misma capacidad, el más barato primero");
+        // Grupo de 4: los de capacidad 4 primero y después APT-301
+        get(disponibles(entrada, 4, ""))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-201", "APT-202", "APT-301")));
+    }
+
+    @Test
     @DisplayName("7.5: filtro por número de dormitorios, aparte de las características")
     void filtroPorDormitorios() throws Exception {
         get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&dormitorios=2"))

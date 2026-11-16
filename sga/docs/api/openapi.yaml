@@ -526,7 +526,9 @@ paths:
       description: |
         Apartamentos libres en todas las noches de la estancia y con capacidad para el grupo
         (RN-01, RN-02, RN-07, RN-20, RP-01). La disponibilidad la decide `DisponibilidadApartamentoService`;
-        sobre ese resultado se aplican los filtros opcionales y luego la paginación (10 por página, 7.5, 12.4).
+        sobre ese resultado se aplican los filtros opcionales, el orden y luego la paginación (10 por página, 7.5,
+        12.4). Orden: primero los apartamentos cuya capacidad se acerca más al tamaño del grupo, después el valor
+        estimado de la estancia de menor a mayor y, en empate, la identificación.
         Solo consulta. Mapea a `BuscarApartamentoDisponibleUseCase.buscar`.
 
         - **valorEstimado** es el valor de toda la estancia para el grupo (RN-05, RN-06). Si no se envían
