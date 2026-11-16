@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Menu, Search } from 'lucide-react'
+import { z } from 'zod'
 import { useAuth } from '@/auth/AuthContext'
 import { NOMBRE_ROL } from '@/auth/roles'
 import { BotonTema, Logo } from '@/components/coral'
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+import { textoObligatorio, useValidacion } from '@/lib/validacion'
 import { AvatarUsuario } from './AvatarUsuario'
 import { OPCION_PERFIL_PANEL, menuPanel, tituloPanel, type OpcionMenu } from './menus'
 
@@ -91,6 +93,11 @@ function MenuLateral({ alNavegar }: { alNavegar?: () => void }) {
 }
 
 /** Panel de recepción y administración: menú lateral y barra superior */
+// Búsqueda de reservas del encabezado: un código o un documento, sin quedar vacía
+const esquemaBusqueda = z.object({
+  texto: textoObligatorio('Escribe un código de reserva o un documento', 60, 'Máximo 60 caracteres'),
+})
+
 export function PanelLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -98,10 +105,13 @@ export function PanelLayout() {
   const [busqueda, setBusqueda] = useState('')
   const titulo = tituloPanel(pathname)
 
+  const validacionBusqueda = useValidacion(esquemaBusqueda, { texto: busqueda })
+  const errorBusqueda = validacionBusqueda.errores.texto
+
   const buscar = (evento: FormEvent) => {
     evento.preventDefault()
-    const texto = busqueda.trim()
-    if (texto) navigate(`/panel/reservas?buscar=${encodeURIComponent(texto)}`)
+    const limpios = validacionBusqueda.comprobar()
+    if (limpios) navigate(`/panel/reservas?buscar=${encodeURIComponent(limpios.texto)}`)
   }
 
   return (
@@ -148,8 +158,19 @@ export function PanelLayout() {
               placeholder="Buscar reservas…"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
+              onBlur={() => !busqueda && validacionBusqueda.reiniciar()}
+              aria-invalid={errorBusqueda ? true : undefined}
+              aria-describedby={errorBusqueda ? 'buscador-panel-error' : undefined}
               className="pl-10"
             />
+            {errorBusqueda && (
+              <p
+                id="buscador-panel-error"
+                className="absolute top-full left-0 mt-1 rounded-campo bg-card px-2 py-1 text-xs font-medium text-error shadow-tarjeta"
+              >
+                {errorBusqueda}
+              </p>
+            )}
           </form>
 
           <BotonTema />

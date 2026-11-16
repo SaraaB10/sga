@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CircleCheck, CircleX, MoonStar, PencilLine, Receipt } from 'lucide-react'
+import { z } from 'zod'
 import { usePoliticaVigente, useApartamento } from '@/api/publico'
 import {
   useConfirmarReserva,
@@ -15,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { erroresDelServidor, useValidacion } from '@/lib/validacion'
 import { AvisoAnticipo } from '@/pages/huesped/reserva/AvisoAnticipo'
 import { DatosReserva } from '@/pages/huesped/reserva/DatosReserva'
 import { DialogoCancelar } from '@/pages/huesped/reserva/DialogoCancelar'
@@ -25,6 +27,15 @@ import { TextoCargo } from '@/pages/publico/comun/TextoCargo'
 import { DialogoModificar } from './DialogoModificar'
 
 type Dialogo = 'modificar' | 'confirmar' | 'cancelar' | 'noshow' | null
+
+/** ConfirmarReservaRequest: la hora es opcional si la reserva ya la tiene; sin ella no se puede confirmar */
+const esquemaConfirmacion = (yaTieneHora: boolean) =>
+  z.object({
+    hora: z
+      .string()
+      .refine((h) => h === '' || /^\d{2}:\d{2}(:\d{2})?$/.test(h), 'Escribe una hora válida')
+      .refine((h) => yaTieneHora || h !== '', 'Escribe la hora estimada de llegada: se necesita para confirmar'),
+  })
 
 type Resultado =
   | { tipo: 'modificada'; datos: ModificacionReservaResponse }
@@ -43,6 +54,7 @@ export default function DetalleReserva() {
 
   const [dialogo, setDialogo] = useState<Dialogo>(null)
   const [hora, setHora] = useState('')
+  const validacionHora = useValidacion(esquemaConfirmacion(!!reserva.data?.horaEstimadaLlegada), { hora })
   const [resultado, setResultado] = useState<Resultado | null>(null)
 
   // Reloj por minuto: el botón de no-show se activa solo al llegar la hora límite
@@ -84,11 +96,16 @@ export default function DetalleReserva() {
   const tramoCero = tramosOrdenados(politica.data).find((t) => t.antelacionMinimaDias === 0)
   const retencionNoShow = tramoCero ? Math.round((r.valorTotal * tramoCero.porcentajeRetencion) / 100) : null
 
+  const errorHora =
+    validacionHora.errores.hora ??
+    erroresDelServidor(confirmar.error, { horaEstimadaLlegada: 'hora' }).hora
+
   const cerrar = (abierto: boolean) => {
     if (!abierto) {
       setDialogo(null)
       confirmar.reset()
       noShow.reset()
+      validacionHora.reiniciar()
     }
   }
 
@@ -188,19 +205,32 @@ export default function DetalleReserva() {
         textoConfirmar="Confirmar reserva"
         textoCancelar="Volver"
         cargando={confirmar.isPending}
-        alConfirmar={() =>
+        alConfirmar={() => {
+          if (!validacionHora.comprobar()) return
           confirmar.mutate(hora || undefined, {
             onSuccess: () => {
               setDialogo(null)
               setResultado({ tipo: 'confirmada' })
             },
           })
-        }
+        }}
       >
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="confirmar-hora">Hora estimada de llegada (opcional si ya la tiene)</Label>
-            <Input id="confirmar-hora" type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
+            <Input
+              id="confirmar-hora"
+              type="time"
+              value={hora}
+              onChange={(e) => setHora(e.target.value)}
+              aria-invalid={errorHora ? true : undefined}
+              aria-describedby={errorHora ? 'confirmar-hora-error' : undefined}
+            />
+            {errorHora && (
+              <p id="confirmar-hora-error" className="text-xs font-medium text-error">
+                {errorHora}
+              </p>
+            )}
             {reglas.horaNocturna && horaDesde(hora, reglas.horaNocturna) && (
               <p className="text-xs text-muted-foreground">
                 Con llegada desde las {formatearHora(reglas.horaNocturna)},{' '}

@@ -1,11 +1,25 @@
-/** Regla de contraseña del registro: 8 a 72 caracteres, al menos una mayúscula y un número */
-export function errorContrasena(contrasena: string): string | undefined {
-  if (contrasena.length < 8) return 'Mínimo 8 caracteres'
-  if (contrasena.length > 72) return 'Máximo 72 caracteres'
-  if (!/[A-ZÁÉÍÓÚÑ]/.test(contrasena) || !/\d/.test(contrasena)) return 'Debe tener al menos una mayúscula y un número'
-  return undefined
+import { z } from 'zod'
+import type { Rol } from '@/api/tipos'
+import { cumpleEdadMinima, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
+import { contrasenaNueva, correo, fechaPasada, telefono, textoObligatorio } from '@/lib/validacion'
+import { ROLES } from './listaRoles'
+
+/** Usuario nuevo del panel: las reglas de CrearUsuarioRequest */
+export const esquemaCrearUsuario = z.object({
+  nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  correo: correo(),
+  contrasena: contrasenaNueva(),
+  telefono: telefono(),
+  documento: textoObligatorio('Escribe el documento', 15, 'El documento admite máximo 15 caracteres'),
+  fechaNacimiento: fechaPasada('Escribe la fecha de nacimiento').refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
+  rol: z.enum(ROLES as [Rol, ...Rol[]], 'Elige el rol'),
+})
+
+/** Cambio de rol: uno de los roles y distinto del actual */
+export function esquemaCambioRol(actual: Rol) {
+  return z.object({
+    rol: z
+      .enum(ROLES as [Rol, ...Rol[]], 'Elige el rol')
+      .refine((rol) => rol !== actual, 'Elige un rol distinto al actual'),
+  })
 }
-
-export const esCorreo = (texto: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(texto)
-
-export const AYUDA_CONTRASENA = 'Mínimo 8 caracteres, con al menos una mayúscula y un número.'

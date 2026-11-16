@@ -4,6 +4,7 @@ import { AvisoError } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { esErrorDeCampos } from '@/lib/validacion'
 
 interface Props {
   /** id del formulario: enlaza el botón de enviar del pie */
@@ -14,7 +15,7 @@ interface Props {
   descripcion?: ReactNode
   textoEnviar: string
   cargando?: boolean
-  /** Error de la mutación (409 de negocio o 400 sin campos), en un AvisoError */
+  /** Error de la mutación; los 409 de negocio y los 400 sin campos van en un AvisoError */
   error?: unknown
   tituloError?: string
   peligroso?: boolean
@@ -53,7 +54,8 @@ export function DialogoFormulario({
         </DialogHeader>
         <form id={id} noValidate onSubmit={enviar} className="flex flex-col gap-4">
           {children}
-          {!!error && <AvisoError titulo={tituloError} error={error} />}
+          {/* Un 400 con errores por campo se muestra en cada campo, no en el aviso */}
+          {!!error && !esErrorDeCampos(error) && <AvisoError titulo={tituloError} error={error} />}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={() => alCambiar(false)} disabled={cargando}>

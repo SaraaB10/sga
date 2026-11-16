@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ClipboardList, Plus, SlidersHorizontal } from 'lucide-react'
+import { z } from 'zod'
 import { useTodosLosApartamentos } from '@/api/apartamentos'
 import { useReservas, type CanalOrigen, type FiltrosReservas, type ReservaResumenResponse } from '@/api/reservas'
 import type { EstadoReserva as Estado } from '@/api/tipos'
@@ -18,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { rangoFiltro, textoOpcional, useValidacion } from '@/lib/validacion'
 import { NOMBRE_CANAL } from '@/pages/huesped/reserva/formato'
 import { EncabezadoFiltros } from '@/pages/publico/comun/EncabezadoFiltros'
 import { claseContenidoPlegable, claseSelect } from '@/pages/publico/comun/estilos'
@@ -179,6 +181,14 @@ export default function ListadoReservas() {
   )
 }
 
+// Filtros de GET /api/reservas: documento del titular de hasta 15 caracteres y "llegada hasta" no antes de "desde"
+const esquemaFiltros = rangoFiltro().safeExtend({
+  estado: z.string(),
+  apartamento: z.string(),
+  canal: z.string(),
+  titular: textoOpcional(15, 'El documento admite máximo 15 caracteres'),
+})
+
 function FiltrosListado({
   valores,
   alAplicar,
@@ -187,7 +197,8 @@ function FiltrosListado({
   alAplicar: (v: Record<Clave, string>) => void
 }) {
   const [borrador, setBorrador] = useState(valores)
-  const [error, setError] = useState<string>()
+  const validacion = useValidacion(esquemaFiltros, borrador)
+  const errores = validacion.errores
   // En el celular los filtros empiezan plegados para que la lista quede a la vista
   const [abierto, setAbierto] = useState(false)
   const apartamentos = useTodosLosApartamentos()
@@ -195,18 +206,13 @@ function FiltrosListado({
 
   const enviar = (e: FormEvent) => {
     e.preventDefault()
-    if (borrador.desde && borrador.hasta && borrador.desde > borrador.hasta) {
-      setError('La fecha "desde" no puede ser posterior a "hasta".')
-      return
-    }
-    setError(undefined)
-    alAplicar(borrador)
+    if (validacion.comprobar()) alAplicar(borrador)
   }
 
   const limpiar = () => {
     const vacios = Object.fromEntries(CLAVES.map((c) => [c, ''])) as Record<Clave, string>
     setBorrador(vacios)
-    setError(undefined)
+    validacion.reiniciar()
     alAplicar(vacios)
   }
 
@@ -262,13 +268,13 @@ function FiltrosListado({
           ))}
         </select>
       </Campo>
-      <Campo id="fr-titular" etiqueta="Documento del titular">
+      <Campo id="fr-titular" etiqueta="Documento del titular" error={errores.titular}>
         <Input inputMode="numeric" value={borrador.titular} onChange={(e) => cambiar('titular', e.target.value)} />
       </Campo>
-      <Campo id="fr-desde" etiqueta="Llegada desde">
+      <Campo id="fr-desde" etiqueta="Llegada desde" error={errores.desde}>
         <Input type="date" value={borrador.desde} onChange={(e) => cambiar('desde', e.target.value)} />
       </Campo>
-      <Campo id="fr-hasta" etiqueta="Llegada hasta" error={error}>
+      <Campo id="fr-hasta" etiqueta="Llegada hasta" error={errores.hasta}>
         <Input type="date" value={borrador.hasta} onChange={(e) => cambiar('hasta', e.target.value)} />
       </Campo>
       <div className="flex items-end gap-2 sm:col-span-2">

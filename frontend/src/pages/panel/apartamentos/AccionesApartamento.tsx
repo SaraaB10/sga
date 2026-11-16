@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarX2, Eye, Loader2, MoreHorizontal, Pencil, Power, ScrollText, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import {
   useActivarApartamento,
   usePonerFueraDeServicio,
@@ -9,7 +10,6 @@ import {
   useRestablecerServicio,
   useRetirarApartamento,
 } from '@/api/apartamentos'
-import { esErrorApi } from '@/api/cliente'
 import type { EstadoOperativo } from '@/api/tipos'
 import { AvisoError, Campo, ConfirmarDialogo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import {
+  erroresDelServidor,
+  esErrorDeCampos,
+  fecha,
+  finDespuesDeInicio,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { claseTextarea } from '../calendario/estilos'
 import { hoyISO, sumarDias } from '../calendario/fechas'
 import { useEsAdministrador } from './utilidades'
@@ -33,6 +42,15 @@ export interface ApartamentoBasico {
 }
 
 // ---------- Bloqueo ----------
+
+// RegistrarBloqueoRequest: las dos fechas y el motivo; el día en que vuelve a la venta va después de la primera noche
+const esquemaBloqueo = z
+  .object({
+    fechaInicio: fecha('Elige la primera noche'),
+    fechaFin: fecha('Elige el día en que vuelve a la venta'),
+    motivo: textoObligatorio('Escribe el motivo'),
+  })
+  .superRefine(finDespuesDeInicio('fechaInicio', 'fechaFin', 'Debe ser posterior a la primera noche'))
 
 interface DialogoProps {
   apartamento: ApartamentoBasico
@@ -46,13 +64,14 @@ export function DialogoBloqueo({ apartamento, abierto, alCambiar }: DialogoProps
   const [fechaInicio, setFechaInicio] = useState(() => hoyISO())
   const [fechaFin, setFechaFin] = useState(() => sumarDias(hoyISO(), 1))
   const [motivo, setMotivo] = useState('')
-  const [errores, setErrores] = useState<Record<string, string>>({})
+  const validacion = useValidacion(esquemaBloqueo, { fechaInicio, fechaFin, motivo })
+  const errores = unirErrores(validacion.errores, erroresDelServidor(bloqueo.error))
 
   const cambiar = (valor: boolean) => {
     if (bloqueo.isPending) return
     if (!valor) {
       bloqueo.reset()
-      setErrores({})
+      validacion.reiniciar()
       setMotivo('')
     }
     alCambiar(valor)
@@ -60,29 +79,18 @@ export function DialogoBloqueo({ apartamento, abierto, alCambiar }: DialogoProps
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos: Record<string, string> = {}
-    if (!fechaInicio) nuevos.fechaInicio = 'Elige la primera noche'
-    if (!fechaFin) nuevos.fechaFin = 'Elige el día en que termina'
-    else if (fechaInicio && fechaFin <= fechaInicio) nuevos.fechaFin = 'Debe ser posterior a la primera noche'
-    if (!motivo.trim()) nuevos.motivo = 'Escribe el motivo'
-    setErrores(nuevos)
-    if (Object.keys(nuevos).length > 0) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
 
-    bloqueo.mutate(
-      { fechaInicio, fechaFin, motivo: motivo.trim() },
-      {
-        onSuccess: () => {
-          toast.success('Bloqueo registrado', { description: apartamento.identificacion })
-          cambiar(false)
-        },
-        onError: (error) => {
-          if (esErrorApi(error) && error.status === 400) setErrores(error.errores)
-        },
+    bloqueo.mutate(limpios, {
+      onSuccess: () => {
+        toast.success('Bloqueo registrado', { description: apartamento.identificacion })
+        cambiar(false)
       },
-    )
+    })
   }
 
-  const errorGeneral = bloqueo.error && !(esErrorApi(bloqueo.error) && bloqueo.error.status === 400) ? bloqueo.error : null
+  const errorGeneral = bloqueo.error && !esErrorDeCampos(bloqueo.error) ? bloqueo.error : null
 
   return (
     <Dialog open={abierto} onOpenChange={cambiar}>

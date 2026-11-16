@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useDetallesApartamentos, useTodosLosApartamentos } from '@/api/apartamentos'
 import { useAgregarRangoTemporada, useCrearTemporada, type RangoFechasRequest } from '@/api/configuracion'
 import type { TemporadaResponse, TipoTemporada } from '@/api/tipos'
@@ -8,11 +9,18 @@ import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { aPesos } from '@/pages/panel/apartamentos/utilidades'
+import {
+  aPesos,
+  erroresDelServidor,
+  fecha,
+  finDespuesDeInicio,
+  pesos,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
-import { erroresDe } from '@/pages/panel/folio/erroresDe'
 import { useAlAbrir } from '@/pages/panel/folio/useAlAbrir'
-import { esFechaValida } from '@/pages/publico/comun/reglas'
 import { claseSelect } from '@/pages/publico/comun/estilos'
 import { COLOR_TEMPORADA, finExcluido, textoRango, TIPOS_TEMPORADA } from './utilidadesTemporada'
 
@@ -28,11 +36,33 @@ interface RangoEditable {
   fin: string
 }
 
-/** Valida un rango con la fecha final incluida y lo convierte al formato del backend (final excluida) */
-function validarRango(rango: { inicio: string; fin: string }): { error?: string; rango?: RangoFechasRequest } {
-  if (!esFechaValida(rango.inicio) || !esFechaValida(rango.fin)) return { error: 'Escribe las dos fechas' }
-  if (rango.fin < rango.inicio) return { error: 'La fecha final no puede ser anterior a la inicial' }
-  return { rango: { fechaInicio: rango.inicio, fechaFin: finExcluido(rango.fin) } }
+/*
+ * RangoFechasRequest: las dos fechas obligatorias. En pantalla la fecha final va incluida, así que puede ser el
+ * mismo día de la inicial; al enviar se convierte al formato del backend (final excluida).
+ */
+const esquemaRango = z
+  .object({
+    inicio: fecha('Escribe la fecha inicial'),
+    fin: fecha('Escribe la fecha final'),
+  })
+  .superRefine(finDespuesDeInicio('inicio', 'fin', 'La fecha final no puede ser anterior a la inicial', true))
+
+const aRangoBackend = (rango: { inicio: string; fin: string }): RangoFechasRequest => ({
+  fechaInicio: rango.inicio,
+  fechaFin: finExcluido(rango.fin),
+})
+
+/** CrearTemporadaRequest: id, nombre y tipo; rangos si no es la base y una tarifa por cada apartamento activo */
+function esquemaTemporada(esBase: boolean, activos: string[]) {
+  return z.object({
+    id: textoObligatorio('Escribe un identificador, por ejemplo T-FESTIVAL'),
+    nombre: textoObligatorio('Escribe el nombre'),
+    tipo: z.enum(TIPOS_TEMPORADA as [TipoTemporada, ...TipoTemporada[]], 'Elige el tipo'),
+    rangos: esBase
+      ? z.array(z.unknown())
+      : z.array(esquemaRango).min(1, 'Una temporada que no es base necesita al menos un rango'),
+    tarifas: z.object(Object.fromEntries(activos.map((a) => [a, pesos('Valor mayor que cero, sin decimales')]))),
+  })
 }
 
 const AYUDA_FIN = 'Último día de la temporada, incluido.'
@@ -57,7 +87,31 @@ export function DialogoCrearTemporada({ temporadas, abierto, alCambiar }: PropsC
   const [tipo, setTipo] = useState<TipoTemporada>('MEDIA')
   const [rangos, setRangos] = useState<RangoEditable[]>([{ clave: 0, inicio: '', fin: '' }])
   const [tarifas, setTarifas] = useState<Record<string, string>>({})
-  const [errores, setErrores] = useState<Record<string, string | undefined>>({})
+
+  const hayBase = temporadas.some((t) => t.tipo === 'BASE')
+  const esBase = tipo === 'BASE'
+  const idsActivos = activos.map((a) => a.identificacion)
+  const validacion = useValidacion(esquemaTemporada(esBase, idsActivos), {
+    id,
+    nombre,
+    tipo,
+    rangos,
+    tarifas: Object.fromEntries(idsActivos.map((a) => [a, tarifas[a] ?? ''])),
+  })
+  // Los 400 del backend: rangos[i].x a su rango y tarifas[i].x a la tarifa del apartamento de esa posición
+  const deServidor = erroresDelServidor(crear.error)
+  const errores = unirErrores(validacion.errores, deServidor)
+  const errorRango = (i: number) =>
+    errores[`rangos.${i}.inicio`] ??
+    errores[`rangos.${i}.fin`] ??
+    errores[`rangos.${i}.fechaInicio`] ??
+    errores[`rangos.${i}.fechaFin`] ??
+    errores[`rangos.${i}`]
+  const errorTarifa = (i: number, idApartamento: string) =>
+    errores[`tarifas.${idApartamento}`] ??
+    errores[`tarifas.${i}.valorPorOcupante`] ??
+    errores[`tarifas.${i}.identificacionApartamento`] ??
+    errores[`tarifas.${i}`]
 
   useAlAbrir(abierto, () => {
     setId('')
@@ -65,39 +119,22 @@ export function DialogoCrearTemporada({ temporadas, abierto, alCambiar }: PropsC
     setTipo('MEDIA')
     setRangos([{ clave: Date.now(), inicio: '', fin: '' }])
     setTarifas({})
-    setErrores({})
+    validacion.reiniciar()
     crear.reset()
   })
 
-  const hayBase = temporadas.some((t) => t.tipo === 'BASE')
-  const esBase = tipo === 'BASE'
-
   const enviar = () => {
-    const nuevos: Record<string, string | undefined> = {}
-    if (!id.trim()) nuevos.id = 'Escribe un identificador, por ejemplo T-FESTIVAL'
-    if (!nombre.trim()) nuevos.nombre = 'Escribe el nombre'
-
-    const rangosEnviar: RangoFechasRequest[] = []
-    if (!esBase) {
-      rangos.forEach((r) => {
-        const { error, rango } = validarRango(r)
-        if (error) nuevos[`rango-${r.clave}`] = error
-        else if (rango) rangosEnviar.push(rango)
-      })
-      if (rangos.length === 0) nuevos.rangos = 'Una temporada que no es base necesita al menos un rango'
-    }
-
-    const tarifasEnviar = activos.map((a) => {
-      const valor = aPesos(tarifas[a.identificacion] ?? '')
-      if (!Number.isInteger(valor) || valor <= 0) nuevos[`tarifa-${a.identificacion}`] = 'Valor mayor que cero, sin decimales'
-      return { identificacionApartamento: a.identificacion, valorPorOcupante: valor }
-    })
-
-    setErrores(nuevos)
-    if (Object.values(nuevos).some(Boolean)) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
 
     crear.mutate(
-      { id: id.trim(), nombre: nombre.trim(), tipo, rangos: esBase ? [] : rangosEnviar, tarifas: tarifasEnviar },
+      {
+        id: limpios.id,
+        nombre: limpios.nombre,
+        tipo,
+        rangos: esBase ? [] : rangos.map(aRangoBackend),
+        tarifas: idsActivos.map((a) => ({ identificacionApartamento: a, valorPorOcupante: aPesos(tarifas[a] ?? '') })),
+      },
       {
         onSuccess: (temporada) => {
           toast.success('Temporada creada', { description: `${temporada.nombre} (${temporada.id})` })
@@ -106,8 +143,6 @@ export function DialogoCrearTemporada({ temporadas, abierto, alCambiar }: PropsC
       },
     )
   }
-
-  const deServidor = erroresDe(crear.error)
 
   return (
     <DialogoFormulario
@@ -124,16 +159,17 @@ export function DialogoCrearTemporada({ temporadas, abierto, alCambiar }: PropsC
       alEnviar={enviar}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Campo id="temporada-id" etiqueta="Identificador" error={errores.id ?? deServidor.id}>
+        <Campo id="temporada-id" etiqueta="Identificador" error={errores.id}>
           <Input placeholder="T-FESTIVAL" value={id} onChange={(e) => setId(e.target.value.toUpperCase())} />
         </Campo>
-        <Campo id="temporada-nombre" etiqueta="Nombre" error={errores.nombre ?? deServidor.nombre}>
+        <Campo id="temporada-nombre" etiqueta="Nombre" error={errores.nombre}>
           <Input placeholder="Festival" value={nombre} onChange={(e) => setNombre(e.target.value)} />
         </Campo>
       </div>
       <Campo
         id="temporada-tipo"
         etiqueta="Tipo"
+        error={errores.tipo}
         ayuda={
           esBase
             ? hayBase
@@ -184,9 +220,7 @@ export function DialogoCrearTemporada({ temporadas, abierto, alCambiar }: PropsC
                   <Trash2 aria-hidden="true" />
                 </Button>
               </div>
-              {errores[`rango-${r.clave}`] && (
-                <p className="text-xs font-medium text-error">{errores[`rango-${r.clave}`]}</p>
-              )}
+              {errorRango(i) && <p className="text-xs font-medium text-error">{errorRango(i)}</p>}
             </div>
           ))}
           {errores.rangos && <p className="text-xs font-medium text-error">{errores.rangos}</p>}
@@ -214,12 +248,12 @@ export function DialogoCrearTemporada({ temporadas, abierto, alCambiar }: PropsC
           <p className="text-sm text-muted-foreground">No hay apartamentos activos.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {activos.map((a) => (
+            {activos.map((a, i) => (
               <Campo
                 key={a.identificacion}
                 id={`tarifa-${a.identificacion}`}
                 etiqueta={`${a.identificacion} · ${a.nombre}`}
-                error={errores[`tarifa-${a.identificacion}`]}
+                error={errorTarifa(i, a.identificacion)}
               >
                 <Input
                   inputMode="numeric"
@@ -246,28 +280,30 @@ export function DialogoAgregarRango({ temporada, abierto, alCambiar }: PropsRang
   const agregar = useAgregarRangoTemporada()
   const [inicio, setInicio] = useState('')
   const [fin, setFin] = useState('')
-  const [error, setError] = useState<string>()
+  const validacion = useValidacion(esquemaRango, { inicio, fin })
+  const errores = unirErrores(
+    validacion.errores,
+    erroresDelServidor(agregar.error, { fechaInicio: 'inicio', fechaFin: 'fin' }),
+  )
 
   useAlAbrir(abierto, () => {
     setInicio('')
     setFin('')
-    setError(undefined)
+    validacion.reiniciar()
     agregar.reset()
   })
 
   if (!temporada) return null
 
   const enviar = () => {
-    const resultado = validarRango({ inicio, fin })
-    setError(resultado.error)
-    if (!resultado.rango) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
+    const rango = aRangoBackend(limpios)
     agregar.mutate(
-      { id: temporada.id, rango: resultado.rango },
+      { id: temporada.id, rango },
       {
         onSuccess: () => {
-          toast.success('Rango agregado', {
-            description: `${temporada.nombre}: ${textoRango(resultado.rango as RangoFechasRequest)}`,
-          })
+          toast.success('Rango agregado', { description: `${temporada.nombre}: ${textoRango(rango)}` })
           alCambiar(false)
         },
       },
@@ -288,14 +324,14 @@ export function DialogoAgregarRango({ temporada, abierto, alCambiar }: PropsRang
       alEnviar={enviar}
     >
       <div className="grid grid-cols-2 gap-3">
-        <Campo id="rango-inicio" etiqueta="Desde">
+        <Campo id="rango-inicio" etiqueta="Desde" error={errores.inicio}>
           <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
         </Campo>
-        <Campo id="rango-fin" etiqueta="Hasta (incluido)">
+        <Campo id="rango-fin" etiqueta="Hasta (incluido)" error={errores.fin}>
           <Input type="date" min={inicio || undefined} value={fin} onChange={(e) => setFin(e.target.value)} />
         </Campo>
       </div>
-      {error ? <p className="-mt-2 text-xs font-medium text-error">{error}</p> : <p className="-mt-2 text-xs text-muted-foreground">{AYUDA_FIN}</p>}
+      <p className="-mt-2 text-xs text-muted-foreground">{AYUDA_FIN}</p>
     </DialogoFormulario>
   )
 }

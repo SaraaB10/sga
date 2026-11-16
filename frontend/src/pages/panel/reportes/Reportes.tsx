@@ -13,11 +13,15 @@ import { AvisoError, Campo, Dinero, formatearFecha } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { rangoFiltro, validar } from '@/lib/validacion'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { NOMBRE_MEDIO } from '@/pages/panel/folio/movimientos'
 import { NOMBRE_CANAL } from '@/pages/huesped/reserva/formato'
 import { BarraPorcentaje } from './BarraPorcentaje'
 import { formatearPorcentaje } from './formato'
+
+// Los reportes piden desde y hasta, ambas incluidas; hasta no va antes de desde
+const esquemaPeriodo = rangoFiltro({ obligatorio: true })
 
 /** Por defecto, el mes en curso completo */
 function periodoInicial(): PeriodoReporte {
@@ -27,9 +31,8 @@ function periodoInicial(): PeriodoReporte {
 
 export default function Reportes() {
   const [periodo, setPeriodo] = useState<PeriodoReporte>(periodoInicial)
-  const completo = !!periodo.desde && !!periodo.hasta
-  const invertido = completo && periodo.desde > periodo.hasta
-  const valido = completo && !invertido
+  // Mientras el periodo tenga errores no se consulta ni se descarga nada
+  const { exito: valido, errores } = validar(esquemaPeriodo, periodo)
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -45,14 +48,14 @@ export default function Reportes() {
 
       {/* ---------- Selector de fechas ---------- */}
       <div className="flex flex-col gap-4 rounded-tarjeta border border-border bg-card p-5 shadow-tarjeta sm:flex-row sm:items-start">
-        <Campo id="reporte-desde" etiqueta="Desde" className="sm:w-52">
+        <Campo id="reporte-desde" etiqueta="Desde" className="sm:w-52" error={errores.desde}>
           <Input type="date" value={periodo.desde} onChange={(e) => setPeriodo({ ...periodo, desde: e.target.value })} />
         </Campo>
         <Campo
           id="reporte-hasta"
           etiqueta="Hasta"
           className="sm:w-52"
-          error={invertido ? 'Debe ser igual o posterior a la fecha desde' : !completo ? 'Elige las dos fechas' : undefined}
+          error={errores.hasta}
         >
           <Input
             type="date"

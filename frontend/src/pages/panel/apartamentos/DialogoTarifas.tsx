@@ -1,13 +1,21 @@
 import { useState, type FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useDefinirTarifas, type TarifaRequest } from '@/api/apartamentos'
 import type { TarifaResponse, TemporadaResponse } from '@/api/tipos'
 import { AvisoError, Campo, formatearDinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { aPesos } from './utilidades'
+import {
+  aPesos,
+  erroresDelServidor,
+  esErrorDeCampos,
+  pesosOpcional,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 
 interface Props {
   identificacion: string
@@ -22,8 +30,19 @@ export function DialogoTarifas({ identificacion, temporadas, vigentes, abierto, 
   const definir = useDefinirTarifas(identificacion)
   const actuales = Object.fromEntries(vigentes.map((t) => [t.idTemporada, t.valorPorOcupante]))
   const [valores, setValores] = useState<Record<string, string>>({})
-  const [errores, setErrores] = useState<Record<string, string>>({})
   const [aviso, setAviso] = useState<string | null>(null)
+  // TarifaRequest: cada valor escrito es mayor que cero; una temporada en blanco no se cambia
+  const validacion = useValidacion(z.record(z.string(), pesosOpcional()), valores)
+  // Temporada de cada tarifa enviada, en orden: un 400 sobre tarifas[i] se muestra en esa temporada
+  const [enviadas, setEnviadas] = useState<string[]>([])
+  const deServidor = Object.fromEntries(
+    Object.entries(erroresDelServidor(definir.error)).flatMap(([campo, mensaje]) => {
+      const posicion = /^tarifas\.(\d+)/.exec(campo)
+      const idTemporada = posicion ? enviadas[Number(posicion[1])] : undefined
+      return idTemporada ? [[idTemporada, mensaje]] : []
+    }),
+  )
+  const errores = unirErrores(validacion.errores, deServidor)
 
   const cambiar = (valor: boolean) => {
     if (definir.isPending) return
@@ -31,7 +50,7 @@ export function DialogoTarifas({ identificacion, temporadas, vigentes, abierto, 
       setValores(Object.fromEntries(temporadas.map((t) => [t.id, actuales[t.id] ? String(actuales[t.id]) : ''])))
     } else {
       definir.reset()
-      setErrores({})
+      validacion.reiniciar()
       setAviso(null)
     }
     alCambiar(valor)
@@ -39,25 +58,16 @@ export function DialogoTarifas({ identificacion, temporadas, vigentes, abierto, 
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos: Record<string, string> = {}
-    const tarifas: TarifaRequest[] = []
-    temporadas.forEach((t) => {
-      const texto = valores[t.id] ?? ''
-      if (texto.trim() === '') return
-      const valor = aPesos(texto)
-      if (!Number.isInteger(valor) || valor <= 0) {
-        nuevos[t.id] = 'Escribe un valor mayor que cero, sin decimales'
-        return
-      }
-      if (valor !== actuales[t.id]) tarifas.push({ idTemporada: t.id, valorPorOcupante: valor })
-    })
-    setErrores(nuevos)
     setAviso(null)
-    if (Object.keys(nuevos).length > 0) return
+    if (!validacion.comprobar()) return
+    const tarifas: TarifaRequest[] = temporadas
+      .filter((t) => (valores[t.id] ?? '').trim() !== '' && aPesos(valores[t.id]) !== actuales[t.id])
+      .map((t) => ({ idTemporada: t.id, valorPorOcupante: aPesos(valores[t.id]) }))
     if (tarifas.length === 0) {
       setAviso('No cambiaste ninguna tarifa.')
       return
     }
+    setEnviadas(tarifas.map((t) => t.idTemporada))
     definir.mutate(tarifas, {
       onSuccess: () => {
         toast.success(tarifas.length === 1 ? 'Tarifa definida' : 'Tarifas definidas', { description: identificacion })
@@ -94,7 +104,7 @@ export function DialogoTarifas({ identificacion, temporadas, vigentes, abierto, 
             </Campo>
           ))}
           {aviso && <AvisoError mensaje={aviso} />}
-          {definir.error && <AvisoError error={definir.error} />}
+          {definir.error && !esErrorDeCampos(definir.error) && <AvisoError error={definir.error} />}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={() => cambiar(false)} disabled={definir.isPending}>

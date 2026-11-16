@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CalendarSearch, SearchX } from 'lucide-react'
+import { z } from 'zod'
 import { useApartamentosDisponibles } from '@/api/publico'
 import type { FiltrosDisponibles } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, Fecha, Paginador, Vacio } from '@/components/coral'
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { textoOpcional, useValidacion } from '@/lib/validacion'
 import { BuscadorEstancia } from './comun/BuscadorEstancia'
 import { useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { EncabezadoFiltros } from './comun/EncabezadoFiltros'
@@ -188,10 +190,40 @@ interface PropsFiltros {
   alAplicar: (valores: Record<Filtro, string>) => void
 }
 
+/** Valor en pesos opcional de un filtro: vacío o entero de 0 en adelante */
+const pesosFiltro = z
+  .string()
+  .trim()
+  .refine((v) => v === '' || /^\d+$/.test(v.replace(/[$.\s]/g, '')), 'Escribe un valor en pesos, sin decimales')
+
+// Filtros de GET /api/apartamentos/disponibles: capacidad entera de 1 o más y el precio mínimo no pasa del máximo
+const esquemaFiltros = z
+  .object({
+    capacidadMinima: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Escribe una capacidad entera de 1 o más'),
+    caracteristica: textoOpcional(100, 'La característica admite máximo 100 caracteres'),
+    servicios: z.string(),
+    precioMinimo: pesosFiltro,
+    precioMaximo: pesosFiltro,
+  })
+  .superRefine((datos, contexto) => {
+    const min = aNumero(datos.precioMinimo)
+    const max = aNumero(datos.precioMaximo)
+    if (min !== undefined && max !== undefined && min > max)
+      contexto.addIssue({
+        code: 'custom',
+        path: ['precioMaximo'],
+        message: 'El precio máximo no puede ser menor que el mínimo.',
+      })
+  })
+
 /** Capacidad mínima, característica de la dotación, servicios y rango del valor estimado */
 function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
   const [borrador, setBorrador] = useState(valores)
-  const [error, setError] = useState<string>()
+  const validacion = useValidacion(esquemaFiltros, borrador)
+  const errores = validacion.errores
   // En el celular los filtros empiezan plegados para que los resultados queden a la vista
   const [abierto, setAbierto] = useState(false)
 
@@ -205,20 +237,13 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
 
   const aplicar = (e: FormEvent) => {
     e.preventDefault()
-    const min = aNumero(borrador.precioMinimo)
-    const max = aNumero(borrador.precioMaximo)
-    if (min !== undefined && max !== undefined && min > max) {
-      setError('El precio mínimo no puede ser mayor que el máximo.')
-      return
-    }
-    setError(undefined)
-    alAplicar(borrador)
+    if (validacion.comprobar()) alAplicar(borrador)
   }
 
   const limpiar = () => {
     const vacios = { capacidadMinima: '', caracteristica: '', servicios: '', precioMinimo: '', precioMaximo: '' }
     setBorrador(vacios)
-    setError(undefined)
+    validacion.reiniciar()
     alAplicar(vacios)
   }
 
@@ -238,7 +263,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
         desde="lg"
       />
       <div id="contenido-filtros" className={claseContenidoPlegable(abierto, 'lg')}>
-      <Campo id="filtro-capacidad" etiqueta="Capacidad mínima">
+      <Campo id="filtro-capacidad" etiqueta="Capacidad mínima" error={errores.capacidadMinima}>
         <Input
           type="number"
           inputMode="numeric"
@@ -248,7 +273,12 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
           onChange={(e) => cambiar('capacidadMinima', e.target.value)}
         />
       </Campo>
-      <Campo id="filtro-caracteristica" etiqueta="Característica" ayuda="Busca en la dotación, por ejemplo «hidromasaje».">
+      <Campo
+        id="filtro-caracteristica"
+        etiqueta="Característica"
+        ayuda="Busca en la dotación, por ejemplo «hidromasaje»."
+        error={errores.caracteristica}
+      >
         <Input
           placeholder="Hidromasaje, balcón…"
           value={borrador.caracteristica}
@@ -284,7 +314,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-medium">Valor de la estancia</legend>
         <div className="grid grid-cols-2 gap-2">
-          <Campo id="filtro-precio-min" etiqueta="Desde">
+          <Campo id="filtro-precio-min" etiqueta="Desde" error={errores.precioMinimo}>
             <Input
               inputMode="numeric"
               placeholder="$0"
@@ -292,7 +322,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
               onChange={(e) => cambiar('precioMinimo', e.target.value)}
             />
           </Campo>
-          <Campo id="filtro-precio-max" etiqueta="Hasta">
+          <Campo id="filtro-precio-max" etiqueta="Hasta" error={errores.precioMaximo}>
             <Input
               inputMode="numeric"
               placeholder="Sin límite"
@@ -301,7 +331,6 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
             />
           </Campo>
         </div>
-        {error && <p className="text-xs font-medium text-error">{error}</p>}
       </fieldset>
       <div className="flex gap-2">
         <Button type="submit" className="flex-1">

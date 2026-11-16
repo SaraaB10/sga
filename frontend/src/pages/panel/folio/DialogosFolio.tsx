@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useRegistrarCargoServicio, useRegistrarCorreccion, useRegistrarPago } from '@/api/folio'
 import type { MedioPago } from '@/api/reservas'
 import type { ServicioAdicionalResponse } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, formatearDinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { aPesos } from '@/pages/panel/apartamentos/utilidades'
+import { aPesos, erroresDelServidor, pesos, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/publico/comun/estilos'
 import { DialogoFormulario } from './DialogoFormulario'
 import { erroresDe } from './erroresDe'
@@ -23,31 +24,34 @@ export interface BaseDialogoFolio {
 
 const MEDIOS: MedioPago[] = ['TARJETA_DEBITO_CREDITO', 'TRANSFERENCIA_BANCARIA']
 
+// RegistrarPagoRequest: valor positivo en pesos enteros y uno de los medios
+const esquemaPago = z.object({
+  valor: pesos('El valor del pago debe ser mayor que cero, sin decimales'),
+  medio: z.enum(MEDIOS as [MedioPago, ...MedioPago[]], 'Elige el medio de pago'),
+})
+
 export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFolio & { saldo: number }) {
   const pago = useRegistrarPago(codigo)
   const [valor, setValor] = useState('')
   const [medio, setMedio] = useState<MedioPago>('TRANSFERENCIA_BANCARIA')
-  const [error, setError] = useState<string>()
+  const validacion = useValidacion(esquemaPago, { valor, medio })
+  const errores = unirErrores(validacion.errores, erroresDe(pago.error))
 
   useAlAbrir(abierto, () => {
     setValor('')
     setMedio('TRANSFERENCIA_BANCARIA')
-    setError(undefined)
+    validacion.reiniciar()
     pago.reset()
   })
 
   const enviar = () => {
-    const pesos = aPesos(valor)
-    if (!Number.isInteger(pesos) || pesos <= 0) {
-      setError('Escribe un valor mayor que cero, sin decimales')
-      return
-    }
-    setError(undefined)
+    if (!validacion.comprobar()) return
+    const monto = aPesos(valor)
     pago.mutate(
-      { valor: pesos, medio },
+      { valor: monto, medio },
       {
         onSuccess: (folio) => {
-          toast.success(`Pago de ${formatearDinero(pesos)} registrado`, {
+          toast.success(`Pago de ${formatearDinero(monto)} registrado`, {
             description: `Nuevo saldo: ${formatearDinero(folio.saldo)}`,
           })
           alCambiar(false)
@@ -72,7 +76,7 @@ export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFo
       <Campo
         id="pago-valor"
         etiqueta="Valor en pesos"
-        error={error ?? erroresDe(pago.error).valor}
+        error={errores.valor}
         ayuda={
           saldo > 0 ? (
             <>
@@ -86,7 +90,7 @@ export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFo
       >
         <Input inputMode="numeric" placeholder="310000" value={valor} onChange={(e) => setValor(e.target.value)} />
       </Campo>
-      <Campo id="pago-medio" etiqueta="Medio de pago">
+      <Campo id="pago-medio" etiqueta="Medio de pago" error={errores.medio}>
         <select className={claseSelect} value={medio} onChange={(e) => setMedio(e.target.value as MedioPago)}>
           {MEDIOS.map((m) => (
             <option key={m} value={m}>
@@ -110,22 +114,26 @@ export function DialogoServicio({ codigo, servicios, errorServicios, abierto, al
   const cargo = useRegistrarCargoServicio(codigo)
   const disponibles = (servicios ?? []).filter((s) => s.activo && s.generaCargo)
   const [idServicio, setIdServicio] = useState('')
-  const [error, setError] = useState<string>()
+  // RegistrarCargoServicioRequest: el id del servicio, que debe ser uno de los ofrecidos
+  const esquema = z.object({
+    idServicio: z
+      .string()
+      .min(1, 'Elige un servicio')
+      .refine((id) => disponibles.some((s) => s.id === id), 'Elige un servicio activo que genere cargo'),
+  })
+  const validacion = useValidacion(esquema, { idServicio })
+  const error = validacion.errores.idServicio ?? erroresDe(cargo.error).idServicio
 
   useAlAbrir(abierto, () => {
     setIdServicio('')
-    setError(undefined)
+    validacion.reiniciar()
     cargo.reset()
   })
 
   const elegido = disponibles.find((s) => s.id === idServicio)
 
   const enviar = () => {
-    if (!elegido) {
-      setError('Elige un servicio')
-      return
-    }
-    setError(undefined)
+    if (!validacion.comprobar() || !elegido) return
     cargo.mutate(elegido.id, {
       onSuccess: () => {
         toast.success('Servicio cargado al folio', { description: `${elegido.nombre}: ${formatearDinero(elegido.valor)}` })
@@ -185,26 +193,33 @@ export function DialogoCorreccion({ codigo, cargos, indiceInicial, abierto, alCa
   const correccion = useRegistrarCorreccion(codigo)
   const [indice, setIndice] = useState('')
   const [motivo, setMotivo] = useState('')
-  const [errores, setErrores] = useState<{ indice?: string; motivo?: string }>({})
+  // RegistrarCorreccionRequest: la posición de un cargo del folio y el motivo
+  const esquema = z.object({
+    indice: z
+      .string()
+      .refine((valor) => cargos.some((c) => String(c.indiceCargo) === valor), 'Elige el cargo que vas a corregir'),
+    motivo: textoObligatorio('Escribe el motivo de la corrección'),
+  })
+  const validacion = useValidacion(esquema, { indice, motivo })
+  const errores = unirErrores(
+    validacion.errores,
+    erroresDelServidor(correccion.error, { indiceCargo: 'indice' }),
+  )
 
   useAlAbrir(abierto, () => {
     setIndice(indiceInicial !== null ? String(indiceInicial) : '')
     setMotivo('')
-    setErrores({})
+    validacion.reiniciar()
     correccion.reset()
   })
 
   const elegido = cargos.find((c) => String(c.indiceCargo) === indice)
 
   const enviar = () => {
-    const nuevos = {
-      indice: elegido ? undefined : 'Elige el cargo que vas a corregir',
-      motivo: motivo.trim() ? undefined : 'Escribe el motivo de la corrección',
-    }
-    setErrores(nuevos)
-    if (nuevos.indice || nuevos.motivo || !elegido) return
+    const limpios = validacion.comprobar()
+    if (!limpios || !elegido) return
     correccion.mutate(
-      { indiceCargo: elegido.indiceCargo as number, motivo: motivo.trim() },
+      { indiceCargo: elegido.indiceCargo as number, motivo: limpios.motivo },
       {
         onSuccess: () => {
           toast.success(`Corrección de ${elegido.numero} registrada`)
@@ -249,7 +264,7 @@ export function DialogoCorreccion({ codigo, cargos, indiceInicial, abierto, alCa
           <Dinero valor={-elegido.valor} className="font-semibold" />
         </p>
       )}
-      <Campo id="correccion-motivo" etiqueta="Motivo" error={errores.motivo ?? erroresDe(correccion.error).motivo}>
+      <Campo id="correccion-motivo" etiqueta="Motivo" error={errores.motivo}>
         <textarea
           className={claseTextarea}
           placeholder="La cena no se consumió"

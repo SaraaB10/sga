@@ -10,27 +10,20 @@ import { esErrorApi } from '@/api/cliente'
 import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { AYUDA_CONTRASENA, contrasenaNueva, correo, erroresDelServidor } from '@/lib/validacion'
 import { PanelBienvenida } from './PanelBienvenida'
 import type { EstadoRecuperacion } from './RecuperarContrasena'
 
 // La contraseña nueva sigue las mismas reglas del registro
 const esquema = z
   .object({
-    correo: z
-      .string()
-      .trim()
-      .min(1, 'Escribe tu correo')
-      .email('El correo no tiene un formato válido')
-      .max(120, 'El correo admite máximo 120 caracteres'),
+    correo: correo(),
     codigo: z
       .string()
       .trim()
+      .min(1, 'Escribe el código')
       .regex(/^\d{6}$/, 'El código tiene 6 dígitos'),
-    nuevaContrasena: z
-      .string()
-      .min(8, 'La contraseña debe tener entre 8 y 72 caracteres')
-      .max(72, 'La contraseña debe tener entre 8 y 72 caracteres')
-      .regex(/^(?=.*\p{Lu})(?=.*\d).*$/u, 'La contraseña debe tener al menos una mayúscula y un número'),
+    nuevaContrasena: contrasenaNueva('Escribe la contraseña nueva'),
     confirmacion: z.string().min(1, 'Repite la contraseña nueva'),
   })
   .refine((datos) => datos.nuevaContrasena === datos.confirmacion, {
@@ -70,7 +63,9 @@ export default function RecuperarCodigo() {
     },
     onError: (error) => {
       if (!esErrorApi(error) || error.status !== 400) return
-      const deCampos = Object.entries(error.errores).filter(([campo]) => CAMPOS.includes(campo as CampoBackend))
+      const deCampos = Object.entries(erroresDelServidor(error)).filter(([campo]) =>
+        CAMPOS.includes(campo as CampoBackend),
+      )
       if (deCampos.length > 0) {
         deCampos.forEach(([campo, mensaje]) => setError(campo as CampoBackend, { message: mensaje }))
       } else {
@@ -113,7 +108,7 @@ export default function RecuperarCodigo() {
             id="nuevaContrasena"
             etiqueta="Contraseña nueva"
             error={errors.nuevaContrasena?.message}
-            ayuda="Mínimo 8 caracteres, con una mayúscula y un número."
+            ayuda={AYUDA_CONTRASENA}
           >
             <Input type="password" autoComplete="new-password" {...register('nuevaContrasena')} />
           </Campo>

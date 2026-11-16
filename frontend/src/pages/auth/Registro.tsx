@@ -2,7 +2,6 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { format } from 'date-fns'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -14,31 +13,25 @@ import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
+import {
+  AYUDA_CONTRASENA,
+  contrasenaNueva,
+  correo,
+  erroresDelServidor,
+  fechaPasada,
+  telefono,
+  textoObligatorio,
+} from '@/lib/validacion'
 import { PanelBienvenida } from './PanelBienvenida'
-
-const hoy = () => format(new Date(), 'yyyy-MM-dd')
 
 // Las mismas reglas que valida el backend al registrar
 const esquema = z.object({
-  nombre: z.string().trim().min(1, 'Escribe tu nombre').max(100, 'El nombre admite máximo 100 caracteres'),
-  correo: z
-    .string()
-    .trim()
-    .min(1, 'Escribe tu correo')
-    .email('El correo no tiene un formato válido')
-    .max(120, 'El correo admite máximo 120 caracteres'),
-  contrasena: z
-    .string()
-    .min(8, 'La contraseña debe tener entre 8 y 72 caracteres')
-    .max(72, 'La contraseña debe tener entre 8 y 72 caracteres')
-    .regex(/^(?=.*\p{Lu})(?=.*\d).*$/u, 'La contraseña debe tener al menos una mayúscula y un número'),
-  telefono: z.string().trim().min(1, 'Escribe tu teléfono').max(20, 'El teléfono admite máximo 20 caracteres'),
-  documento: z.string().trim().min(1, 'Escribe tu documento').max(15, 'El documento admite máximo 15 caracteres'),
-  fechaNacimiento: z
-    .string()
-    .min(1, 'Elige tu fecha de nacimiento')
-    .refine((valor) => valor < hoy(), 'La fecha de nacimiento debe ser pasada')
-    .refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
+  nombre: textoObligatorio('Escribe tu nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  correo: correo(),
+  contrasena: contrasenaNueva('Escribe una contraseña'),
+  telefono: telefono(),
+  documento: textoObligatorio('Escribe tu documento', 15, 'El documento admite máximo 15 caracteres'),
+  fechaNacimiento: fechaPasada('Elige tu fecha de nacimiento').refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
 })
 
 type Datos = z.infer<typeof esquema>
@@ -74,9 +67,9 @@ export default function Registro() {
         // El backend no dice cuál de los dos se repite: se marca en ambos
         setError('correo', { message: error.message })
         setError('documento', { message: error.message })
-      } else if (error.status === 400) {
-        Object.entries(error.errores).forEach(([campo, mensaje]) => {
-          if (CAMPOS.includes(campo as NombreCampo)) setError(campo as NombreCampo, { message: mensaje })
+      } else {
+        Object.entries(erroresDelServidor(error)).forEach(([campo, mensaje]) => {
+          if (mensaje && CAMPOS.includes(campo as NombreCampo)) setError(campo as NombreCampo, { message: mensaje })
         })
       }
     },
@@ -114,7 +107,7 @@ export default function Registro() {
             id="contrasena"
             etiqueta="Contraseña"
             error={errors.contrasena?.message}
-            ayuda="Mínimo 8 caracteres, con una mayúscula y un número."
+            ayuda={AYUDA_CONTRASENA}
             className="sm:col-span-2"
           >
             <Input type="password" autoComplete="new-password" {...register('contrasena')} />
