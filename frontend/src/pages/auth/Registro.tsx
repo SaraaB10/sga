@@ -13,6 +13,7 @@ import { rutaDespuesDeLogin } from '@/auth/destino'
 import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
 import { PanelBienvenida } from './PanelBienvenida'
 
 const hoy = () => format(new Date(), 'yyyy-MM-dd')
@@ -36,7 +37,8 @@ const esquema = z.object({
   fechaNacimiento: z
     .string()
     .min(1, 'Elige tu fecha de nacimiento')
-    .refine((valor) => valor < hoy(), 'La fecha de nacimiento debe ser pasada'),
+    .refine((valor) => valor < hoy(), 'La fecha de nacimiento debe ser pasada')
+    .refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
 })
 
 type Datos = z.infer<typeof esquema>
@@ -52,6 +54,7 @@ export default function Registro() {
     register,
     handleSubmit,
     setError,
+    clearErrors,
     formState: { errors },
   } = useForm<Datos>({
     resolver: zodResolver(esquema),
@@ -123,7 +126,20 @@ export default function Registro() {
             <Input inputMode="numeric" {...register('documento')} />
           </Campo>
           <Campo id="fechaNacimiento" etiqueta="Fecha de nacimiento" error={errors.fechaNacimiento?.message} className="sm:col-span-2">
-            <Input type="date" max={hoy()} autoComplete="bday" {...register('fechaNacimiento')} />
+            <Input
+              type="date"
+              max={fechaMaximaNacimientoCuenta()}
+              autoComplete="bday"
+              {...register('fechaNacimiento', {
+                // La edad mínima se avisa en cuanto la fecha está completa, sin esperar al envío
+                onChange: (e: { target: { value: string } }) => {
+                  const valor = e.target.value
+                  if (esFechaCompleta(valor) && !cumpleEdadMinima(valor))
+                    setError('fechaNacimiento', { message: MENSAJE_EDAD_MINIMA })
+                  else if (errors.fechaNacimiento?.message === MENSAJE_EDAD_MINIMA) clearErrors('fechaNacimiento')
+                },
+              })}
+            />
           </Campo>
 
           <Button type="submit" size="lg" className="mt-2 w-full sm:col-span-2" disabled={registro.isPending}>

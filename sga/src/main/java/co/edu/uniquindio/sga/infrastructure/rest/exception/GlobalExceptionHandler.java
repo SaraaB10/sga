@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.application.exception.ApartamentoNoEncontradoExcept
 import co.edu.uniquindio.sga.application.exception.CanalVentaNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.ConflictoCanalNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.CodigoRecuperacionInvalidoException;
+import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
 import co.edu.uniquindio.sga.application.exception.BloqueoNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.FolioNoEncontradoException;
@@ -107,6 +108,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> titularMenorDeEdad(TitularMenorDeEdadException ex, HttpServletRequest req) {
         return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
                 Map.of("titular.fechaNacimiento", ex.getMessage()));
+    }
+
+    /** 400: quien crea la cuenta no tiene la edad mínima; se reporta sobre el campo fechaNacimiento. */
+    @ExceptionHandler(EdadMinimaCuentaException.class)
+    public ResponseEntity<ErrorResponse> edadMinimaCuenta(EdadMinimaCuentaException ex, HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
+                Map.of("fechaNacimiento", ex.getMessage()));
     }
 
     /** 400: el código para restablecer la contraseña no sirve (7.2). Mismo mensaje en todos los casos. */

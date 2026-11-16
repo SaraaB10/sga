@@ -230,6 +230,8 @@ En la misma revisión se movieron los demás valores del negocio que seguían es
 | Política de mascotas (L-16) | `new CargoAseoMascota(true, 110.000, 2, 10)` | `sga.alojamiento.mascotas.aceptadas`, `.cargo-aseo`, `.maximo`, `.peso-maximo-kg` |
 | Valor de la recepción nocturna (RP-03) | `Dinero.de(70_000)` | `sga.alojamiento.valor-recepcion-nocturna` |
 
+Se exige una edad mínima de 18 años para crear una cuenta y para ser titular de una reserva, porque el titular es el responsable del pago; el valor es configurable (sga.usuarios.edad-minima).
+
 Se dejaron en el código, a propósito:
 
 - El **catálogo de datos iniciales** (identidad del alojamiento, temporadas, tarifas, inventario de apartamentos y

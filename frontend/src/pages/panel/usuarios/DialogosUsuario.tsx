@@ -5,6 +5,7 @@ import type { Rol, UsuarioResponse } from '@/api/tipos'
 import { NOMBRE_ROL } from '@/auth/roles'
 import { Campo } from '@/components/coral'
 import { Input } from '@/components/ui/input'
+import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
 import { erroresDe } from '@/pages/panel/folio/erroresDe'
 import { useAlAbrir } from '@/pages/panel/folio/useAlAbrir'
@@ -58,6 +59,7 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
     if (!datos.documento.trim()) nuevos.documento = 'Escribe el documento'
     if (!datos.fechaNacimiento) nuevos.fechaNacimiento = 'Escribe la fecha de nacimiento'
     else if (datos.fechaNacimiento >= hoyISO()) nuevos.fechaNacimiento = 'Debe ser una fecha pasada'
+    else if (!cumpleEdadMinima(datos.fechaNacimiento)) nuevos.fechaNacimiento = MENSAJE_EDAD_MINIMA
     setErrores(nuevos)
     if (Object.values(nuevos).some(Boolean)) return
 
@@ -109,7 +111,20 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
           <Input inputMode="numeric" maxLength={15} {...campo('documento')} />
         </Campo>
         <Campo id="usuario-nacimiento" etiqueta="Fecha de nacimiento" error={error('fechaNacimiento')}>
-          <Input type="date" max={hoyISO()} {...campo('fechaNacimiento')} />
+          <Input
+            type="date"
+            max={fechaMaximaNacimientoCuenta()}
+            value={datos.fechaNacimiento}
+            onChange={(e) => {
+              const valor = e.target.value
+              setDatos((d) => ({ ...d, fechaNacimiento: valor }))
+              // La edad mínima se avisa en cuanto la fecha está completa, sin esperar al envío
+              setErrores((er) => ({
+                ...er,
+                fechaNacimiento: esFechaCompleta(valor) && !cumpleEdadMinima(valor) ? MENSAJE_EDAD_MINIMA : undefined,
+              }))
+            }}
+          />
         </Campo>
         <Campo id="usuario-rol" etiqueta="Rol" error={error('rol')}>
           <select className={claseSelect} {...campo('rol')}>

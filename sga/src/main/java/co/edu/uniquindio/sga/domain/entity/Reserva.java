@@ -1,7 +1,6 @@
 package co.edu.uniquindio.sga.domain.entity;
 
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
-import co.edu.uniquindio.sga.domain.exception.TitularMenorDeEdadException;
 import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Cotizacion;
@@ -138,7 +137,6 @@ public class Reserva {
         requerido(canalOrigen, "El canal de origen es obligatorio");
         requerido(politicaVigente, "RN-22: la reserva debe congelar la política de cancelación vigente");
         requerido(ahora, "La fecha actual es obligatoria");
-        validarEdadTitular(canalOrigen, titular, ocupantes, ahora.toLocalDate());
         validarCondicionesDeCreacion(apartamento, estancia, titular, ocupantes, cotizacion, umbral, ahora.toLocalDate());
         String idExterno = validarIdentificadorExterno(canalOrigen, identificadorCanalExterno);
         String nombreCanal = validarNombreCanalExterno(canalOrigen, nombreCanalExterno);
@@ -338,7 +336,6 @@ public class Reserva {
         requerido(ahora, "La fecha actual es obligatoria");
         requerido(nuevasMascotas, "L-16: las mascotas de la reserva son obligatorias (sin mascotas: cantidad 0)");
         validarNoIniciada("modificar");
-        validarEdadTitular(canalOrigen, titular, nuevosOcupantes, ahora.toLocalDate());
         validarCondicionesDeCreacion(nuevoApartamento, nuevaEstancia, titular, nuevosOcupantes, nuevaCotizacion,
                 umbral, ahora.toLocalDate());
 
@@ -461,17 +458,6 @@ public class Reserva {
         // RN-05 / RN-22: la cotización congelada debe corresponder a la estancia
         if (cotizacion.totalNoches() != estancia.noches()) {
             throw new ReglaDominioException("La cotización no corresponde a las noches de la estancia");
-        }
-    }
-
-    /**
-     * En el canal DIRECTO la recepción registra al titular en persona y este responde por la reserva y su pago:
-     * debe tener la edad mínima el día en que se crea o se modifica.
-     */
-    private static void validarEdadTitular(CanalOrigen canal, Titular titular, List<Ocupante> ocupantes,
-                                           LocalDate hoy) {
-        if (canal == CanalOrigen.DIRECTO && titular.esMenorDeEdadEn(ocupantes, hoy)) {
-            throw new TitularMenorDeEdadException();
         }
     }
 

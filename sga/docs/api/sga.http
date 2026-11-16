@@ -4220,6 +4220,163 @@ Content-Type: application/json
     });
 %}
 
+# ----------------------------------------------------------------------------------------------------
+# Edad mínima (sga.usuarios.edad-minima=18): para crear una cuenta y para ser titular de una reserva de
+# recepción, porque el titular es el responsable del pago. Se cuenta con la fecha de hoy en Colombia.
+# ----------------------------------------------------------------------------------------------------
+
+### 14.26 Fechas de nacimiento de quien cumple hoy 17 y 18 años
+GET {{host}}/api/apartamentos
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("14.26 la app responde", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+    });
+    // Hoy en Colombia (UTC-5). Un 29 de febrero se toma el 28, que da la misma edad en cualquier año.
+    var hoy = new Date(Date.now() - 5 * 3600000).toISOString().substring(0, 10);
+    function haceAnios(n) {
+        var dia = hoy.substring(5) === "02-29" ? "02-28" : hoy.substring(5);
+        return String(Number(hoy.substring(0, 4)) - n) + "-" + dia;
+    }
+    client.global.set("nacio17", haceAnios(17));
+    client.global.set("nacio18", haceAnios(18));
+%}
+
+### 14.27 400 Registro público con 17 años
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Sofia Menor",
+  "correo": "sofia.menor@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "3160000020",
+  "documento": "1000000020",
+  "fechaNacimiento": "{{nacio17}}"
+}
+
+> {%
+    client.test("14.27 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/auth/registro", "path: " + e.path);
+        client.assert(e.timestamp != null, "timestamp: " + e.timestamp);
+        client.assert(e.errores.fechaNacimiento === "Debes tener al menos 18 años para crear una cuenta", "errores: " + JSON.stringify(e.errores));
+    });
+    client.test("14.27 400 menor de edad no crea cuenta", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+    });
+%}
+
+### 14.28 Registro público con 18 años cumplidos hoy: 201 como HUESPED
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Sofia Mayor",
+  "correo": "sofia.mayor@correo.co",
+  "contrasena": "Segura2026",
+  "telefono": "3160000021",
+  "documento": "1000000021",
+  "fechaNacimiento": "{{nacio18}}"
+}
+
+> {%
+    client.test("14.28 201 cuenta creada", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.rol === "HUESPED", "Rol: " + response.body.rol);
+    });
+%}
+
+### 14.29 400 El administrador crea un usuario de 17 años
+POST {{host}}/api/usuarios
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "nombre": "Recepcion Menor",
+  "correo": "recepcion.menor@sga.local",
+  "contrasena": "Menor2026",
+  "telefono": "3001000022",
+  "documento": "1000000022",
+  "fechaNacimiento": "{{nacio17}}",
+  "rol": "RECEPCIONISTA"
+}
+
+> {%
+    client.test("14.29 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/usuarios", "path: " + e.path);
+        client.assert(e.timestamp != null, "timestamp: " + e.timestamp);
+        client.assert(e.errores.fechaNacimiento === "Debes tener al menos 18 años para crear una cuenta", "errores: " + JSON.stringify(e.errores));
+    });
+    client.test("14.29 400 menor de edad no crea cuenta", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+    });
+%}
+
+### 14.30 El administrador crea un usuario con 18 años cumplidos hoy: 201
+POST {{host}}/api/usuarios
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "nombre": "Recepcion Mayor",
+  "correo": "recepcion.mayor@sga.local",
+  "contrasena": "Mayor2026",
+  "telefono": "3001000023",
+  "documento": "1000000023",
+  "fechaNacimiento": "{{nacio18}}",
+  "rol": "RECEPCIONISTA"
+}
+
+> {%
+    client.test("14.30 201 usuario creado", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.fechaNacimiento === client.global.get("nacio18"), "fechaNacimiento: " + response.body.fechaNacimiento);
+    });
+%}
+
+### 14.31 400 Por recepción (DIRECTO), el titular de 17 años no puede reservar
+POST {{host}}/api/reservas
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-301",
+  "fechaEntrada": "{{cu14Entrada}}",
+  "fechaSalida": "{{cu14Salida}}",
+  "horaEstimadaLlegada": "16:00",
+  "canalOrigen": "DIRECTO",
+  "titular": {
+    "nombre": "Sofia Menor",
+    "tipoDocumento": "TI",
+    "numeroDocumento": "1000000020",
+    "email": "sofia.menor@correo.co",
+    "telefono": "3160000020"
+  },
+  "ocupantes": [
+    { "nombre": "Sofia Menor", "tipoDocumento": "TI", "numeroDocumento": "1000000020", "fechaNacimiento": "{{nacio17}}" }
+  ]
+}
+
+> {%
+    client.test("14.31 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/reservas", "path: " + e.path);
+        client.assert(e.errores["titular.fechaNacimiento"] === "El titular debe tener al menos 18 años", "errores: " + JSON.stringify(e.errores));
+    });
+    client.test("14.31 400 titular menor de edad", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+    });
+%}
+
 ### Sección 15: SUGERENCIA DE GRAVEDAD CON IA (10.2) Y REPORTES DEL ADMINISTRADOR (7.9)
 
 # ====================================================================================================

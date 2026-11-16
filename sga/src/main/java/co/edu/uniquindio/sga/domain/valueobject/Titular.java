@@ -14,9 +14,6 @@ import java.util.List;
  */
 public record Titular(String nombre, DocumentoIdentidad documento, String email, String telefono) {
 
-    /** Edad mínima del titular de una reserva tomada por la recepción */
-    public static final int EDAD_MINIMA = 18;
-
     private static final String PATRON_EMAIL = "^[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+$";
 
     public Titular {
@@ -55,12 +52,12 @@ public record Titular(String nombre, DocumentoIdentidad documento, String email,
      * El titular, reconocido en el grupo por su documento, no alcanza la edad mínima en la fecha dada.
      * Si no está en el grupo no se puede saber su edad y responde false: esa falta la rechaza la regla 3.2.
      */
-    public boolean esMenorDeEdadEn(List<Ocupante> ocupantes, LocalDate fecha) {
+    public boolean esMenorDeEdadEn(List<Ocupante> ocupantes, LocalDate fecha, int edadMinima) {
         if (ocupantes == null || fecha == null) {
             return false;
         }
         return ocupantes.stream()
                 .filter(this::coincideConOcupante)
-                .anyMatch(o -> !fecha.isBefore(o.fechaNacimiento()) && o.edadA(fecha) < EDAD_MINIMA);
+                .anyMatch(o -> fecha.isBefore(o.fechaNacimiento()) || o.edadA(fecha) < edadMinima);
     }
 }

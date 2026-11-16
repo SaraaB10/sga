@@ -12,6 +12,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Map;
 
 import static org.hamcrest.Matchers.contains;
@@ -81,6 +83,21 @@ class AutenticacionIntegracionTest {
         login("nuevo@correo.co", "Segura2026")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles", contains("HUESPED")));
+    }
+
+    @Test
+    @DisplayName("Registro: con 17 años responde 400 sobre fechaNacimiento; con 18 cumplidos hoy se crea")
+    void registroExigeLaEdadMinima() throws Exception {
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Bogota"));
+
+        registrar(registro("menor@correo.co", "1095000010").replace("1990-05-20", hoy.minusYears(17).toString()))
+                .andExpect(CuerpoError.validacion("/api/auth/registro",
+                        Map.of("fechaNacimiento", "Debes tener al menos 18 años para crear una cuenta")));
+        assertTrue(usuarios.findByCorreo("menor@correo.co").isEmpty());
+
+        registrar(registro("mayor@correo.co", "1095000011").replace("1990-05-20", hoy.minusYears(18).toString()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.rol").value("HUESPED"));
     }
 
     @Test
