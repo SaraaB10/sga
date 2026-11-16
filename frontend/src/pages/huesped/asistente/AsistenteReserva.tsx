@@ -102,13 +102,8 @@ const PASOS: { numero: Paso; titulo: string }[] = [
   { numero: 3, titulo: 'Confirmar' },
 ]
 
-const TIPOS_DOCUMENTO = [
-  { valor: 'CC', texto: 'Cédula de ciudadanía' },
-  { valor: 'CE', texto: 'Cédula de extranjería' },
-  { valor: 'TI', texto: 'Tarjeta de identidad' },
-  { valor: 'PA', texto: 'Pasaporte' },
-  { valor: 'PPT', texto: 'Permiso de protección temporal' },
-]
+/** El titular de una reserva de recepción se identifica solo con cédula de ciudadanía (número de 6 a 10 dígitos) */
+const TIPO_DOCUMENTO_TITULAR = { valor: 'CC', texto: 'Cédula de ciudadanía' } as const
 
 const NOMBRE_CANAL: Record<CanalOrigen, string> = { PORTAL: 'Portal web', DIRECTO: 'Directo (recepción)', EXTERNO: 'Externo' }
 
@@ -133,8 +128,8 @@ const esquemaEstancia = z
 /** Titular que escribe la recepción: todos los datos obligatorios, con correo y teléfono válidos */
 const esquemaTitular = z.object({
   nombre: nombrePersona('Escribe el nombre del titular.'),
-  tipoDocumento: z.string().min(1, 'Elige el tipo de documento.'),
-  numeroDocumento: documento('Escribe el número de documento.'),
+  tipoDocumento: z.literal(TIPO_DOCUMENTO_TITULAR.valor, 'El titular se identifica con cédula de ciudadanía.'),
+  numeroDocumento: documento('Escribe el número de cédula.'),
   email: correo(),
   telefono: telefono('Escribe el teléfono.'),
   fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
@@ -261,7 +256,7 @@ export function AsistenteReserva({ modo }: Props) {
   const [canal, setCanal] = useState<CanalOrigen>(modo === 'huesped' ? 'PORTAL' : 'DIRECTO')
   const [titular, setTitular] = useState<TitularFormulario>({
     nombre: '',
-    tipoDocumento: 'CC',
+    tipoDocumento: TIPO_DOCUMENTO_TITULAR.valor,
     numeroDocumento: '',
     email: '',
     telefono: '',
@@ -352,7 +347,7 @@ export function AsistenteReserva({ modo }: Props) {
     modo === 'huesped' && usuario
       ? {
           nombre: usuario.nombre,
-          tipoDocumento: 'CC',
+          tipoDocumento: TIPO_DOCUMENTO_TITULAR.valor,
           numeroDocumento: usuario.documento,
           email: usuario.correo,
           telefono: usuario.telefono,
@@ -625,19 +620,10 @@ export function AsistenteReserva({ modo }: Props) {
                       />
                     </Campo>
                     <Campo id="tit-tipo" etiqueta="Tipo de documento" error={errores.titularTipo}>
-                      <select
-                        className={claseSelect}
-                        value={titular.tipoDocumento}
-                        onChange={(e) => setTitular({ ...titular, tipoDocumento: e.target.value })}
-                      >
-                        {TIPOS_DOCUMENTO.map((t) => (
-                          <option key={t.valor} value={t.valor}>
-                            {t.texto}
-                          </option>
-                        ))}
-                      </select>
+                      {/* Sin selector: el titular de recepción se identifica solo con cédula de ciudadanía */}
+                      <Input value={TIPO_DOCUMENTO_TITULAR.texto} readOnly aria-readonly="true" tabIndex={-1} />
                     </Campo>
-                    <Campo id="tit-documento" etiqueta="Número de documento" error={errores.titularDocumento}>
+                    <Campo id="tit-documento" etiqueta="Número de cédula" error={errores.titularDocumento}>
                       <InputDigitos
                         maximo={MAXIMO_DIGITOS_DOCUMENTO}
                         value={titular.numeroDocumento}
