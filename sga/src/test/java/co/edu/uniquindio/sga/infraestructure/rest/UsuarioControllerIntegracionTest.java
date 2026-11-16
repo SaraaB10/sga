@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
@@ -17,6 +18,9 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,6 +64,28 @@ class UsuarioControllerIntegracionTest {
         Integer id = JsonPath.read(resultado.getResponse().getContentAsString(), "$.id");
 
         assertTrue(resultado.getResponse().getHeader(HttpHeaders.LOCATION).endsWith("/api/usuarios/" + id));
+    }
+
+    @Test
+    @DisplayName("El administrador crea un usuario de 17 años: 400 sobre fechaNacimiento; con 18 cumplidos hoy, 201")
+    void crearUsuarioExigeLaEdadMinima() throws Exception {
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Bogota"));
+        int menor = SECUENCIA.incrementAndGet();
+        mvc.perform(como(MockMvcRequestBuilders.post("/api/usuarios"), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(usuario(correo(menor), documento(menor), "RECEPCIONISTA")
+                                .replace("1990-04-10", hoy.minusYears(17).toString())))
+                .andExpect(CuerpoError.validacion("/api/usuarios",
+                        Map.of("fechaNacimiento", "Debes tener al menos 18 años para crear una cuenta")));
+        assertTrue(usuarios.findByCorreo(correo(menor)).isEmpty());
+
+        int mayor = SECUENCIA.incrementAndGet();
+        mvc.perform(como(MockMvcRequestBuilders.post("/api/usuarios"), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(usuario(correo(mayor), documento(mayor), "HUESPED")
+                                .replace("1990-04-10", hoy.minusYears(18).toString())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fechaNacimiento").value(hoy.minusYears(18).toString()));
     }
 
     @Test
@@ -176,6 +202,31 @@ class UsuarioControllerIntegracionTest {
 
         login(correo(n), "Nueva2027").andExpect(status().isOk());
         login(correo(n), CONTRASENA).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Cuerpos de error de /api/usuarios: 400 con errores por campo, 401, 403, 404 y 409")
+    void cuerposDeErrorDeUsuarios() throws Exception {
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/1/rol"), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"rol\":\"JEFE\"}"))
+                .andExpect(CuerpoError.validacion("/api/usuarios/1/rol",
+                        Map.of("rol", "El rol debe ser HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO")));
+
+        mvc.perform(MockMvcRequestBuilders.get("/api/usuarios"))
+                .andExpect(CuerpoError.error(HttpStatus.UNAUTHORIZED, CuerpoError.MENSAJE_401, "/api/usuarios"));
+
+        mvc.perform(como(MockMvcRequestBuilders.get("/api/usuarios"), "HUESPED", CORREO_HUESPED_1))
+                .andExpect(CuerpoError.error(HttpStatus.FORBIDDEN, CuerpoError.MENSAJE_403, "/api/usuarios"));
+
+        mvc.perform(como(MockMvcRequestBuilders.get("/api/usuarios/999999"), "ADMINISTRADOR", CORREO_ADMIN))
+                .andExpect(CuerpoError.error(HttpStatus.NOT_FOUND, "No existe un usuario con id 999999",
+                        "/api/usuarios/999999"));
+
+        mvc.perform(como(MockMvcRequestBuilders.post("/api/usuarios"), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(usuario(CORREO_ADMIN, documento(SECUENCIA.incrementAndGet()), "RECEPCIONISTA")))
+                .andExpect(CuerpoError.error(HttpStatus.CONFLICT,
+                        "Ya existe un usuario registrado con ese correo o documento", "/api/usuarios"));
     }
 
     private ResultActions cambiarContrasena(String correo, String actual, String nueva) throws Exception {

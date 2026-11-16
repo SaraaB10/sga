@@ -14,7 +14,17 @@ info:
     Todos los errores responden con el esquema `ErrorResponse`.
 
     Autenticación: `POST /api/auth/login` devuelve un JWT que se envía en `Authorization: Bearer <token>`.
-    Todas las operaciones lo exigen salvo `/api/auth/login` y `/api/auth/registro` (`security: []`).
+    Todas las operaciones lo exigen salvo `/api/auth/login`, `/api/auth/registro`,
+    `/api/auth/recuperacion/solicitar`, `/api/auth/recuperacion/restablecer` y las consultas públicas del
+    visitante (`security: []`): `GET /api/apartamentos`, `GET /api/apartamentos/disponibles`,
+    `GET /api/apartamentos/{id}`, `GET /api/apartamentos/{id}/disponibilidad`, `GET /api/alojamiento`, `GET /api/politica-cancelacion`, `GET /api/temporadas`,
+    `GET /api/temporadas/{id}` y `POST /api/cotizaciones`.
+
+    Canal externo (10.3.1): las tres operaciones `/api/canales/{canal}/disponibilidad`, `/api/canales/{canal}/reservas`
+    y `/api/canales/{canal}/reservas/{identificadorExterno}/cancelar` no usan el JWT. El canal se autentica con su
+    propia credencial en el encabezado `X-Canal-Credencial` (`credencialCanal`): sin ella o con una que no es la de
+    ese canal responde `401`, y si el canal está inactivo `403`, siempre con `ErrorResponse`. Cada intento rechazado
+    queda en la bitácora (7.8). El administrador crea los canales y recibe la credencial una sola vez.
   version: 1.0.0
 
 servers:
@@ -33,11 +43,15 @@ tags:
   - name: Folio
     description: 'Cuenta de la reserva: cargos, pagos, saldo y cierre'
   - name: Canal externo
-    description: Integración con plataformas de terceros (CU-08)
+    description: Integración con plataformas de terceros (CU-08), autenticada con la credencial del canal
+  - name: Canales de venta
+    description: Canales externos, su credencial, conflictos (RN-18) y bitácora (7.8). Solo ADMINISTRADOR
   - name: Autenticación
-    description: Inicio de sesión, registro público y emisión del JWT (Guía 12)
+    description: Inicio de sesión, registro público, recuperación de contraseña y emisión del JWT (Guía 12, 7.2)
   - name: Usuarios
     description: Usuarios y roles internos, perfil propio y cambio de contraseña (Guía 12, 7.2)
+  - name: Reportes
+    description: Ocupación, ingresos y reservas por canal de un periodo (7.9)
 
 # Todas las operaciones exigen el JWT, salvo las que declaran security: []
 security:
@@ -418,6 +432,7 @@ paths:
         Los retirados de la venta (eliminación lógica) no aparecen. Solo consulta.
         Mapea a `ConsultarApartamentosUseCase.listar`.
       operationId: listarApartamentos
+      security: []
       parameters:
         - $ref: '#/components/parameters/PaginaApartamentos'
       responses:
@@ -429,14 +444,6 @@ paths:
                 $ref: '#/components/schemas/PaginaApartamentoResponse'
         '400':
           $ref: '#/components/responses/DatosInvalidos'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
     # CU-22 (agregado): registrar un apartamento
     post:
@@ -501,13 +508,13 @@ paths:
         - **precioMinimo / precioMaximo** se comparan con ese valor estimado, no con la tarifa de una noche.
         - **caracteristica** busca un texto dentro de la dotación del apartamento, sin distinguir mayúsculas
           ni tildes (por ejemplo `hidromasaje`).
-        - **Sin filtro de servicios:** los servicios de 7.5 son del alojamiento (servicios adicionales como
-          la recepción nocturna o el paseo por la bahía) y se ofrecen igual en todos los apartamentos, así que
-          no sirven para distinguir uno de otro. Lo que distingue a un apartamento es su dotación, que se filtra
-          con `caracteristica`.
+        - **servicios** acepta varios valores (`servicios=hidromasaje&servicios=mar` o `servicios=hidromasaje,mar`)
+          y los aplica juntos: el apartamento debe ofrecerlos todos. Cada uno se busca en la dotación y en la
+          descripción del apartamento, sin distinguir mayúsculas ni tildes.
         - Un apartamento FUERA_DE_SERVICIO no sale de la búsqueda por su estado (3.3); sale cuando tiene un
           bloqueo en esas noches (RN-07).
       operationId: buscarApartamentosDisponibles
+      security: []
       parameters:
         - { name: entrada, in: query, required: true, schema: { type: string, format: date }, example: '2026-11-20' }
         - { name: salida, in: query, required: true, schema: { type: string, format: date }, example: '2026-11-22' }
@@ -538,6 +545,16 @@ paths:
           description: Texto que debe aparecer en algún elemento de la dotación
           schema: { type: string }
           example: hidromasaje
+        - name: servicios
+          in: query
+          required: false
+          description: |
+            Servicios que el apartamento debe ofrecer todos, según su dotación y sus características. Se repite
+            el parámetro o se separan por coma
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string } }
+          example: [ 'hidromasaje', 'mar' ]
         - $ref: '#/components/parameters/PaginaApartamentos'
       responses:
         '200':
@@ -548,14 +565,6 @@ paths:
                 $ref: '#/components/schemas/PaginaApartamentoDisponibleResponse'
         '400':
           $ref: '#/components/responses/DatosInvalidos'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: |
             Las fechas no forman una estancia válida (RN-03, RN-04, RP-01) o los filtros son inconsistentes
@@ -607,6 +616,7 @@ paths:
         bloqueos vigentes (7.3). Un apartamento retirado de la venta responde 404.
         Mapea a `ConsultarApartamentosUseCase.detalle`.
       operationId: consultarApartamento
+      security: []
       responses:
         '200':
           description: Detalle del apartamento
@@ -614,14 +624,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApartamentoDetalleResponse'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NoEncontrado'
 
@@ -666,6 +668,47 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Capacidad menor que 1 (RN-02), dormitorios menores que 1 o dotación vacía (L-06)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/apartamentos/{id}/disponibilidad:
+    parameters:
+      - $ref: '#/components/parameters/IdApartamento'
+    get:
+      tags: [Apartamentos]
+      summary: Calendario público de disponibilidad de un apartamento
+      description: |
+        Por cada noche entre `desde` (incluida) y `hasta` (excluida) dice si está libre para reservar. Lo calcula
+        `DisponibilidadApartamentoService.disponibilidadPorNoche` con las mismas reglas de la búsqueda: apartamento
+        activo, sin bloqueos (RN-07) ni reservas activas (RN-01) y con el tiempo de preparación (RN-20). Las noches
+        anteriores a hoy no están libres (RN-04). No incluye datos de las reservas ni de los bloqueos. Máximo 62
+        noches por consulta. Un apartamento retirado de la venta responde 404.
+        Mapea a `ConsultarDisponibilidadApartamentoUseCase`.
+      operationId: consultarDisponibilidadApartamento
+      security: []
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date }, example: '2026-12-01' }
+        - name: hasta
+          in: query
+          required: true
+          description: Primera noche que ya no se incluye
+          schema: { type: string, format: date }
+          example: '2027-01-01'
+      responses:
+        '200':
+          description: Disponibilidad noche por noche
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisponibilidadApartamentoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: '`desde` no es anterior a `hasta` o el rango supera 62 noches'
           content:
             application/json:
               schema:
@@ -1039,6 +1082,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/apartamentos/novedades/sugerir-gravedad:
+    post:
+      tags: [Apartamentos]
+      summary: Sugerir la gravedad de una novedad con IA (10.2)
+      description: |
+        El modelo de IA configurado en `sga.ia.proveedor` sugiere BAJA, MEDIA o ALTA con una explicación corta a
+        partir de la descripción: `gemini` (API de Google AI Studio, tiempo de espera de 4 s), `local` (reglas por
+        palabras clave, el de por defecto) o `deshabilitado` (nunca sugiere).
+
+        No es bloqueante: si el modelo falla, tarda, devuelve algo inválido o está apagado, responde `200` con
+        `disponible: false` y lo registra en el log. Solo sugiere: no guarda nada y la gravedad final la elige la
+        persona al registrar la novedad (CU-17). Mapea a `SugerirGravedadNovedadUseCase` y al puerto
+        `SugeridorGravedad`.
+      operationId: sugerirGravedadNovedad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SugerirGravedadRequest'
+            example:
+              descripcion: Huele a gas en la cocina
+      responses:
+        '200':
+          description: Sugerencia, o `disponible = false` si no hay ninguna
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SugerenciaGravedadResponse'
+              examples:
+                disponible:
+                  summary: Con sugerencia
+                  value:
+                    disponible: true
+                    gravedad: ALTA
+                    explicacion: Menciona "gas", un posible riesgo para las personas o el apartamento
+                noDisponible:
+                  summary: Sin sugerencia (IA apagada, caída o lenta)
+                  value:
+                    disponible: false
+                    gravedad: null
+                    explicacion: null
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Roles: PERSONAL_SERVICIO o ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   # ==================== COTIZACIONES ====================
 
   /api/cotizaciones:
@@ -1048,7 +1144,13 @@ paths:
       description: |
         Calcula noche a noche con la tarifa de cada temporada (RN-05, RP-01) y solo cobra a los ocupantes
         desde 6 años (RN-06). No crea la reserva. Mapea a `CotizarEstanciaUseCase`.
+
+        El grupo debe incluir al menos un ocupante facturable (el titular siempre lo es): un grupo solo de
+        menores responde **400** con el mensaje "El grupo debe incluir al menos un adulto que pague noche; el
+        titular siempre es facturable". La misma regla aplica a la búsqueda de disponibles con
+        `fechasNacimiento` y a la creación y modificación de reservas.
       operationId: cotizarEstancia
+      security: []
       requestBody:
         required: true
         content:
@@ -1073,14 +1175,6 @@ paths:
                 $ref: '#/components/schemas/CotizacionResponse'
         '400':
           $ref: '#/components/responses/DatosInvalidos'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NoEncontrado'
         '409':
@@ -1245,6 +1339,8 @@ paths:
         Apartamentos libres para la estancia y el grupo, con las mismas reglas que CU-01, 10 por página
         (12.4). La consulta queda en la bitácora (7.8). Mapea a `RecibirReservaExternaUseCase.consultarDisponibilidad`.
       operationId: consultarDisponibilidadCanal
+      security:
+        - credencialCanal: []
       parameters:
         - { name: entrada, in: query, required: true, schema: { type: string, format: date }, example: '2026-11-20' }
         - { name: salida, in: query, required: true, schema: { type: string, format: date }, example: '2026-11-22' }
@@ -1260,13 +1356,9 @@ paths:
         '400':
           $ref: '#/components/responses/DatosInvalidos'
         '401':
-          $ref: '#/components/responses/NoAutenticado'
+          $ref: '#/components/responses/CredencialCanalInvalida'
         '403':
-          description: 'Sin permiso. Solo ADMINISTRADOR'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/CanalInactivo'
         '409':
           $ref: '#/components/responses/ReglaDeNegocio'
 
@@ -1278,10 +1370,13 @@ paths:
       summary: Recibir una reserva del canal (CU-08)
       description: |
         Si las noches están libres crea la reserva PENDIENTE con su folio (incluye CU-03). Si ya están
-        vendidas o bloqueadas responde RECHAZADO_CONFLICTO (RN-18); si el identificador externo ya llegó,
-        DUPLICADO_IGNORADO (RN-19). Todo mensaje queda en la bitácora (7.8), también los rechazados.
+        vendidas o bloqueadas responde RECHAZADO_CONFLICTO (RN-18); si ese mismo canal ya envió el identificador
+        externo, DUPLICADO_IGNORADO (RN-19). El mismo identificador desde otro canal es otra reserva. Todo mensaje
+        queda en la bitácora (7.8), también los rechazados.
         Mapea a `RecibirReservaExternaUseCase.ejecutar`.
       operationId: recibirReservaExterna
+      security:
+        - credencialCanal: []
       requestBody:
         required: true
         content:
@@ -1320,13 +1415,9 @@ paths:
         '400':
           $ref: '#/components/responses/DatosInvalidos'
         '401':
-          $ref: '#/components/responses/NoAutenticado'
+          $ref: '#/components/responses/CredencialCanalInvalida'
         '403':
-          description: 'Sin permiso. Solo ADMINISTRADOR'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/CanalInactivo'
         '409':
           description: RECHAZADO_CONFLICTO, las noches ya están vendidas o bloqueadas (RN-18)
           content:
@@ -1355,9 +1446,11 @@ paths:
       tags: [ Canal externo ]
       summary: Cancelar una reserva del canal (CU-08)
       description: |
-        Cancela la reserva que el mismo canal creó con ese identificador; una cancelación repetida responde
-        DUPLICADO_IGNORADO (RN-19). Mapea a `RecibirReservaExternaUseCase.cancelar`.
+        Cancela la reserva que el mismo canal creó con ese identificador (un canal no cancela las de otro); una
+        cancelación repetida responde DUPLICADO_IGNORADO (RN-19). Mapea a `RecibirReservaExternaUseCase.cancelar`.
       operationId: cancelarReservaExterna
+      security:
+        - credencialCanal: []
       responses:
         '200':
           description: ACEPTADO o DUPLICADO_IGNORADO (RN-19)
@@ -1366,6 +1459,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/EventoCanalResponse'
         '401':
+          $ref: '#/components/responses/CredencialCanalInvalida'
+        '403':
+          $ref: '#/components/responses/CanalInactivo'
+        '422':
+          description: RECHAZADO_INVALIDO, no hay una reserva del canal con ese identificador o ya no se puede cancelar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoCanalResponse'
+
+  # ==================== CANALES DE VENTA: ADMINISTRACIÓN (10.3.1, 7.8) ====================
+
+  /api/canales:
+    post:
+      tags: [ Canales de venta ]
+      summary: Crear un canal de venta
+      description: |
+        Registra una plataforma externa (tipo EXTERNO, activa) y genera su credencial al azar (256 bits). La
+        credencial en claro solo viene en esta respuesta: el SGA guarda su hash BCrypt y no la puede volver a
+        mostrar. El nombre es único y va en la ruta de las operaciones del canal. Mapea a `CanalesVentaUseCase.crear`.
+      operationId: crearCanalVenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearCanalVentaRequest'
+            example:
+              nombre: expedia
+      responses:
+        '201':
+          description: Canal creado, con la credencial en claro una sola vez
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredencialCanalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
           $ref: '#/components/responses/NoAutenticado'
         '403':
           description: 'Sin permiso. Solo ADMINISTRADOR'
@@ -1373,12 +1505,223 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '422':
-          description: RECHAZADO_INVALIDO, no hay una reserva del canal con ese identificador o ya no se puede cancelar
+        '409':
+          description: Ya existe un canal con ese nombre, o el nombre está reservado (conflictos, eventos)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EventoCanalResponse'
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags: [ Canales de venta ]
+      summary: Listar canales de venta
+      description: |
+        Activos e inactivos, ordenados por nombre, 10 por página (12.4). Nunca trae la credencial ni su hash.
+        Mapea a `CanalesVentaUseCase.listar`.
+      operationId: listarCanalesVenta
+      parameters:
+        - $ref: '#/components/parameters/PaginaApartamentos'
+      responses:
+        '200':
+          description: Página de canales (el contenido puede venir vacío)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaCanalVentaResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/canales/{nombre}/regenerar-credencial:
+    parameters:
+      - $ref: '#/components/parameters/NombreCanal'
+    put:
+      tags: [ Canales de venta ]
+      summary: Regenerar la credencial de un canal
+      description: |
+        Emite una credencial nueva; la anterior responde 401 desde ese momento. La nueva solo viene en esta
+        respuesta. Un canal inactivo no recibe credencial nueva. Mapea a `CanalesVentaUseCase.regenerarCredencial`.
+      operationId: regenerarCredencialCanal
+      responses:
+        '200':
+          description: Credencial nueva en claro, una sola vez
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredencialCanalResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: El canal está inactivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/canales/{nombre}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/NombreCanal'
+    put:
+      tags: [ Canales de venta ]
+      summary: Desactivar un canal
+      description: |
+        Eliminación lógica: el canal, sus reservas, sus conflictos y su bitácora se conservan, pero sus peticiones
+        responden 403 desde ese momento. No hay DELETE. Mapea a `CanalesVentaUseCase.desactivar`.
+      operationId: desactivarCanal
+      responses:
+        '200':
+          description: Canal desactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanalVentaResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: El canal ya estaba inactivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/canales/conflictos:
+    get:
+      tags: [ Canales de venta ]
+      summary: Listar conflictos de canal (RN-18)
+      description: |
+        Reservas externas rechazadas por chocar con una reserva vigente, de la más reciente a la más antigua,
+        10 por página (12.4). Sin estado trae todos. Mapea a `ConflictosCanalUseCase.listar`.
+      operationId: listarConflictosCanal
+      parameters:
+        - { name: estado, in: query, required: false, schema: { $ref: '#/components/schemas/EstadoConflictoCanal' } }
+        - $ref: '#/components/parameters/PaginaApartamentos'
+      responses:
+        '200':
+          description: Página de conflictos (el contenido puede venir vacío)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaConflictoCanalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/canales/conflictos/{id}/resolver:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Id del conflicto
+        schema:
+          type: string
+          example: CNF-3f0c2a9e-6d1b-4c3e-9a51-0b7c2d4e8f10
+    put:
+      tags: [ Canales de venta ]
+      summary: Resolver un conflicto de canal (RN-18)
+      description: |
+        Marca el conflicto como RESUELTO con el motivo, el administrador del token (sub) y la fecha. Un conflicto
+        se resuelve una sola vez y nunca se toca la reserva vigente. Mapea a `ConflictosCanalUseCase.resolver`.
+      operationId: resolverConflictoCanal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolverConflictoCanalRequest'
+            example:
+              motivo: Se avisó al canal; el huésped eligió otras fechas
+      responses:
+        '200':
+          description: Conflicto resuelto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictoCanalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: El conflicto ya estaba resuelto (RN-18)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/canales/eventos:
+    get:
+      tags: [ Canales de venta ]
+      summary: Consultar la bitácora de los canales (7.8)
+      description: |
+        Todos los mensajes de los canales: aceptados, duplicados, rechazados y los intentos sin credencial válida o
+        de un canal inactivo. Del más reciente al más antiguo, 10 por página (12.4). Filtros opcionales por canal
+        (sin distinguir mayúsculas) y por fechas (incluidas). Mapea a `BitacoraCanalUseCase.listar`.
+      operationId: listarBitacoraCanales
+      parameters:
+        - { name: canal, in: query, required: false, schema: { type: string }, example: booking }
+        - { name: desde, in: query, required: false, schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: false, schema: { type: string, format: date } }
+        - $ref: '#/components/parameters/PaginaApartamentos'
+      responses:
+        '200':
+          description: Página de eventos (el contenido puede venir vacío)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaEventoBitacoraResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: La fecha desde es posterior a la fecha hasta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # ==================== CU-22 a CU-25: ADMINISTRACIÓN Y TARIFAS (7.3, 7.4) ====================
   # POST /api/apartamentos (CU-22) y PUT /api/apartamentos/{id} (CU-23) están en sus rutas de arriba.
@@ -1619,6 +1962,7 @@ paths:
         de la sección 6. Los parámetros son de solo lectura: se configuran en application.properties
         (`sga.alojamiento.*`) y no se cambian por API. Mapea a `ConfiguracionAlojamientoUseCase.consultar`.
       operationId: consultarAlojamiento
+      security: []
       responses:
         '200':
           description: El alojamiento
@@ -1626,14 +1970,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlojamientoResponse'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags: [Configuración del alojamiento]
       summary: Actualizar los datos del alojamiento (CU-28)
@@ -1673,6 +2009,180 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/alojamiento/servicios:
+    post:
+      tags: [Configuración del alojamiento]
+      summary: Crear un servicio adicional
+      description: |
+        Registra un servicio activo del alojamiento (L-17) con `GestionServiciosAdicionalesService.registrar`. El id
+        admite letras, números y guiones y se guarda en mayúsculas; no puede repetirse. Un servicio que genera
+        cargo exige un valor mayor que cero; uno sin cargo queda en 0. Mapea a `ServiciosAdicionalesUseCase.registrar`.
+      operationId: crearServicioAdicional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrarServicioAdicionalRequest'
+      responses:
+        '201':
+          description: Servicio creado
+          headers:
+            Location:
+              description: URL del servicio creado (/api/alojamiento/servicios/{id})
+              schema: { type: string, format: uri }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicioAdicionalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: El id ya existe o tiene un formato inválido, o un servicio con cargo llega sin valor mayor que cero
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/alojamiento/servicios/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdServicioAdicional'
+    get:
+      tags: [Configuración del alojamiento]
+      summary: Consultar un servicio adicional
+      description: Es el recurso del `Location` de la creación. Mapea a `ServiciosAdicionalesUseCase.consultar`.
+      operationId: consultarServicioAdicional
+      responses:
+        '200':
+          description: El servicio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicioAdicionalResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+    put:
+      tags: [Configuración del alojamiento]
+      summary: Editar un servicio adicional
+      description: |
+        Reemplaza nombre, descripción, si genera cargo y valor. Los cargos ya asentados en los folios no cambian
+        (RN-16). RP-03: el servicio de recepción nocturna (`sga.alojamiento.id-servicio-recepcion-nocturna`) debe
+        seguir generando cargo. Mapea a `ServiciosAdicionalesUseCase.actualizar`.
+      operationId: actualizarServicioAdicional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarServicioAdicionalRequest'
+      responses:
+        '200':
+          description: Servicio actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicioAdicionalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: Un servicio con cargo llega sin valor mayor que cero, o se deja sin cargo la recepción nocturna (RP-03)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/alojamiento/servicios/{id}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdServicioAdicional'
+    put:
+      tags: [Configuración del alojamiento]
+      summary: Desactivar un servicio adicional
+      description: |
+        Eliminación lógica: el servicio deja de ofrecerse y de poder cargarse al folio; los cargos que ya generó se
+        conservan. RP-03: la recepción nocturna no se desactiva. Mapea a `ServiciosAdicionalesUseCase.desactivar`.
+      operationId: desactivarServicioAdicional
+      responses:
+        '200':
+          description: Servicio desactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicioAdicionalResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: Ya estaba desactivado o es la recepción nocturna (RP-03)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/alojamiento/servicios/{id}/activar:
+    parameters:
+      - $ref: '#/components/parameters/IdServicioAdicional'
+    put:
+      tags: [Configuración del alojamiento]
+      summary: Volver a activar un servicio adicional
+      description: Mapea a `ServiciosAdicionalesUseCase.activar`.
+      operationId: activarServicioAdicional
+      responses:
+        '200':
+          description: Servicio activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicioAdicionalResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: Ya estaba activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/temporadas:
     get:
       tags: [Configuración del alojamiento]
@@ -1682,6 +2192,7 @@ paths:
         en que se registraron, 10 por página (12.4). La base no tiene rangos: cubre las fechas que no son de
         otra temporada (F-05). Mapea a `TemporadasUseCase.listar`.
       operationId: listarTemporadas
+      security: []
       parameters:
         - $ref: '#/components/parameters/PaginaApartamentos'
       responses:
@@ -1693,14 +2204,6 @@ paths:
                 $ref: '#/components/schemas/PaginaTemporadaResponse'
         '400':
           $ref: '#/components/responses/DatosInvalidos'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Configuración del alojamiento]
       summary: Crear una temporada con las tarifas de los apartamentos activos (CU-29)
@@ -1759,6 +2262,7 @@ paths:
         La temporada con sus rangos de fechas (fecha final excluida). Es el recurso al que apunta la cabecera
         Location al crearla o al agregarle un rango. Mapea a `TemporadasUseCase.consultar`.
       operationId: consultarTemporada
+      security: []
       responses:
         '200':
           description: La temporada
@@ -1766,14 +2270,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TemporadaResponse'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NoEncontrado'
 
@@ -1833,6 +2329,7 @@ paths:
         (RN-22). Al arrancar, si no hay ninguna, se guarda la versión 1 con `sga.politica-cancelacion.*`.
         Mapea a `PoliticaCancelacionUseCase.vigente`.
       operationId: consultarPoliticaCancelacionVigente
+      security: []
       responses:
         '200':
           description: La versión vigente
@@ -1840,14 +2337,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PoliticaCancelacionResponse'
-        '401':
-          $ref: '#/components/responses/NoAutenticado'
-        '403':
-          description: 'Sin permiso. Roles: HUESPED, RECEPCIONISTA, ADMINISTRADOR o PERSONAL_SERVICIO'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
     put:
       tags: [Configuración del alojamiento]
       summary: Actualizar la política de cancelación (CU-30)
@@ -2086,6 +2575,67 @@ paths:
           $ref: '#/components/responses/DatosInvalidos'
         '409':
           description: El correo o el documento ya están registrados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/recuperacion/solicitar:
+    post:
+      tags: [Autenticación]
+      summary: Pedir un código para restablecer la contraseña
+      description: |
+        7.2. Si el correo es de una cuenta activa, genera un código de 6 dígitos, lo guarda cifrado y lo envía por
+        el puerto de notificaciones (con `sga.notificaciones.proveedor=local` queda en el log). El código vence a los
+        `sga.recuperacion.vigencia` (15 minutos), sirve una sola vez y se anula tras
+        `sga.recuperacion.intentos-maximos` (5) intentos fallidos. Pedir otro anula el anterior.
+
+        Responde **202 exista o no la cuenta**, para no revelar qué correos están registrados. El correo sale
+        después de responder: si falla, se registra en el log y la respuesta no cambia.
+      operationId: solicitarRecuperacionContrasena
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitarRecuperacionRequest'
+            example:
+              correo: huesped1@sga.local
+      responses:
+        '202':
+          description: Solicitud recibida (no dice si el correo existe)
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /api/auth/recuperacion/restablecer:
+    post:
+      tags: [Autenticación]
+      summary: Restablecer la contraseña con el código
+      description: |
+        7.2. Cambia la contraseña si el código coincide, no ha vencido y no se ha usado. La contraseña nueva sigue la
+        regla del registro (8 a 72 caracteres, al menos una mayúscula y un número). Si el código no sirve (incorrecto,
+        vencido, usado, sin intentos o el correo no tiene cuenta activa) responde 400 con el mismo mensaje en todos los
+        casos.
+      operationId: restablecerContrasena
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestablecerContrasenaRequest'
+            example:
+              correo: huesped1@sga.local
+              codigo: '048213'
+              nuevaContrasena: Huesped2027
+      responses:
+        '204':
+          description: Contraseña restablecida; ya se puede iniciar sesión con la nueva
+        '400':
+          description: |
+            Datos inválidos (con `errores` por campo) o el código no sirve
+            (mensaje "El código no es válido o ya venció. Solicita uno nuevo.")
           content:
             application/json:
               schema:
@@ -2335,6 +2885,109 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # ==================== REPORTES (administrador, 7.9) ====================
+
+  /api/reportes/ocupacion:
+    get:
+      tags: [Reportes]
+      summary: Reporte de ocupación (7.9)
+      description: |
+        Noches vendidas en el periodo y porcentaje = noches vendidas / (apartamentos activos × noches del periodo),
+        con el detalle por apartamento. desde y hasta van incluidas: cada fecha es una noche.
+
+        Una noche está vendida si pertenece a una reserva CONFIRMADA, EN_CURSO o FINALIZADA; de una estancia que
+        empieza antes o termina después del periodo solo cuentan las noches de adentro. Los apartamentos activos
+        son los que hoy están a la venta; uno retirado que vendió noches sale en el detalle con `activo: false`.
+        Mapea a `ConsultarReportesUseCase.ocupacion` y `ReportesService`.
+      operationId: reporteOcupacion
+      parameters:
+        - $ref: '#/components/parameters/DesdeReporte'
+        - $ref: '#/components/parameters/HastaReporte'
+      responses:
+        '200':
+          description: Reporte de ocupación del periodo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteOcupacionResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/PeriodoInvertido'
+
+  /api/reportes/ingresos:
+    get:
+      tags: [Reportes]
+      summary: Reporte de ingresos (7.9)
+      description: |
+        Suma de los pagos registrados en los folios con fecha entre desde y hasta (incluidas), por medio de pago.
+        Los cargos no cuentan: son lo que se cobra, no lo que entró. Trae una fila por cada medio de pago, aunque
+        esté en cero. Mapea a `ConsultarReportesUseCase.ingresos` y `ReportesService`; los folios se leen con
+        `FolioRepository.listarConPagosEntre`.
+      operationId: reporteIngresos
+      parameters:
+        - $ref: '#/components/parameters/DesdeReporte'
+        - $ref: '#/components/parameters/HastaReporte'
+      responses:
+        '200':
+          description: Reporte de ingresos del periodo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteIngresosResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/PeriodoInvertido'
+
+  /api/reportes/reservas-por-canal:
+    get:
+      tags: [Reportes]
+      summary: Reporte de reservas por canal (7.9)
+      description: |
+        Reservas con fecha de entrada entre desde y hasta (incluidas) por canal de origen, en cualquier estado:
+        incluye las canceladas y los no-show. Trae una fila por cada canal (PORTAL, DIRECTO, EXTERNO), aunque
+        esté en cero. Mapea a `ConsultarReportesUseCase.reservasPorCanal` y `ReportesService`.
+      operationId: reporteReservasPorCanal
+      parameters:
+        - $ref: '#/components/parameters/DesdeReporte'
+        - $ref: '#/components/parameters/HastaReporte'
+      responses:
+        '200':
+          description: Reporte de reservas por canal del periodo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteReservasPorCanalResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          $ref: '#/components/responses/PeriodoInvertido'
+
 components:
 
   securitySchemes:
@@ -2343,6 +2996,13 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Token de POST /api/auth/login. Firmado con HS256, emisor sga, vence en 30 minutos.
+    credencialCanal:
+      type: apiKey
+      in: header
+      name: X-Canal-Credencial
+      description: |
+        Credencial del canal externo (10.3.1). La devuelven POST /api/canales y PUT
+        /api/canales/{nombre}/regenerar-credencial una sola vez; debe ser la del canal de la ruta.
 
   parameters:
     CodigoReserva:
@@ -2362,6 +3022,14 @@ components:
       schema:
         type: string
         example: APT-101
+    IdServicioAdicional:
+      name: id
+      in: path
+      required: true
+      description: Id del servicio adicional
+      schema:
+        type: string
+        example: SRV-PASEO-BAHIA
     PaginaApartamentos:
       name: pagina
       in: query
@@ -2385,6 +3053,29 @@ components:
       schema:
         type: string
         example: booking
+    NombreCanal:
+      name: nombre
+      in: path
+      required: true
+      description: Nombre del canal de venta
+      schema:
+        type: string
+        pattern: '^[a-z0-9][a-z0-9-]{1,39}$'
+        example: booking
+    DesdeReporte:
+      name: desde
+      in: query
+      required: true
+      description: Primer día del periodo (incluido)
+      schema: { type: string, format: date }
+      example: '2026-11-01'
+    HastaReporte:
+      name: hasta
+      in: query
+      required: true
+      description: Último día del periodo (incluido); no puede ser anterior a desde
+      schema: { type: string, format: date }
+      example: '2026-11-30'
 
   responses:
     DatosInvalidos:
@@ -2405,6 +3096,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    PeriodoInvertido:
+      description: La fecha desde es posterior a la fecha hasta (7.9)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: '2026-11-08T14:00:00Z'
+            status: 409
+            error: Conflict
+            mensaje: '7.9: la fecha desde (2026-11-30) no puede ser posterior a la fecha hasta (2026-11-01)'
+            path: /api/reportes/ocupacion
 
     NoAutenticado:
       description: Sin token, token mal firmado o vencido. Trae el encabezado WWW-Authenticate Bearer
@@ -2422,6 +3125,36 @@ components:
             error: Unauthorized
             mensaje: Debe iniciar sesión o el token no es válido
             path: /api/reservas
+
+    CredencialCanalInvalida:
+      description: |
+        Sin credencial del canal (encabezado X-Canal-Credencial), credencial incorrecta, de otro canal o canal que no
+        existe. El intento queda en la bitácora como RECHAZADO_CREDENCIAL (7.8)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: '2026-11-12T14:00:00Z'
+            status: 401
+            error: Unauthorized
+            mensaje: Falta la credencial del canal en el encabezado X-Canal-Credencial
+            path: /api/canales/booking/reservas
+
+    CanalInactivo:
+      description: |
+        La credencial es la del canal, pero el administrador lo desactivó. El intento queda en la bitácora como
+        RECHAZADO_CANAL_INACTIVO (7.8)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            timestamp: '2026-11-12T14:00:00Z'
+            status: 403
+            error: Forbidden
+            mensaje: El canal booking está inactivo
+            path: /api/canales/booking/disponibilidad
 
   schemas:
     # ---------- Apartamentos y operación ----------
@@ -2595,6 +3328,23 @@ components:
         descripcion: { type: string }
         gravedad: { $ref: '#/components/schemas/GravedadNovedad' }
         fechaAtencion: { type: string, format: date, nullable: true }
+
+    SugerirGravedadRequest:
+      type: object
+      required: [ descripcion ]
+      properties:
+        descripcion: { type: string, maxLength: 1000, example: Huele a gas en la cocina }
+
+    SugerenciaGravedadResponse:
+      type: object
+      description: Sugerencia de la IA (10.2). Si disponible es false, gravedad y explicacion vienen en null
+      properties:
+        disponible: { type: boolean }
+        gravedad:
+          oneOf:
+            - $ref: '#/components/schemas/GravedadNovedad'
+            - type: 'null'
+        explicacion: { type: [ string, 'null' ], maxLength: 200 }
 
     ErrorResponse:
       type: object
@@ -2775,7 +3525,15 @@ components:
 
     ResultadoEventoCanal:
       type: string
-      enum: [ ACEPTADO, RECHAZADO_CONFLICTO, RECHAZADO_INVALIDO, DUPLICADO_IGNORADO ]
+      description: |
+        RECHAZADO_CREDENCIAL y RECHAZADO_CANAL_INACTIVO solo aparecen en la bitácora: son los intentos que no se
+        autenticaron (10.3.1); al canal se le responde 401 o 403 con ErrorResponse.
+      enum: [ ACEPTADO, RECHAZADO_CONFLICTO, RECHAZADO_INVALIDO, DUPLICADO_IGNORADO, RECHAZADO_CREDENCIAL,
+              RECHAZADO_CANAL_INACTIVO ]
+
+    EstadoConflictoCanal:
+      type: string
+      enum: [ PENDIENTE, RESUELTO ]
 
     RegistrarPagoRequest:
       type: object
@@ -2847,6 +3605,108 @@ components:
         identificadorExterno: { type: string }
         tipoEvento: { $ref: '#/components/schemas/TipoEventoCanal' }
         resultado: { $ref: '#/components/schemas/ResultadoEventoCanal' }
+
+    # ---------- Canales de venta (10.3.1, 7.8) ----------
+
+    CrearCanalVentaRequest:
+      type: object
+      required: [ nombre ]
+      properties:
+        nombre:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{1,39}$'
+          description: Minúsculas, números y guiones; no puede ser conflictos ni eventos
+          example: expedia
+
+    ResolverConflictoCanalRequest:
+      type: object
+      required: [ motivo ]
+      properties:
+        motivo: { type: string, maxLength: 1000 }
+
+    CanalVentaResponse:
+      type: object
+      description: Nunca incluye la credencial ni su hash
+      properties:
+        nombre: { type: string, example: booking }
+        tipo: { type: string, enum: [ EXTERNO ] }
+        activo: { type: boolean }
+        fechaCreacion: { type: string, format: date-time, example: '2026-11-12T10:30:00' }
+
+    CredencialCanalResponse:
+      type: object
+      description: Solo al crear el canal o regenerar su credencial. La credencial no se vuelve a mostrar
+      properties:
+        nombre: { type: string, example: expedia }
+        tipo: { type: string, enum: [ EXTERNO ] }
+        activo: { type: boolean }
+        fechaCreacion: { type: string, format: date-time }
+        credencial:
+          type: string
+          description: Valor del encabezado X-Canal-Credencial (43 caracteres, Base64 para URL)
+          example: q3Vb1tZ8yN0cXv2mJ5rL7aK9sD4fG6hW1eR3tY5uI8o
+
+    ConflictoCanalResponse:
+      type: object
+      properties:
+        id: { type: string }
+        canal: { type: string, example: booking }
+        identificadorExterno: { type: string, example: BK-889202 }
+        detalle: { type: string, description: Con qué reserva o bloqueo chocó }
+        fecha: { type: string, format: date }
+        estado: { $ref: '#/components/schemas/EstadoConflictoCanal' }
+        motivoResolucion: { type: string, nullable: true }
+        resueltoPor: { type: string, nullable: true, description: Correo del administrador que lo resolvió }
+        fechaResolucion: { type: string, format: date, nullable: true }
+
+    EventoBitacoraResponse:
+      type: object
+      properties:
+        id: { type: string }
+        fecha: { type: string, format: date-time }
+        canal: { type: string, example: booking }
+        tipoEvento: { $ref: '#/components/schemas/TipoEventoCanal' }
+        identificadorExterno:
+          type: string
+          nullable: true
+          description: Null en las consultas y en los intentos rechazados antes de leer el mensaje
+        resultado: { $ref: '#/components/schemas/ResultadoEventoCanal' }
+
+    PaginaCanalVentaResponse:
+      type: object
+      properties:
+        contenido:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/CanalVentaResponse' }
+        pagina: { type: integer, description: Empieza en 0 }
+        tamano: { type: integer, example: 10 }
+        totalElementos: { type: integer, format: int64 }
+        totalPaginas: { type: integer }
+
+    PaginaConflictoCanalResponse:
+      type: object
+      properties:
+        contenido:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/ConflictoCanalResponse' }
+        pagina: { type: integer, description: Empieza en 0 }
+        tamano: { type: integer, example: 10 }
+        totalElementos: { type: integer, format: int64 }
+        totalPaginas: { type: integer }
+
+    PaginaEventoBitacoraResponse:
+      type: object
+      properties:
+        contenido:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/EventoBitacoraResponse' }
+        pagina: { type: integer, description: Empieza en 0 }
+        tamano: { type: integer, example: 10 }
+        totalElementos: { type: integer, format: int64 }
+        totalPaginas: { type: integer }
 
     # ---------- CU-22 a CU-25: administración y tarifas (7.3, 7.4) ----------
 
@@ -2972,6 +3832,23 @@ components:
           description: Una entrada por noche, en orden de fecha
           items: { $ref: '#/components/schemas/NocheCalendarioResponse' }
 
+    DisponibilidadApartamentoResponse:
+      type: object
+      description: Calendario público; solo dice si cada noche está libre, sin datos de reservas ni bloqueos
+      properties:
+        apartamento: { type: string, example: APT-201 }
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date, description: Excluida }
+        noches:
+          type: array
+          maxItems: 62
+          description: Una entrada por noche, en orden de fecha
+          items:
+            type: object
+            properties:
+              fecha: { type: string, format: date, description: La noche va de esta fecha a la siguiente }
+              libre: { type: boolean, description: true si se puede reservar esa noche }
+
     # ---------- CU-28 Alojamiento ----------
 
     ActualizarAlojamientoRequest:
@@ -2997,6 +3874,30 @@ components:
         generaCargo: { type: boolean }
         valor: { type: integer, format: int64, example: 70000, description: Pesos enteros; 0 si no genera cargo }
         activo: { type: boolean }
+        motivoObligatorio:
+          type: string
+          nullable: true
+          description: Por qué el servicio no puede desactivarse ni dejar de generar cargo (RP-03); null si se puede
+          example: 'Se cobra automáticamente a las reservas con llegada nocturna (RP-03). Puedes cambiar su nombre, su descripción y su valor, pero no desactivarlo ni dejarlo sin cargo.'
+
+    RegistrarServicioAdicionalRequest:
+      type: object
+      required: [id, nombre, generaCargo]
+      properties:
+        id: { type: string, maxLength: 40, example: SRV-SPA, description: 'Letras, números y guiones; se guarda en mayúsculas' }
+        nombre: { type: string, maxLength: 100, example: Spa en la habitación }
+        descripcion: { type: string, maxLength: 300, nullable: true, example: Masaje de 60 minutos }
+        generaCargo: { type: boolean }
+        valor: { type: integer, format: int64, minimum: 0, nullable: true, example: 180000, description: Pesos enteros; obligatorio y mayor que cero si genera cargo }
+
+    ActualizarServicioAdicionalRequest:
+      type: object
+      required: [nombre, generaCargo]
+      properties:
+        nombre: { type: string, maxLength: 100, example: Spa en la habitación }
+        descripcion: { type: string, maxLength: 300, nullable: true }
+        generaCargo: { type: boolean }
+        valor: { type: integer, format: int64, minimum: 0, nullable: true, example: 200000, description: Pesos enteros; obligatorio y mayor que cero si genera cargo }
 
     ParametrosAlojamientoResponse:
       type: object
@@ -3015,6 +3916,7 @@ components:
         cargoAseoMascota: { type: integer, format: int64, example: 110000 }
         maximoMascotas: { type: integer, example: 2 }
         pesoMaximoMascotaKg: { type: integer, example: 10 }
+        depositoGarantia: { type: integer, format: int64, example: 250000, description: 'RP-02: depósito de garantía reembolsable, el mismo que se asienta en el folio de toda reserva nueva' }
 
     AlojamientoResponse:
       type: object
@@ -3204,6 +4106,20 @@ components:
         correo: { type: string }
         rol: { $ref: '#/components/schemas/RolUsuario' }
 
+    SolicitarRecuperacionRequest:
+      type: object
+      required: [ correo ]
+      properties:
+        correo: { type: string, format: email, maxLength: 120, example: huesped1@sga.local }
+
+    RestablecerContrasenaRequest:
+      type: object
+      required: [ correo, codigo, nuevaContrasena ]
+      properties:
+        correo: { type: string, format: email, maxLength: 120, example: huesped1@sga.local }
+        codigo: { type: string, pattern: '^\d{6}$', description: El código de 6 dígitos que llegó al correo, example: '048213' }
+        nuevaContrasena: { type: string, minLength: 8, maxLength: 72, description: Al menos una mayúscula y un número, example: Huesped2027 }
+
     CrearUsuarioRequest:
       type: object
       description: Las validaciones del registro, más el rol
@@ -3264,3 +4180,64 @@ components:
         tamano: { type: integer, example: 10 }
         totalElementos: { type: integer, format: int64 }
         totalPaginas: { type: integer }
+
+    # ---------- Reportes (7.9) ----------
+
+    ReporteOcupacionResponse:
+      type: object
+      properties:
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date, description: Incluida }
+        nochesPeriodo: { type: integer, example: 30 }
+        apartamentosActivos: { type: integer, example: 5 }
+        nochesDisponibles: { type: integer, description: apartamentosActivos × nochesPeriodo, example: 150 }
+        nochesVendidas: { type: integer, example: 9 }
+        porcentajeOcupacion: { type: number, description: 'nochesVendidas / nochesDisponibles × 100, dos decimales', example: 6.0 }
+        apartamentos:
+          type: array
+          description: Ordenados por identificación
+          items:
+            type: object
+            properties:
+              apartamento: { type: string, example: APT-101 }
+              nochesVendidas: { type: integer, example: 3 }
+              porcentajeOcupacion: { type: number, description: 'nochesVendidas / nochesPeriodo × 100', example: 10.0 }
+              activo: { type: boolean, description: false si hoy no está a la venta }
+
+    ReporteIngresosResponse:
+      type: object
+      properties:
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date, description: Incluida }
+        total: { type: integer, format: int64, description: Pesos colombianos, example: 1950000 }
+        cantidadPagos: { type: integer, example: 3 }
+        medios:
+          type: array
+          description: Una fila por cada medio de pago, aunque esté en cero
+          items:
+            type: object
+            properties:
+              medio: { $ref: '#/components/schemas/MedioPago' }
+              cantidadPagos: { type: integer }
+              total: { type: integer, format: int64 }
+              porcentaje: { type: number, description: Participación en el total, dos decimales }
+
+    ReporteReservasPorCanalResponse:
+      type: object
+      properties:
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date, description: Incluida }
+        totalReservas: { type: integer, example: 7 }
+        canales:
+          type: array
+          description: Una fila por canal (PORTAL, DIRECTO, EXTERNO), aunque esté en cero
+          items:
+            type: object
+            properties:
+              canal: { $ref: '#/components/schemas/CanalOrigen' }
+              total: { type: integer }
+              activas: { type: integer, description: PENDIENTE, CONFIRMADA o EN_CURSO }
+              finalizadas: { type: integer }
+              canceladas: { type: integer }
+              noShow: { type: integer }
+              porcentaje: { type: number, description: Participación del canal, dos decimales }

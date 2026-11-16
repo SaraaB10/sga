@@ -1,6 +1,10 @@
 package co.edu.uniquindio.sga.infraestructure.rest;
 
+import co.edu.uniquindio.sga.domain.entity.Reserva;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
+import co.edu.uniquindio.sga.domain.valueobject.Ocupante;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.UsuarioJpaDataRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.UsuarioEntity;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.EstadoReserva;
 import com.jayway.jsonpath.JsonPath;
@@ -42,6 +46,9 @@ class AutorizacionIntegracionTest {
 
     @Autowired
     private ReservaRepository reservas;
+
+    @Autowired
+    private UsuarioJpaDataRepository usuarios;
 
     @Test
     @DisplayName("Huésped lista reservas: 403 con el ErrorResponse del proyecto")
@@ -123,6 +130,26 @@ class AutorizacionIntegracionTest {
         assertFalse(codigos.isEmpty());
         codigos.forEach(codigo -> assertEquals(DOCUMENTO_HUESPED_1, reservas.buscarPorCodigo(new CodigoReserva(codigo))
                 .orElseThrow().getTitular().documento().numero()));
+    }
+
+    @Test
+    @DisplayName("Las titulares iniciales de huesped1 y huesped2 tienen el nombre, documento, correo y nacimiento de su usuario")
+    void titularesInicialesCoincidenConSusUsuarios() {
+        for (String correo : List.of("huesped1@sga.local", "huesped2@sga.local")) {
+            UsuarioEntity usuario = usuarios.findByCorreo(correo).orElseThrow();
+            Reserva reserva = reservas.listarTodas().stream()
+                    .filter(r -> r.getTitular().documento().numero().equals(usuario.getDocumento()))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("Sin reserva inicial para " + correo));
+            Ocupante titularQueViaja = reserva.getOcupantes().stream()
+                    .filter(o -> o.documento() != null && o.documento().numero().equals(usuario.getDocumento()))
+                    .findFirst().orElseThrow();
+
+            assertEquals(usuario.getNombre(), reserva.getTitular().nombre(), correo);
+            assertEquals(usuario.getCorreo(), reserva.getTitular().email(), correo);
+            assertEquals(usuario.getNombre(), titularQueViaja.nombre(), correo);
+            assertEquals(usuario.getFechaNacimiento(), titularQueViaja.fechaNacimiento(), correo);
+        }
     }
 
     @Test
