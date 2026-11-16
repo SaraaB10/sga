@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Size;
  */
 public record RestablecerContrasenaRequest(
         @NotBlank(message = "El correo es obligatorio")
-        @Email(message = "El correo no tiene un formato válido")
+        @Email(regexp = ReglaTexto.PATRON_CORREO, message = "El correo no tiene un formato válido")
         @Size(max = 120, message = "El correo admite máximo 120 caracteres")
         String correo,
 

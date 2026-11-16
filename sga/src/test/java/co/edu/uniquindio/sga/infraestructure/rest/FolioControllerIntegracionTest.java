@@ -230,9 +230,10 @@ class FolioControllerIntegracionTest {
         post(folio + "/correcciones", correccion(99, "No existe"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.mensaje", startsWith("RN-16")));
+        // Una posición negativa es un error de forma: 400 sobre el campo
         post(folio + "/correcciones", correccion(-1, "No existe"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.mensaje", startsWith("RN-16")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.indiceCargo").value("La posición del cargo no puede ser negativa"));
 
         cerrarConAutorizacion(folio);
         post(folio + "/correcciones", correccion(0, "Tarde"))

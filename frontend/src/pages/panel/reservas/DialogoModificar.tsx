@@ -23,12 +23,15 @@ import {
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import {
+  documentoOpcional,
   erroresDelServidor,
   esErrorDeCampos,
   fecha,
+  fechaMinimaNacimiento,
   fechaNoFutura,
   finDespuesDeInicio,
-  textoObligatorio,
+  MAXIMO_NOMBRE_PERSONA,
+  nombrePersona,
   unirErrores,
   useValidacion,
 } from '@/lib/validacion'
@@ -82,9 +85,9 @@ function esquemaModificacion(capacidad: number | null, pesoMaximo: number | null
       ocupantes: z
         .array(
           z.object({
-            nombre: textoObligatorio('Escribe el nombre del ocupante'),
+            nombre: nombrePersona('Escribe el nombre del ocupante'),
             tipoDocumento: z.string(),
-            numeroDocumento: z.string(),
+            numeroDocumento: documentoOpcional(),
             fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento'),
           }),
         )
@@ -159,7 +162,10 @@ function Formulario({
       pesoMascotaMasPesadaKg: 'peso',
     }),
   )
-  const errorOcupante = (i: number, campo: 'nombre' | 'fechaNacimiento') => errores[`ocupantes.${i}.${campo}`]
+  // El documento no se edita aquí: si el guardado no lo tenía en el formato vigente, el aviso va junto al nombre
+  const errorOcupante = (i: number, campo: 'nombre' | 'fechaNacimiento') =>
+    errores[`ocupantes.${i}.${campo}`] ??
+    (campo === 'nombre' ? errores[`ocupantes.${i}.numeroDocumento`] : undefined)
   const dentroDeCapacidad = capacidad === null || form.ocupantes.length <= capacidad
   const noches = nochesEntre(form.entrada, form.salida)
   const avisoRP01 = avisoEstanciaMinima(form.entrada, form.salida, temporadas, reglas)
@@ -267,6 +273,7 @@ function Formulario({
                 <Input
                   aria-label={`Nombre del ocupante ${i + 1}`}
                   placeholder="Nombre"
+                  maxLength={MAXIMO_NOMBRE_PERSONA}
                   value={o.nombre}
                   onChange={(e) => cambiarOcupante(i, { nombre: e.target.value })}
                   aria-invalid={errorOcupante(i, 'nombre') ? true : undefined}
@@ -282,6 +289,7 @@ function Formulario({
                 <Input
                   type="date"
                   aria-label={`Fecha de nacimiento del ocupante ${i + 1}`}
+                  min={fechaMinimaNacimiento()}
                   max={hoyISO()}
                   value={o.fechaNacimiento}
                   onChange={(e) => cambiarOcupante(i, { fechaNacimiento: e.target.value })}

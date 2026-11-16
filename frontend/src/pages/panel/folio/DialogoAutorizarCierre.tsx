@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { useAutorizarCierreFolio } from '@/api/folio'
 import { Campo, Dinero } from '@/components/coral'
 import { Input } from '@/components/ui/input'
-import { textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
+import { MAXIMO_MOTIVO, nombrePersona, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 import { DialogoFormulario } from './DialogoFormulario'
 import type { BaseDialogoFolio } from './DialogosFolio'
@@ -15,8 +15,12 @@ import { useAlAbrir } from './useAlAbrir'
 
 // AutorizarCierreFolioRequest: quién autoriza y el motivo, los dos obligatorios
 const esquema = z.object({
-  autorizadoPor: textoObligatorio('Falta el nombre de quien autoriza'),
-  motivo: textoObligatorio('El motivo es obligatorio para cerrar con saldo'),
+  autorizadoPor: nombrePersona('Falta el nombre de quien autoriza'),
+  motivo: textoObligatorio(
+    'El motivo es obligatorio para cerrar con saldo',
+    MAXIMO_MOTIVO,
+    'El motivo admite máximo 250 caracteres',
+  ),
 })
 
 interface PropsAutorizar extends BaseDialogoFolio {
@@ -41,7 +45,7 @@ export function DialogoAutorizarCierre({ codigo, saldo, autorizadoPor, abierto, 
     const limpios = validacion.comprobar()
     if (!limpios) return
     autorizar.mutate(
-      { autorizadoPor: `${limpios.autorizadoPor} (administración)`, motivo: limpios.motivo },
+      { autorizadoPor: limpios.autorizadoPor, motivo: limpios.motivo },
       {
         onSuccess: () => {
           toast.success('Folio cerrado con autorización')

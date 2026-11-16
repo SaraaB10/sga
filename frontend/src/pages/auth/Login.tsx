@@ -10,10 +10,11 @@ import { rutaDespuesDeLogin } from '@/auth/destino'
 import { AvisoError, Campo, InputContrasena } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { correo } from '@/lib/validacion'
 import { PanelBienvenida } from './PanelBienvenida'
 
 const esquema = z.object({
-  correo: z.string().trim().min(1, 'Escribe tu correo').email('El correo no tiene un formato válido'),
+  correo: correo('Escribe tu correo'),
   contrasena: z.string().min(1, 'Escribe tu contraseña'),
 })
 

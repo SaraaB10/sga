@@ -13,7 +13,9 @@ import {
   decimal,
   erroresDelServidor,
   esErrorDeCampos,
+  MAXIMO_DESCRIPCION,
   textoObligatorio,
+  textoOpcional,
   unirErrores,
   useValidacion,
 } from '@/lib/validacion'
@@ -52,15 +54,15 @@ const HORA = /^\d{2}:\d{2}$/
 // ActualizarAlojamientoRequest: nombre, ciudad, latitud y longitud obligatorios; el horario lleva las dos horas o ninguna
 const esquema = z
   .object({
-    nombre: textoObligatorio('Escribe el nombre'),
-    descripcion: z.string(),
-    ciudad: textoObligatorio('Escribe la ciudad'),
-    direccion: z.string(),
+    nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
+    descripcion: textoOpcional(MAXIMO_DESCRIPCION, 'La descripción admite máximo 1000 caracteres'),
+    ciudad: textoObligatorio('Escribe la ciudad', 80, 'La ciudad admite máximo 80 caracteres'),
+    direccion: textoOpcional(200, 'La dirección admite máximo 200 caracteres'),
     latitud: decimal('Escribe una latitud entre -90 y 90', -90, 90),
     longitud: decimal('Escribe una longitud entre -180 y 180', -180, 180),
     horaEntrada: z.string().refine((h) => h === '' || HORA.test(h), 'Escribe una hora válida'),
     horaSalida: z.string().refine((h) => h === '' || HORA.test(h), 'Escribe una hora válida'),
-    normaConvivencia: z.string(),
+    normaConvivencia: textoOpcional(MAXIMO_DESCRIPCION, 'Las normas de convivencia admiten máximo 1000 caracteres'),
   })
   .superRefine((datos, contexto) => {
     if (!!datos.horaEntrada !== !!datos.horaSalida) {
@@ -144,13 +146,13 @@ function FormularioAlojamiento({ alojamiento }: { alojamiento: AlojamientoRespon
       <Seccion titulo="Datos">
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo id="aloj-nombre" etiqueta="Nombre" error={error('nombre')}>
-            <Input {...campo('nombre')} />
+            <Input maxLength={100} {...campo('nombre')} />
           </Campo>
           <Campo id="aloj-ciudad" etiqueta="Ciudad" error={error('ciudad')}>
-            <Input {...campo('ciudad')} />
+            <Input maxLength={80} {...campo('ciudad')} />
           </Campo>
           <Campo id="aloj-direccion" etiqueta="Dirección" error={error('direccion')} className="sm:col-span-2">
-            <Input {...campo('direccion')} />
+            <Input maxLength={200} {...campo('direccion')} />
           </Campo>
           <Campo id="aloj-latitud" etiqueta="Latitud" error={error('latitud')}>
             <Input inputMode="decimal" {...campo('latitud')} />
@@ -159,7 +161,7 @@ function FormularioAlojamiento({ alojamiento }: { alojamiento: AlojamientoRespon
             <Input inputMode="decimal" {...campo('longitud')} />
           </Campo>
           <Campo id="aloj-descripcion" etiqueta="Descripción" error={error('descripcion')} className="sm:col-span-2">
-            <textarea className={claseTextarea} {...campo('descripcion')} />
+            <textarea className={claseTextarea} maxLength={MAXIMO_DESCRIPCION} {...campo('descripcion')} />
           </Campo>
         </div>
       </Seccion>
@@ -177,7 +179,11 @@ function FormularioAlojamiento({ alojamiento }: { alojamiento: AlojamientoRespon
 
       <Seccion titulo="Normas de convivencia">
         <Campo id="aloj-normas" etiqueta="Normas" error={error('normaConvivencia')}>
-          <textarea className={`${claseTextarea} min-h-32`} {...campo('normaConvivencia')} />
+          <textarea
+            className={`${claseTextarea} min-h-32`}
+            maxLength={MAXIMO_DESCRIPCION}
+            {...campo('normaConvivencia')}
+          />
         </Campo>
       </Seccion>
 

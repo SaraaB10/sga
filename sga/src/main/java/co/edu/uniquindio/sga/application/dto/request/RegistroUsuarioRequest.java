@@ -1,5 +1,6 @@
 package co.edu.uniquindio.sga.application.dto.request;
 
+import co.edu.uniquindio.sga.application.dto.validation.FechaNacimientoRazonable;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,11 +16,11 @@ import java.time.LocalDate;
  */
 public record RegistroUsuarioRequest(
         @NotBlank(message = "El nombre es obligatorio")
-        @Size(max = 100, message = "El nombre admite máximo 100 caracteres")
+        @Pattern(regexp = ReglaNombre.PATRON, message = ReglaNombre.MENSAJE)
         String nombre,
 
         @NotBlank(message = "El correo es obligatorio")
-        @Email(message = "El correo no tiene un formato válido")
+        @Email(regexp = ReglaTexto.PATRON_CORREO, message = "El correo no tiene un formato válido")
         @Size(max = 120, message = "El correo admite máximo 120 caracteres")
         String correo,
 
@@ -39,6 +40,7 @@ public record RegistroUsuarioRequest(
 
         @NotNull(message = "La fecha de nacimiento es obligatoria")
         @Past(message = "La fecha de nacimiento debe ser pasada")
+        @FechaNacimientoRazonable
         LocalDate fechaNacimiento
 ) {
 }

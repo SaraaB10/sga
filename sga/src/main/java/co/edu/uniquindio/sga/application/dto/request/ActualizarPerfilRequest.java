@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
  */
 public record ActualizarPerfilRequest(
         @NotBlank(message = "El nombre es obligatorio")
-        @Size(max = 100, message = "El nombre admite máximo 100 caracteres")
+        @Pattern(regexp = ReglaNombre.PATRON, message = ReglaNombre.MENSAJE)
         String nombre,
 
         @NotBlank(message = "El teléfono es obligatorio")
@@ -19,7 +19,7 @@ public record ActualizarPerfilRequest(
 
         // Opcional: sin dato se quita la foto
         @Size(max = 500, message = "La URL de la foto admite máximo 500 caracteres")
-        @Pattern(regexp = "^https?://\\S+$", message = "La URL de la foto debe empezar por http:// o https://")
+        @Pattern(regexp = ReglaTexto.PATRON_URL_IMAGEN, message = ReglaTexto.MENSAJE_URL_IMAGEN)
         String fotoUrl
 ) {
 }

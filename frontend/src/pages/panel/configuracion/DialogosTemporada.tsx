@@ -55,8 +55,8 @@ const aRangoBackend = (rango: { inicio: string; fin: string }): RangoFechasReque
 /** CrearTemporadaRequest: id, nombre y tipo; rangos si no es la base y una tarifa por cada apartamento activo */
 function esquemaTemporada(esBase: boolean, activos: string[]) {
   return z.object({
-    id: textoObligatorio('Escribe un identificador, por ejemplo T-FESTIVAL'),
-    nombre: textoObligatorio('Escribe el nombre'),
+    id: textoObligatorio('Escribe un identificador, por ejemplo T-FESTIVAL', 40, 'El id admite máximo 40 caracteres'),
+    nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
     tipo: z.enum(TIPOS_TEMPORADA as [TipoTemporada, ...TipoTemporada[]], 'Elige el tipo'),
     rangos: esBase
       ? z.array(z.unknown())

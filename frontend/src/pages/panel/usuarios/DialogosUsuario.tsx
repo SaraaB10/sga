@@ -10,7 +10,9 @@ import {
   AYUDA_CONTRASENA,
   DIGITOS_TELEFONO,
   erroresDelServidor,
+  fechaMinimaNacimiento,
   MAXIMO_DIGITOS_DOCUMENTO,
+  MAXIMO_NOMBRE_PERSONA,
   unirErrores,
   useValidacion,
 } from '@/lib/validacion'
@@ -90,7 +92,7 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo id="usuario-nombre" etiqueta="Nombre" error={error('nombre')} className="sm:col-span-2">
-          <Input autoComplete="off" maxLength={100} {...campo('nombre')} />
+          <Input autoComplete="off" maxLength={MAXIMO_NOMBRE_PERSONA} {...campo('nombre')} />
         </Campo>
         <Campo id="usuario-correo" etiqueta="Correo" error={error('correo')} className="sm:col-span-2">
           <Input type="email" autoComplete="off" maxLength={120} {...campo('correo')} />
@@ -107,6 +109,7 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
         <Campo id="usuario-nacimiento" etiqueta="Fecha de nacimiento" error={error('fechaNacimiento')}>
           <Input
             type="date"
+            min={fechaMinimaNacimiento()}
             max={fechaMaximaNacimientoCuenta()}
             value={datos.fechaNacimiento}
             onChange={(e) => {

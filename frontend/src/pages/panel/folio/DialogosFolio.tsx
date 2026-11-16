@@ -7,7 +7,15 @@ import type { ServicioAdicionalResponse } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, formatearDinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { aPesos, erroresDelServidor, pesos, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
+import {
+  aPesos,
+  erroresDelServidor,
+  MAXIMO_MOTIVO,
+  pesos,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/publico/comun/estilos'
 import { DialogoFormulario } from './DialogoFormulario'
 import { erroresDe } from './erroresDe'
@@ -198,7 +206,7 @@ export function DialogoCorreccion({ codigo, cargos, indiceInicial, abierto, alCa
     indice: z
       .string()
       .refine((valor) => cargos.some((c) => String(c.indiceCargo) === valor), 'Elige el cargo que vas a corregir'),
-    motivo: textoObligatorio('Escribe el motivo de la corrección'),
+    motivo: textoObligatorio('Escribe el motivo de la corrección', MAXIMO_MOTIVO, 'El motivo admite máximo 250 caracteres'),
   })
   const validacion = useValidacion(esquema, { indice, motivo })
   const errores = unirErrores(

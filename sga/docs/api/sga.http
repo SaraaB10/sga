@@ -5196,3 +5196,122 @@ Authorization: Bearer {{tokenAdmin}}
         client.assert(response.body.errores.titular === "El documento debe tener entre 6 y 10 dígitos, solo números", "errores: " + JSON.stringify(response.body.errores));
     });
 %}
+
+# ====================================================================================================
+# 18.8 a 18.13 Nombres de personas (solo letras y espacios, de 3 a 80), correo con extensión, fecha de nacimiento
+#     de hace 110 años o menos, URL de imagen con https:// y textos libres con largo máximo.
+# ====================================================================================================
+
+### 18.8 400 Registro con un nombre con dígitos, un correo sin extensión y una fecha de nacimiento de 1900
+POST {{host}}/api/auth/registro
+Content-Type: application/json
+
+{
+  "nombre": "Paula 2",
+  "correo": "paula.formato@correo",
+  "contrasena": "Segura2026",
+  "telefono": "3160000031",
+  "documento": "100031",
+  "fechaNacimiento": "1900-01-01"
+}
+
+> {%
+    client.test("18.8 400 nombre, correo y fecha", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e.nombre === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "nombre: " + e.nombre);
+        client.assert(e.correo === "El correo no tiene un formato válido", "correo: " + e.correo);
+        client.assert(e.fechaNacimiento === "La fecha de nacimiento no puede ser de hace más de 110 años", "fechaNacimiento: " + e.fechaNacimiento);
+    });
+%}
+
+### 18.9 400 Perfil con el nombre con un espacio al final y la foto con http://
+PUT {{host}}/api/usuarios/me
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Administrador Coral ", "telefono": "3001000001", "fotoUrl": "http://fotos.sga.local/admin.png" }
+
+> {%
+    client.test("18.9 400 nombre y foto", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e.nombre === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "nombre: " + e.nombre);
+        client.assert(e.fotoUrl === "La URL de la imagen debe empezar por https:// y no tener espacios", "fotoUrl: " + e.fotoUrl);
+    });
+%}
+
+### 18.10 400 Cotización con un acompañante de nombre con símbolos y nacido hace más de 110 años
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Luis_Gómez", "fechaNacimiento": "1901-02-03" }
+  ]
+}
+
+> {%
+    client.test("18.10 400 acompañante", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e["ocupantes[1].nombre"] === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "errores: " + JSON.stringify(e));
+        client.assert(e["ocupantes[1].fechaNacimiento"] === "La fecha de nacimiento no puede ser de hace más de 110 años", "errores: " + JSON.stringify(e));
+    });
+%}
+
+### 18.11 400 Apartamento nuevo con una imagen por http:// y una descripción solo de espacios
+POST {{host}}/api/apartamentos
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacion": "APT-499",
+  "nombre": "Coral Formato",
+  "descripcion": "   ",
+  "dormitorios": 1,
+  "capacidadMaxima": 2,
+  "dotacion": ["Cama doble"],
+  "imagenes": [ { "url": "http://fotos.sga.local/apt-499.jpg", "principal": true } ]
+}
+
+> {%
+    client.test("18.11 400 imagen y descripción", function () {
+        var e = response.body.errores;
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(e["imagenes[0].url"] === "La URL de la imagen debe empezar por https:// y no tener espacios", "errores: " + JSON.stringify(e));
+        client.assert(e.descripcion === "La descripción no puede quedar solo en espacios", "errores: " + JSON.stringify(e));
+    });
+%}
+
+### 18.12 400 Novedad con un autor que no es un nombre de persona
+POST {{host}}/api/apartamentos/APT-101/novedades
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "autor": "servicio@sga.local", "descripcion": "Fuga en el lavamanos", "gravedad": "MEDIA" }
+
+> {%
+    client.test("18.12 400 autor", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.autor === "El nombre debe tener entre 3 y 80 caracteres, solo letras y espacios, sin espacios al inicio ni al final", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### 18.13 400 Corrección del folio en una posición negativa
+POST {{host}}/api/reservas/RES-2000-00001/folio/correcciones
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "indiceCargo": -1, "motivo": "Cargo duplicado" }
+
+> {%
+    client.test("18.13 400 posición negativa", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.indiceCargo === "La posición del cargo no puede ser negativa", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}

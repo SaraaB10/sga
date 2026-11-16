@@ -23,8 +23,10 @@ import {
   entero,
   erroresDelServidor,
   esErrorDeCampos,
+  MAXIMO_DESCRIPCION,
   pesosOpcional,
   textoObligatorio,
+  textoOpcional,
   urlObligatoria,
 } from '@/lib/validacion'
 
@@ -37,11 +39,14 @@ const MAXIMO_IMAGENES = 10
  */
 const base = z.object({
   identificacion: z.string().trim(),
-  nombre: textoObligatorio('Escribe el nombre'),
-  descripcion: z.string(),
+  nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  descripcion: textoOpcional(MAXIMO_DESCRIPCION, 'La descripción admite máximo 1000 caracteres'),
   dormitorios: entero('Escribe un número entero de 1 o más dormitorios', { minimo: 1 }),
   capacidadMaxima: entero('Escribe una capacidad entera de 1 o más personas', { minimo: 1 }),
-  dotacion: z.string().refine((v) => lineas(v).length > 0, 'Escribe al menos un elemento'),
+  dotacion: z
+    .string()
+    .refine((v) => lineas(v).length > 0, 'Escribe al menos un elemento')
+    .refine((v) => lineas(v).every((l) => l.length <= 100), 'Cada elemento de la dotación admite máximo 100 caracteres'),
   imagenes: z.array(z.object({ url: z.string() })),
   principal: z.string(),
   tarifas: z.record(z.string(), z.string()),
@@ -50,7 +55,11 @@ const base = z.object({
 const esquemaEdicion = base
 
 const esquemaRegistro = base.extend({
-  identificacion: textoObligatorio('Escribe la identificación, por ejemplo APT-401'),
+  identificacion: textoObligatorio(
+    'Escribe la identificación, por ejemplo APT-401',
+    20,
+    'La identificación admite máximo 20 caracteres',
+  ),
   imagenes: z
     .array(z.object({ url: urlObligatoria('Escribe la URL de la imagen') }))
     .min(1, 'Agrega al menos una imagen')
@@ -264,14 +273,20 @@ export default function FormularioApartamento() {
           <legend className="sr-only">Datos</legend>
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo id="identificacion" etiqueta="Identificación" error={errors.identificacion?.message}>
-              <Input placeholder="APT-401" disabled={editando} autoCapitalize="characters" {...register('identificacion')} />
+              <Input
+                placeholder="APT-401"
+                maxLength={20}
+                disabled={editando}
+                autoCapitalize="characters"
+                {...register('identificacion')}
+              />
             </Campo>
             <Campo id="nombre" etiqueta="Nombre" error={errors.nombre?.message}>
-              <Input placeholder="Coral Esmeralda" {...register('nombre')} />
+              <Input placeholder="Coral Esmeralda" maxLength={100} {...register('nombre')} />
             </Campo>
           </div>
           <Campo id="descripcion" etiqueta="Descripción (opcional)" error={errors.descripcion?.message}>
-            <textarea className={claseTextarea} {...register('descripcion')} />
+            <textarea className={claseTextarea} maxLength={MAXIMO_DESCRIPCION} {...register('descripcion')} />
           </Campo>
           <div className="grid grid-cols-2 gap-4">
             <Campo id="dormitorios" etiqueta="Dormitorios" error={errors.dormitorios?.message}>

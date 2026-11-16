@@ -57,6 +57,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ApartamentoControllerIntegracionTest {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
+    /** Apellidos de los ocupantes de reservaDeGrupo: los nombres solo admiten letras y espacios */
+    private static final List<String> NOMBRES_GRUPO = List.of("Uno", "Dos", "Tres", "Cuatro", "Cinco", "Seis");
 
     @Autowired
     private MockMvc mvc;
@@ -745,13 +747,13 @@ class ApartamentoControllerIntegracionTest {
         for (int i = 0; i < ocupantes; i++) {
             if (i > 0) grupo.append(',');
             grupo.append("""
-                    {"nombre":"Ocupante %d","tipoDocumento":"CC","numeroDocumento":"10940002%02d",
-                     "fechaNacimiento":"1990-05-20"}""".formatted(i + 1, i));
+                    {"nombre":"Ocupante %s","tipoDocumento":"CC","numeroDocumento":"10940002%02d",
+                     "fechaNacimiento":"1990-05-20"}""".formatted(NOMBRES_GRUPO.get(i), i));
         }
         return """
                 {"identificacionApartamento":"%s","fechaEntrada":"%s","fechaSalida":"%s",
                  "horaEstimadaLlegada":"16:00","canalOrigen":"PORTAL",
-                 "titular":{"nombre":"Ocupante 1","tipoDocumento":"CC","numeroDocumento":"1094000200",
+                 "titular":{"nombre":"Ocupante Uno","tipoDocumento":"CC","numeroDocumento":"1094000200",
                             "email":"grupo@correo.co","telefono":"3001234567"},
                  "ocupantes":[%s]}
                 """.formatted(apartamento, entrada, salida, grupo);

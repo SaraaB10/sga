@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import type { Rol } from '@/api/tipos'
 import { cumpleEdadMinima, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
-import { contrasenaNueva, correo, documento, fechaPasada, telefono, textoObligatorio } from '@/lib/validacion'
+import { contrasenaNueva, correo, documento, fechaPasada, nombrePersona, telefono } from '@/lib/validacion'
 import { ROLES } from './listaRoles'
 
 /** Usuario nuevo del panel: las reglas de CrearUsuarioRequest */
 export const esquemaCrearUsuario = z.object({
-  nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  nombre: nombrePersona(),
   correo: correo(),
   contrasena: contrasenaNueva(),
   telefono: telefono(),

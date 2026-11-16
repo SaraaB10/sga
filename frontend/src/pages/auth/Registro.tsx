@@ -21,15 +21,17 @@ import {
   documento,
   erroresDelServidor,
   MAXIMO_DIGITOS_DOCUMENTO,
+  fechaMinimaNacimiento,
   fechaPasada,
+  MAXIMO_NOMBRE_PERSONA,
+  nombrePersona,
   telefono,
-  textoObligatorio,
 } from '@/lib/validacion'
 import { PanelBienvenida } from './PanelBienvenida'
 
 // Las mismas reglas que valida el backend al registrar
 const esquema = z.object({
-  nombre: textoObligatorio('Escribe tu nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  nombre: nombrePersona('Escribe tu nombre'),
   correo: correo(),
   contrasena: contrasenaNueva('Escribe una contraseña'),
   telefono: telefono('Escribe tu teléfono'),
@@ -101,7 +103,7 @@ export default function Registro() {
           className="mt-6 grid gap-4 sm:grid-cols-2"
         >
           <Campo id="nombre" etiqueta="Nombre completo" error={errors.nombre?.message} className="sm:col-span-2">
-            <Input autoComplete="name" {...register('nombre')} />
+            <Input autoComplete="name" maxLength={MAXIMO_NOMBRE_PERSONA} {...register('nombre')} />
           </Campo>
           <Campo id="correo" etiqueta="Correo" error={errors.correo?.message} className="sm:col-span-2">
             <Input type="email" autoComplete="email" inputMode="email" {...register('correo')} />
@@ -124,6 +126,7 @@ export default function Registro() {
           <Campo id="fechaNacimiento" etiqueta="Fecha de nacimiento" error={errors.fechaNacimiento?.message} className="sm:col-span-2">
             <Input
               type="date"
+              min={fechaMinimaNacimiento()}
               max={fechaMaximaNacimientoCuenta()}
               autoComplete="bday"
               {...register('fechaNacimiento', {

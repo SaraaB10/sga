@@ -21,9 +21,11 @@ import {
   fecha,
   fechaNoFutura,
   finDespuesDeInicio,
+  fechaMinimaNacimiento,
   MAXIMO_DIGITOS_DOCUMENTO,
+  MAXIMO_NOMBRE_PERSONA,
+  nombrePersona,
   telefono,
-  textoObligatorio,
   validar,
   type Errores,
 } from '@/lib/validacion'
@@ -130,7 +132,7 @@ const esquemaEstancia = z
 
 /** Titular que escribe la recepción: todos los datos obligatorios, con correo y teléfono válidos */
 const esquemaTitular = z.object({
-  nombre: textoObligatorio('Escribe el nombre del titular.'),
+  nombre: nombrePersona('Escribe el nombre del titular.'),
   tipoDocumento: z.string().min(1, 'Elige el tipo de documento.'),
   numeroDocumento: documento('Escribe el número de documento.'),
   email: correo(),
@@ -140,7 +142,7 @@ const esquemaTitular = z.object({
 
 /** Acompañante: nombre y fecha de nacimiento no futura; el tipo se revisa aparte */
 const esquemaAcompanante = z.object({
-  nombre: textoObligatorio('Escribe el nombre.'),
+  nombre: nombrePersona('Escribe el nombre.'),
   fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
 })
 
@@ -617,6 +619,7 @@ export function AsistenteReserva({ modo }: Props) {
                     <Campo id="tit-nombre" etiqueta="Nombre completo" error={errores.titularNombre} className="sm:col-span-2">
                       <Input
                         autoComplete="off"
+                        maxLength={MAXIMO_NOMBRE_PERSONA}
                         value={titular.nombre}
                         onChange={(e) => setTitular({ ...titular, nombre: e.target.value })}
                       />
@@ -658,6 +661,7 @@ export function AsistenteReserva({ modo }: Props) {
                     <Campo id="tit-fecha" etiqueta="Fecha de nacimiento" error={errores.titularFecha}>
                       <Input
                         type="date"
+                        min={fechaMinimaNacimiento()}
                         max={hoyISO()}
                         value={titular.fechaNacimiento}
                         onChange={(e) => setTitular({ ...titular, fechaNacimiento: e.target.value })}
@@ -709,6 +713,7 @@ export function AsistenteReserva({ modo }: Props) {
                         >
                           <Input
                             placeholder="Nombre completo"
+                            maxLength={MAXIMO_NOMBRE_PERSONA}
                             value={a.nombre}
                             onChange={(e) =>
                               setAcompanantes(acompanantes.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))
@@ -746,7 +751,7 @@ export function AsistenteReserva({ modo }: Props) {
                         >
                           <Input
                             type="date"
-                            min={rango.min}
+                            min={rango.min ?? fechaMinimaNacimiento()}
                             max={rango.max}
                             disabled={sinTipo}
                             value={a.fechaNacimiento}
