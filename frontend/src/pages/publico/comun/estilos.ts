@@ -1,3 +1,11 @@
+import type { CSSProperties } from 'react'
+
+/** Noches bloqueadas (RN-07): las mismas rayas en el calendario del panel y en el público */
+export const RAYAS_BLOQUEO: CSSProperties = {
+  backgroundImage: 'repeating-linear-gradient(135deg, #D6CFD3 0 6px, #B9B0B5 6px 12px)',
+  color: '#3A3236',
+}
+
 /** Controles nativos (select y textarea) con el mismo aspecto que el Input de shadcn */
 const base =
   'w-full min-w-0 rounded-campo border border-input bg-card px-3.5 text-base text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30'

@@ -5,6 +5,7 @@ import type { EstadoReserva, TemporadaResponse, TipoTemporada } from '@/api/tipo
 import { formatearFecha } from '@/components/coral'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { RAYAS_BLOQUEO } from '@/pages/publico/comun/estilos'
 import { esNocheDeFinDeSemana, hoyISO, noches, temporadaDeFecha, tramosDelCalendario } from './fechas'
 
 /** Colores de las barras: los mismos de la píldora EstadoReserva */
@@ -12,11 +13,6 @@ const COLOR_RESERVA: Partial<Record<EstadoReserva, { fondo: string; borde: strin
   PENDIENTE: { fondo: '#FFF1C2', borde: '#E3BC4A', texto: '#6B4800', etiqueta: 'Pendiente' },
   CONFIRMADA: { fondo: '#DDF2EA', borde: '#7FC3A6', texto: '#1C5E45', etiqueta: 'Confirmada' },
   EN_CURSO: { fondo: '#FCE1EA', borde: '#E75480', texto: '#8F2450', etiqueta: 'En curso' },
-}
-
-const RAYAS_BLOQUEO: CSSProperties = {
-  backgroundImage: 'repeating-linear-gradient(135deg, #D6CFD3 0 6px, #B9B0B5 6px 12px)',
-  color: '#3A3236',
 }
 
 const COLOR_TEMPORADA: Record<TipoTemporada, string> = {

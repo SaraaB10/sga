@@ -203,7 +203,7 @@ public class ApartamentoController {
         IdentificacionApartamento identificacion = new IdentificacionApartamento(id);
         List<DisponibilidadApartamentoResponse.Noche> noches = consultarDisponibilidadUseCase
                 .ejecutar(identificacion, desde, hasta).stream()
-                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre()))
+                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre(), noche.bloqueada()))
                 .toList();
         return ResponseEntity.ok(new DisponibilidadApartamentoResponse(identificacion.codigo(), desde, hasta, noches));
     }

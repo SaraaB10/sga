@@ -4054,6 +4054,7 @@ components:
             properties:
               fecha: { type: string, format: date, description: La noche va de esta fecha a la siguiente }
               libre: { type: boolean, description: true si se puede reservar esa noche }
+              bloqueada: { type: boolean, description: 'true si un bloqueo del alojamiento la retira de la venta (RN-07); las noches de una reserva solo salen como no libres' }
 
     # ---------- CU-28 Alojamiento ----------
 

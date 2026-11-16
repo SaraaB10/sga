@@ -817,7 +817,8 @@ Content-Type: application/json
     client.test("5.2 cuerpo del error", function () {
         var e = response.body;
         client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
-        client.assert(e.mensaje.indexOf("RN-01: No se puede bloquear el apartamento APT-101") === 0, "mensaje: " + e.mensaje);
+        client.assert(e.mensaje.indexOf("RN-01: No se puede bloquear el apartamento APT-101: la reserva RES-") === 0, "mensaje: " + e.mensaje);
+        client.assert(e.mensaje.indexOf("ocupa esas noches") > 0, "El mensaje debía decir qué reserva lo impide: " + e.mensaje);
         client.assert(e.path === "/api/apartamentos/APT-101/bloqueos", "path: " + e.path);
         client.assert(e.timestamp != null && e.errores == null, "timestamp o errores: " + JSON.stringify(e));
     });
@@ -5618,5 +5619,56 @@ Authorization: Bearer {{tokenAdmin}}
     client.test("20.9 404 medio inexistente", function () {
         client.assert(response.status === 404, "Se esperaba 404 y llegó " + response.status);
         client.assert(response.body.mensaje === "No se encontró el medio de pago con código: CHEQUE", "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### Sección 21: BLOQUEOS EN EL CALENDARIO PÚBLICO (RN-07)
+
+# ====================================================================================================
+# 21. Un bloqueo de APT-101 (de hoy+300 a hoy+302) sale en el calendario público como "bloqueada", sin datos de
+#     las reservas; las noches de una reserva solo salen como no libres.
+# ====================================================================================================
+
+### 21.0 Fechas de la sección
+GET {{host}}/api/apartamentos/APT-101
+
+> {%
+    client.test("21.0 la app responde", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+    });
+    var hoy = new Date(Date.now() - 5 * 3600000);
+    function fecha(dias) {
+        return new Date(hoy.getTime() + dias * 86400000).toISOString().substring(0, 10);
+    }
+    client.global.set("s21Inicio", fecha(300));
+    client.global.set("s21Fin", fecha(302));
+    client.global.set("s21Hasta", fecha(303));
+%}
+
+### 21.1 El administrador bloquea APT-101 dos noches: 201
+POST {{host}}/api/apartamentos/APT-101/bloqueos
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "fechaInicio": "{{s21Inicio}}", "fechaFin": "{{s21Fin}}", "motivo": "Cambio de la tina de hidromasaje" }
+
+> {%
+    client.test("21.1 201 bloqueo registrado", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+    });
+%}
+
+### 21.2 Calendario público (sin token): las dos noches bloqueadas y la siguiente libre
+GET {{host}}/api/apartamentos/APT-101/disponibilidad?desde={{s21Inicio}}&hasta={{s21Hasta}}
+
+> {%
+    client.test("21.2 200 noches bloqueadas", function () {
+        var n = response.body.noches;
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(n.length === 3, "Noches: " + n.length);
+        client.assert(n[0].bloqueada === true && n[0].libre === false, "Noche 1: " + JSON.stringify(n[0]));
+        client.assert(n[1].bloqueada === true && n[1].libre === false, "Noche 2: " + JSON.stringify(n[1]));
+        client.assert(n[2].bloqueada === false, "Noche 3: " + JSON.stringify(n[2]));
+        client.assert(JSON.stringify(response.body).indexOf("Cambio de la tina") < 0, "El calendario público no debe mostrar el motivo");
     });
 %}

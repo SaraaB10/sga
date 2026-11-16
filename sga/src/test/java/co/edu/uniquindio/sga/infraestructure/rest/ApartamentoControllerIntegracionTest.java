@@ -694,9 +694,13 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(jsonPath("$.noches[0].fecha").value(hoy.minusDays(1).toString()))
                 .andExpect(jsonPath("$.noches[0].libre").value(false))     // noche pasada
                 .andExpect(jsonPath("$.noches[2].libre").value(true))      // hoy+1
+                .andExpect(jsonPath("$.noches[2].bloqueada").value(false))
                 .andExpect(jsonPath("$.noches[4].libre").value(false))     // hoy+3, bloqueada
+                .andExpect(jsonPath("$.noches[4].bloqueada").value(true))
                 .andExpect(jsonPath("$.noches[15].libre").value(false))    // hoy+14, bloqueada
-                .andExpect(jsonPath("$.noches[16].libre").value(true));    // hoy+15, ya libre
+                .andExpect(jsonPath("$.noches[15].bloqueada").value(true))
+                .andExpect(jsonPath("$.noches[16].libre").value(true))     // hoy+15, ya libre
+                .andExpect(jsonPath("$.noches[16].bloqueada").value(false));
 
         // Una reserva activa ocupa sus noches; la respuesta no dice de quién es ni por qué
         LocalDate entrada = hoy.plusDays(95);
@@ -707,6 +711,9 @@ class ApartamentoControllerIntegracionTest {
                 .andReturn().getResponse().getContentAsString();
         List<Boolean> libres = JsonPath.read(calendario, "$.noches[*].libre");
         assertEquals(List.of(true, false, false, true, true), libres);
+        // Las noches de una reserva no salen como bloqueadas: solo como no libres
+        List<Boolean> bloqueadas = JsonPath.read(calendario, "$.noches[*].bloqueada");
+        assertEquals(List.of(false, false, false, false, false), bloqueadas);
         assertFalse(calendario.contains("RES-"));
         assertFalse(calendario.contains("Ana"));
 

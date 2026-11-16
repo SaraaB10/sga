@@ -166,10 +166,11 @@ export interface FiltrosDisponibles {
   servicios?: string[]
 }
 
-/** Calendario público de disponibilidad: solo dice si cada noche está libre */
+/** Calendario público de disponibilidad: si cada noche está libre y si la retira un bloqueo (sin datos de reservas) */
 export interface NocheDisponibilidad {
   fecha: FechaISO
   libre: boolean
+  bloqueada: boolean
 }
 
 export interface DisponibilidadApartamentoResponse {
