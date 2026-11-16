@@ -58,12 +58,13 @@ export default function DetalleApartamento() {
     )
   }
 
-  // Foto principal primero; se completan cinco espacios
+  // Foto principal primero; solo las imágenes que existen, hasta cinco en la cuadrícula
   const fotos = [
     ...apto.imagenes.filter((i) => i.principal).map((i) => i.url),
     ...apto.imagenes.filter((i) => !i.principal).map((i) => i.url),
   ]
-  const galeria = Array.from({ length: 5 }, (_, i) => fotos[i] ?? null)
+  const galeria = fotos.slice(0, MAXIMO_FOTOS_GALERIA)
+  const fotosOcultas = fotos.length - galeria.length
 
   const tarifas = apto.tarifas
     .map((t) => ({ ...t, temporada: temporadas.find((x) => x.id === t.idTemporada) }))
@@ -88,20 +89,28 @@ export default function DetalleApartamento() {
         </p>
       </header>
 
-      {/* ---------- Galería: una grande y cuatro pequeñas ---------- */}
-      <div className="grid gap-2 overflow-hidden rounded-tarjeta md:h-[28rem] md:grid-cols-4 md:grid-rows-2">
-        {galeria.map((src, i) => (
-          <FotoApartamento
-            key={i}
-            src={src}
-            alt={i === 0 ? `Foto principal de ${apto.nombre}` : `Foto ${i + 1} de ${apto.nombre}`}
-            className={cn(
-              'size-full',
-              i === 0 ? 'aspect-[4/3] md:col-span-2 md:row-span-2 md:aspect-auto' : 'hidden md:flex',
-            )}
-          />
-        ))}
-      </div>
+      {/* ---------- Galería: solo las imágenes del apartamento, la principal más grande ---------- */}
+      {galeria.length > 0 && (
+        <div className={cn('grid gap-2 overflow-hidden rounded-tarjeta', claseCuadricula(galeria.length))}>
+          {galeria.map((src, i) => {
+            const ultima = i === galeria.length - 1
+            return (
+              <div key={src} className={cn('relative overflow-hidden', claseFoto(i, galeria.length))}>
+                <FotoApartamento
+                  src={src}
+                  alt={i === 0 ? `Foto principal de ${apto.nombre}` : `Foto ${i + 1} de ${apto.nombre}`}
+                  className="size-full"
+                />
+                {ultima && fotosOcultas > 0 && (
+                  <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2.5 py-1 text-xs font-semibold text-white">
+                    +{fotosOcultas} {fotosOcultas === 1 ? 'foto' : 'fotos'}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="grid gap-8 lg:grid-cols-[1fr_24rem] lg:items-start">
         <div className="flex flex-col gap-10">
@@ -224,6 +233,34 @@ export default function DetalleApartamento() {
         <TarjetaCotizar identificacion={apto.identificacion} capacidad={apto.capacidadMaxima} />
       </div>
     </article>
+  )
+}
+
+const MAXIMO_FOTOS_GALERIA = 5
+
+/**
+ * Cuadrícula de la galería según cuántas fotos hay. En el celular: dos columnas con la principal arriba a todo el
+ * ancho. Desde md: 1 foto ocupa todo; 2 van lado a lado; 3 o más, la principal ocupa la mitad izquierda y las
+ * demás se reparten a la derecha en dos filas.
+ */
+function claseCuadricula(total: number): string {
+  if (total === 1) return 'grid-cols-1 md:h-[28rem]'
+  if (total === 2) return 'grid-cols-2 md:h-[28rem]'
+  return 'grid-cols-2 md:h-[28rem] md:grid-cols-4 md:grid-rows-2'
+}
+
+function claseFoto(indice: number, total: number): string {
+  if (total === 1) return 'aspect-[4/3] md:aspect-auto'
+  if (total === 2) return 'col-span-2 aspect-[4/3] md:col-span-1 md:aspect-auto'
+  if (indice === 0) return 'col-span-2 aspect-[4/3] md:row-span-2 md:aspect-auto'
+  // Con 3 fotos las dos secundarias son franjas; con 4 la última es una franja; con 5 todas son cuadros
+  const franjaDeEscritorio = total === 3 || (total === 4 && indice === 3)
+  // En el celular, si las secundarias son impares, la última ocupa todo el ancho
+  const soloEnCelular = (total - 1) % 2 === 1 && indice === total - 1
+  return cn(
+    soloEnCelular ? 'col-span-2 aspect-[2/1]' : 'aspect-square',
+    franjaDeEscritorio ? 'md:col-span-2' : 'md:col-span-1',
+    'md:aspect-auto',
   )
 }
 
