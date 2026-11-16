@@ -752,13 +752,28 @@ class ApartamentoControllerIntegracionTest {
 
         // Una reserva activa ocupa sus noches; la respuesta no dice de quién es ni por qué
         LocalDate entrada = hoy.plusDays(95);
-        post("/api/reservas", reserva("APT-102", entrada, entrada.plusDays(2))).andExpect(status().isCreated());
-        String calendario = mvc.perform(MockMvcRequestBuilders.get("/api/apartamentos/APT-102/disponibilidad?desde="
-                        + entrada.minusDays(1) + "&hasta=" + entrada.plusDays(4)).with(anonymous()))
+        String codigo = JsonPath.read(post("/api/reservas", reserva("APT-102", entrada, entrada.plusDays(2)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.codigo");
+        String rango = "/api/apartamentos/APT-102/disponibilidad?desde=" + entrada.minusDays(1) + "&hasta="
+                + entrada.plusDays(4);
+        String calendario = mvc.perform(MockMvcRequestBuilders.get(rango).with(anonymous()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         List<Boolean> libres = JsonPath.read(calendario, "$.noches[*].libre");
         assertEquals(List.of(true, false, false, true, true), libres);
+
+        // RN-14: al modificar esa reserva, sus propias noches cuentan como libres (solo personal o el titular)
+        String sinElla = mvc.perform(MockMvcRequestBuilders.get(rango + "&excluirReserva=" + codigo)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("RECEPCIONISTA"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(List.of(true, true, true, true, true), JsonPath.read(sinElla, "$.noches[*].libre"));
+        mvc.perform(MockMvcRequestBuilders.get(rango + "&excluirReserva=" + codigo).with(anonymous()))
+                .andExpect(status().isForbidden());
+        mvc.perform(MockMvcRequestBuilders.get(rango + "&excluirReserva=" + codigo)
+                        .with(jwt().jwt(j -> j.claim("documento", "999999999"))
+                                .authorities(new SimpleGrantedAuthority("HUESPED"))))
+                .andExpect(status().isForbidden());
         // Las noches de una reserva no salen como bloqueadas: solo como no libres
         List<Boolean> bloqueadas = JsonPath.read(calendario, "$.noches[*].bloqueada");
         assertEquals(List.of(false, false, false, false, false), bloqueadas);

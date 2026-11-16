@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Trash2 } from 'lucide-reac
 import { z } from 'zod'
 import { useTodosLosApartamentos } from '@/api/apartamentos'
 import { esErrorApi } from '@/api/cliente'
-import { useApartamento, usePoliticaVigente } from '@/api/publico'
+import { useApartamento, useEstanciasLibres, usePoliticaVigente } from '@/api/publico'
 import { useCrearReserva, type CanalOrigen, type ReservaDetalleResponse } from '@/api/reservas'
 import type { OcupanteRequest } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
@@ -43,6 +43,7 @@ import {
 import { claseCasilla, claseSelect } from '@/pages/publico/comun/estilos'
 import { EtiquetaPago } from '@/pages/publico/comun/EtiquetaPago'
 import { ListaPolitica } from '@/pages/publico/comun/ListaPolitica'
+import { SelectorEstancia } from '@/pages/publico/comun/SelectorEstancia'
 import { SelectorMascotas } from '@/pages/publico/comun/SelectorMascotas'
 import { TextoCargo } from '@/pages/publico/comun/TextoCargo'
 import {
@@ -54,7 +55,6 @@ import {
   horaDesde,
   hoyISO,
   nochesEntre,
-  sumarDias,
   textoMenores,
 } from '@/pages/publico/comun/reglas'
 import { ExitoReserva } from './ExitoReserva'
@@ -62,7 +62,7 @@ import { ResumenReserva } from './ResumenReserva'
 
 /*
  * Asistente de reserva en 3 pasos, el mismo para el huésped (/reservar/:id, canal PORTAL) y para la
- * recepción (/panel/reservas/nueva, canal DIRECTO). El administrador elige el canal.
+ * recepción y la administración (/panel/reservas/nueva, siempre canal DIRECTO).
  */
 
 type Modo = 'huesped' | 'panel'
@@ -237,14 +237,13 @@ interface Props {
 export function AsistenteReserva({ modo }: Props) {
   const { id: idRuta } = useParams()
   const [params] = useSearchParams()
-  const { roles, usuario, cargandoUsuario } = useAuth()
+  const { usuario, cargandoUsuario } = useAuth()
   const { alojamiento, reglas } = useReglasAlojamiento()
   const { temporadas } = useTemporadasAlojamiento()
   const politica = usePoliticaVigente()
   const crear = useCrearReserva()
 
   const estanciaUrl = leerEstancia(params)
-  const esAdmin = roles.includes('ADMINISTRADOR')
 
   // ---------- Estado ----------
   const [paso, setPaso] = useState<Paso>(1)
@@ -253,7 +252,8 @@ export function AsistenteReserva({ modo }: Props) {
   )
   const [entrada, setEntrada] = useState(estanciaUrl.entrada)
   const [salida, setSalida] = useState(estanciaUrl.salida)
-  const [canal, setCanal] = useState<CanalOrigen>(modo === 'huesped' ? 'PORTAL' : 'DIRECTO')
+  // El huésped reserva por el portal; la recepción y la administración, siempre por el canal directo
+  const canal: CanalOrigen = modo === 'huesped' ? 'PORTAL' : 'DIRECTO'
   const [titular, setTitular] = useState<TitularFormulario>({
     nombre: '',
     tipoDocumento: TIPO_DOCUMENTO_TITULAR.valor,
@@ -277,6 +277,10 @@ export function AsistenteReserva({ modo }: Props) {
 
   const apartamento = useApartamento(idApartamento || undefined)
   const apartamentos = useTodosLosApartamentos()
+  // Con las fechas elegidas, qué apartamentos tienen libres todas sus noches (el huésped solo consulta el suyo)
+  const idsAConsultar =
+    modo === 'panel' ? (apartamentos.data ?? []).map((a) => a.identificacion) : idApartamento ? [idApartamento] : []
+  const estanciasLibres = useEstanciasLibres(idsAConsultar, entrada, salida)
   // Mientras el apartamento no carga no se limita el grupo; al cargar se valida con su capacidad
   const capacidad = apartamento.data?.capacidadMaxima ?? null
 
@@ -394,6 +398,8 @@ export function AsistenteReserva({ modo }: Props) {
     if (p === 1) {
       anotar(validar(esquemaEstancia, { apartamento: idApartamento, entrada, salida }).errores)
       if (avisoRP01) e.estancia = avisoRP01
+      if (idApartamento && estanciasLibres[idApartamento] === false)
+        e.estancia = 'El apartamento no tiene libres todas las noches de esa estancia. Elige otras fechas.'
       if (modo === 'panel') anotar(validar(esquemaTitular, titular).errores, (c) => CAMPO_TITULAR[c] ?? c)
       acompanantes.forEach((a, i) => {
         anotar(validar(esquemaAcompanante, a).errores, (c) => (c === 'nombre' ? `acompNombre${i}` : `acompFecha${i}`))
@@ -539,58 +545,52 @@ export function AsistenteReserva({ modo }: Props) {
             <>
               <Tarjeta titulo="Estancia">
                 {modo === 'panel' && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Campo id="res-apartamento" etiqueta="Apartamento" error={errores.apartamento}>
-                      <select
-                        className={claseSelect}
-                        value={idApartamento}
-                        onChange={(e) => setIdApartamento(e.target.value)}
-                      >
-                        <option value="">{apartamentos.isPending ? 'Cargando…' : 'Elige el apartamento'}</option>
-                        {(apartamentos.data ?? []).map((a) => (
-                          <option key={a.identificacion} value={a.identificacion}>
+                  <Campo
+                    id="res-apartamento"
+                    etiqueta="Apartamento"
+                    error={errores.apartamento}
+                    ayuda={
+                      entrada && salida
+                        ? 'Los marcados "No disponible" no tienen libres todas las noches de esas fechas.'
+                        : undefined
+                    }
+                  >
+                    <select
+                      className={claseSelect}
+                      value={idApartamento}
+                      onChange={(e) => setIdApartamento(e.target.value)}
+                    >
+                      <option value="">{apartamentos.isPending ? 'Cargando…' : 'Elige el apartamento'}</option>
+                      {(apartamentos.data ?? []).map((a) => {
+                        const noDisponible = estanciasLibres[a.identificacion] === false
+                        return (
+                          <option
+                            key={a.identificacion}
+                            value={a.identificacion}
+                            // El que ya estaba elegido no se deshabilita: así se ve por qué hay que cambiarlo
+                            disabled={noDisponible && a.identificacion !== idApartamento}
+                          >
                             {a.identificacion} · {a.nombre} (hasta {a.capacidadMaxima})
+                            {noDisponible ? ' · No disponible' : ''}
                           </option>
-                        ))}
-                      </select>
-                    </Campo>
-                    {esAdmin && (
-                      <Campo id="res-canal" etiqueta="Canal" error={errores.canal} ayuda="Portal: a nombre del huésped. Directo: en recepción.">
-                        <select
-                          className={claseSelect}
-                          value={canal}
-                          onChange={(e) => setCanal(e.target.value as CanalOrigen)}
-                        >
-                          <option value="DIRECTO">{NOMBRE_CANAL.DIRECTO}</option>
-                          <option value="PORTAL">{NOMBRE_CANAL.PORTAL}</option>
-                        </select>
-                      </Campo>
-                    )}
-                  </div>
+                        )
+                      })}
+                    </select>
+                  </Campo>
                 )}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Campo id="res-entrada" etiqueta="Llegada" error={errores.entrada}>
-                    <Input
-                      type="date"
-                      min={hoyISO()}
-                      value={entrada}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        setEntrada(v)
-                        if (v && (!salida || salida <= v)) setSalida(sumarDias(v, 1))
-                      }}
-                    />
-                  </Campo>
-                  <Campo id="res-salida" etiqueta="Salida" error={errores.salida}>
-                    <Input
-                      type="date"
-                      min={entrada ? sumarDias(entrada, 1) : hoyISO()}
-                      value={salida}
-                      onChange={(e) => setSalida(e.target.value)}
-                    />
-                  </Campo>
-                </div>
+                <SelectorEstancia
+                  idApartamento={idApartamento || undefined}
+                  entrada={entrada}
+                  salida={salida}
+                  alCambiar={(nuevaEntrada, nuevaSalida) => {
+                    setEntrada(nuevaEntrada)
+                    setSalida(nuevaSalida)
+                  }}
+                  errorEntrada={errores.entrada}
+                  errorSalida={errores.salida}
+                />
                 {avisoRP01 && <AvisoError titulo="Estancia mínima" mensaje={avisoRP01} />}
+                {errores.estancia && !avisoRP01 && <AvisoError titulo="Estancia" mensaje={errores.estancia} />}
               </Tarjeta>
 
               <Tarjeta titulo="Titular de la reserva">

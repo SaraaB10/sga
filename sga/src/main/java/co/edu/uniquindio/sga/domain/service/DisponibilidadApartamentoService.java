@@ -108,6 +108,17 @@ public class DisponibilidadApartamentoService {
      */
     public List<NocheDisponibilidad> disponibilidadPorNoche(Apartamento apartamento, LocalDate desde, LocalDate hasta,
                                                             LocalDate hoy) {
+        return disponibilidadPorNoche(apartamento, desde, hasta, hoy, null);
+    }
+
+    /**
+     * Igual que {@link #disponibilidadPorNoche(Apartamento, LocalDate, LocalDate, LocalDate)}, sin contar como
+     * ocupación la reserva que se está modificando (RN-14): sus noches y su tiempo de preparación quedan libres.
+     *
+     * @param reservaExcluida reserva que no se cuenta como ocupación; puede ser null.
+     */
+    public List<NocheDisponibilidad> disponibilidadPorNoche(Apartamento apartamento, LocalDate desde, LocalDate hasta,
+                                                            LocalDate hoy, CodigoReserva reservaExcluida) {
         requerido(apartamento, "El apartamento es obligatorio");
         requerido(hoy, "La fecha actual es obligatoria");
         if (desde == null || hasta == null) {
@@ -127,7 +138,8 @@ public class DisponibilidadApartamentoService {
                     // RN-07: se marca la noche bloqueada (también si ya pasó, para que el calendario lo muestre)
                     boolean bloqueada = !bloqueoRepository
                             .listarVigentesQueSeSolapan(apartamento.getIdentificacion(), unaNoche).isEmpty();
-                    boolean libre = !noche.isBefore(hoy) && !bloqueada && estaDisponible(apartamento, unaNoche, 1, null);
+                    boolean libre = !noche.isBefore(hoy) && !bloqueada
+                            && estaDisponible(apartamento, unaNoche, 1, reservaExcluida);
                     return new NocheDisponibilidad(noche, libre, bloqueada);
                 })
                 .toList();

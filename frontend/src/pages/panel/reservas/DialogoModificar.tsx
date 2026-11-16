@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { z } from 'zod'
 import { useTodosLosApartamentos } from '@/api/apartamentos'
-import { useApartamento } from '@/api/publico'
+import { useApartamento, useEstanciasLibres } from '@/api/publico'
 import {
   useModificarReserva,
   type ModificacionReservaResponse,
@@ -38,9 +38,10 @@ import {
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from '@/pages/publico/comun/consultas'
 import { EtiquetaPago } from '@/pages/publico/comun/EtiquetaPago'
 import { claseSelect } from '@/pages/publico/comun/estilos'
+import { SelectorEstancia } from '@/pages/publico/comun/SelectorEstancia'
 import { SelectorMascotas } from '@/pages/publico/comun/SelectorMascotas'
 import { TextoCargo } from '@/pages/publico/comun/TextoCargo'
-import { avisoEstanciaMinima, esFechaValida, hoyISO, nochesEntre, sumarDias } from '@/pages/publico/comun/reglas'
+import { avisoEstanciaMinima, esFechaValida, hoyISO, nochesEntre } from '@/pages/publico/comun/reglas'
 
 interface Props {
   reserva: ReservaDetalleResponse
@@ -144,8 +145,16 @@ function Formulario({
   const inicial = aFormulario(reserva)
   const [form, setForm] = useState(inicial)
   const [avisoSinCambios, setAvisoSinCambios] = useState(false)
+  const [errorEstancia, setErrorEstancia] = useState<string | null>(null)
   const modificar = useModificarReserva(reserva.codigo)
   const apartamentos = useTodosLosApartamentos()
+  // Las noches de esta misma reserva cuentan como libres (RN-14)
+  const estanciasLibres = useEstanciasLibres(
+    (apartamentos.data ?? []).map((a) => a.identificacion),
+    form.entrada,
+    form.salida,
+    reserva.codigo,
+  )
   const apartamento = useApartamento(form.apartamento || undefined)
   const { reglas } = useReglasAlojamiento()
   const { temporadas } = useTemporadasAlojamiento()
@@ -189,6 +198,10 @@ function Formulario({
   const guardar = () => {
     setAvisoSinCambios(false)
     if (!validacion.comprobar()) return
+    if (estanciasLibres[form.apartamento] === false) {
+      setErrorEstancia('El apartamento no tiene libres todas las noches de esa estancia. Elige otras fechas.')
+      return
+    }
 
     // Solo viajan los campos que cambiaron; el resto se conserva
     const datos: ModificarReservaRequest = {}
@@ -222,42 +235,44 @@ function Formulario({
       </DialogHeader>
 
       <div className="flex flex-col gap-5">
-        <Campo id="mod-apartamento" etiqueta="Apartamento" error={errores.apartamento}>
+        <Campo
+          id="mod-apartamento"
+          etiqueta="Apartamento"
+          error={errores.apartamento}
+          ayuda='Los marcados "No disponible" no tienen libres todas las noches de esas fechas.'
+        >
           <select
             className={claseSelect}
             value={form.apartamento}
             onChange={(e) => setForm({ ...form, apartamento: e.target.value })}
           >
             {!apartamentos.data && <option value={form.apartamento}>{form.apartamento}</option>}
-            {(apartamentos.data ?? []).map((a) => (
-              <option key={a.identificacion} value={a.identificacion}>
-                {a.identificacion} · {a.nombre} (hasta {a.capacidadMaxima})
-              </option>
-            ))}
+            {(apartamentos.data ?? []).map((a) => {
+              const noDisponible = estanciasLibres[a.identificacion] === false
+              return (
+                <option
+                  key={a.identificacion}
+                  value={a.identificacion}
+                  disabled={noDisponible && a.identificacion !== form.apartamento}
+                >
+                  {a.identificacion} · {a.nombre} (hasta {a.capacidadMaxima})
+                  {noDisponible ? ' · No disponible' : ''}
+                </option>
+              )
+            })}
           </select>
         </Campo>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo id="mod-entrada" etiqueta="Llegada" error={errores.entrada}>
-            <Input
-              type="date"
-              min={hoyISO()}
-              value={form.entrada}
-              onChange={(e) => {
-                const v = e.target.value
-                setForm({ ...form, entrada: v, salida: v && form.salida <= v ? sumarDias(v, 1) : form.salida })
-              }}
-            />
-          </Campo>
-          <Campo id="mod-salida" etiqueta="Salida" error={errores.salida}>
-            <Input
-              type="date"
-              min={form.entrada ? sumarDias(form.entrada, 1) : undefined}
-              value={form.salida}
-              onChange={(e) => setForm({ ...form, salida: e.target.value })}
-            />
-          </Campo>
-        </div>
+        <SelectorEstancia
+          idApartamento={form.apartamento || undefined}
+          entrada={form.entrada}
+          salida={form.salida}
+          excluirReserva={reserva.codigo}
+          alCambiar={(entrada, salida) => setForm({ ...form, entrada, salida })}
+          errorEntrada={errores.entrada}
+          errorSalida={errores.salida}
+        />
         {avisoRP01 && <AvisoError mensaje={avisoRP01} />}
+        {errorEstancia && <AvisoError mensaje={errorEstancia} />}
 
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-sm font-medium">

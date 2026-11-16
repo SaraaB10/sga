@@ -4939,6 +4939,37 @@ GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta
     });
 %}
 
+### 17.3b RN-14 Al modificar la reserva CONFIRMADA de APT-102, sus propias noches cuentan como libres (recepción)
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}&excluirReserva={{confirmadaInicial}}
+Authorization: Bearer {{tokenRecepcion}}
+
+> {%
+    client.test("17.3b 200 sin contar la reserva que se modifica", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var libres = response.body.noches.map(function (n) { return n.libre; }).join();
+        client.assert(libres === "true,true,true,true,true", "noches: " + libres);
+    });
+%}
+
+### 17.3c excluirReserva sin token: 403 (no revela las fechas de una reserva ajena)
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}&excluirReserva={{confirmadaInicial}}
+
+> {%
+    client.test("17.3c 403 excluirReserva sin token", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 17.3d excluirReserva de una reserva de otro titular: 403
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{s17HoyMas11}}&hasta={{s17HoyMas16}}&excluirReserva={{confirmadaInicial}}
+Authorization: Bearer {{tokenHuesped2}}
+
+> {%
+    client.test("17.3d 403 excluirReserva de una reserva ajena", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
 ### 17.4 Calendario: las noches anteriores a hoy no están libres
 GET {{host}}/api/apartamentos/APT-301/disponibilidad?desde={{s17Ayer}}&hasta={{s17HoyMas1}}
 
