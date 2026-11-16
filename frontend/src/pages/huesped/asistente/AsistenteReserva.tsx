@@ -13,7 +13,16 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from '@/pages/publico/comun/consultas'
-import { leerEstancia, ocupantesParaCotizar } from '@/pages/publico/comun/estancia'
+import {
+  contarTipos,
+  fechaCuadraConTipo,
+  leerEstancia,
+  nombreTipo,
+  ocupantesParaCotizar,
+  rangoNacimiento,
+  tipoDeFecha,
+  type TipoHuesped,
+} from '@/pages/publico/comun/estancia'
 import { claseCasilla, claseSelect } from '@/pages/publico/comun/estilos'
 import { EtiquetaPago } from '@/pages/publico/comun/EtiquetaPago'
 import { ListaPolitica } from '@/pages/publico/comun/ListaPolitica'
@@ -45,6 +54,20 @@ type Paso = 1 | 2 | 3
 interface Acompanante {
   nombre: string
   fechaNacimiento: string
+  /**
+   * Paga noche o menor del umbral. '' mientras no se elige (acompañante nuevo); null si viene de la cotización y
+   * aún no carga el umbral con el que se deduce de su fecha.
+   */
+  tipo: TipoHuesped | '' | null
+}
+
+/** Mensaje para una fecha de nacimiento que no corresponde al tipo elegido */
+function mensajeFueraDeTipo(fecha: string, tipo: TipoHuesped, umbral: number | null): string {
+  if (fecha > hoyISO()) return 'La fecha no puede ser futura.'
+  if (umbral === null) return 'Revisa la fecha de nacimiento.'
+  return tipo === 'paga'
+    ? `Con esa fecha tendría menos de ${umbral} años a la llegada. Si es menor, cambia su tipo a "${nombreTipo('menor', umbral)}".`
+    : `Con esa fecha tendría ${umbral} años o más a la llegada. Si paga noche, cambia su tipo a "${nombreTipo('paga', umbral)}".`
 }
 
 interface TitularFormulario {
@@ -87,7 +110,7 @@ export function AsistenteReserva({ modo }: Props) {
   const { id: idRuta } = useParams()
   const [params] = useSearchParams()
   const { roles, usuario, cargandoUsuario } = useAuth()
-  const { reglas } = useReglasAlojamiento()
+  const { alojamiento, reglas } = useReglasAlojamiento()
   const { temporadas } = useTemporadasAlojamiento()
   const politica = usePoliticaVigente()
   const crear = useCrearReserva()
@@ -112,8 +135,10 @@ export function AsistenteReserva({ modo }: Props) {
     fechaNacimiento: estanciaUrl.huespedes[0] ?? '',
   })
   const [acompanantes, setAcompanantes] = useState<Acompanante[]>(
-    estanciaUrl.huespedes.slice(1).map((f) => ({ nombre: '', fechaNacimiento: f })),
+    estanciaUrl.huespedes.slice(1).map((f) => ({ nombre: '', fechaNacimiento: f, tipo: null })),
   )
+  // Cuántos acompañantes de cada tipo trajo la cotización; null si no se llegó desde una
+  const [grupoCotizado, setGrupoCotizado] = useState<{ paga: number; menor: number } | null>(null)
   const [hora, setHora] = useState('')
   const [mascotas, setMascotas] = useState(0)
   const [peso, setPeso] = useState('')
@@ -126,6 +151,68 @@ export function AsistenteReserva({ modo }: Props) {
   const apartamentos = useTodosLosApartamentos()
   // Mientras el apartamento no carga no se limita el grupo; al cargar se valida con su capacidad
   const capacidad = apartamento.data?.capacidadMaxima ?? null
+
+  // ---------- Tipo de cada acompañante ----------
+  const umbral = reglas.umbralEdad
+  const vieneDeCotizacion = params.getAll('h').length > 0
+  // El tipo de los acompañantes de la cotización se deduce de su fecha en cuanto llega el umbral del alojamiento
+  if (alojamiento.data !== undefined) {
+    if (acompanantes.some((a) => a.tipo === null)) {
+      setAcompanantes(
+        acompanantes.map((a) =>
+          a.tipo === null ? { ...a, tipo: tipoDeFecha(a.fechaNacimiento, umbral, estanciaUrl.entrada) } : a,
+        ),
+      )
+    }
+    if (vieneDeCotizacion && grupoCotizado === null) {
+      setGrupoCotizado(
+        contarTipos(estanciaUrl.huespedes.slice(1).map((f) => tipoDeFecha(f, umbral, estanciaUrl.entrada))),
+      )
+    }
+  }
+  const tipoDe = (a: Acompanante): TipoHuesped | '' =>
+    a.tipo ?? tipoDeFecha(a.fechaNacimiento, umbral, estanciaUrl.entrada)
+  const grupoActual = contarTipos(acompanantes.map(tipoDe))
+  const grupoCambio =
+    grupoCotizado !== null && (grupoActual.paga !== grupoCotizado.paga || grupoActual.menor !== grupoCotizado.menor)
+
+  function quitarErroresDe(i: number) {
+    setErrores((e) => {
+      const resto = { ...e }
+      delete resto[`acompTipo${i}`]
+      delete resto[`acompFecha${i}`]
+      return resto
+    })
+  }
+
+  /** Cambia el tipo y borra la fecha si ya no le corresponde; el resumen se recalcula con el grupo nuevo */
+  function cambiarTipo(i: number, tipo: TipoHuesped) {
+    setAcompanantes(
+      acompanantes.map((x, j) =>
+        j === i
+          ? {
+              ...x,
+              tipo,
+              fechaNacimiento: fechaCuadraConTipo(x.fechaNacimiento, tipo, umbral, entrada) ? x.fechaNacimiento : '',
+            }
+          : x,
+      ),
+    )
+    quitarErroresDe(i)
+  }
+
+  /**
+   * Una fecha completa que no es del tipo elegido no se admite. Mientras se escribe el año (menos de 4 cifras)
+   * se deja pasar para no borrar lo que se va digitando.
+   */
+  function cambiarFecha(i: number, fecha: string) {
+    const tipo = tipoDe(acompanantes[i]) || 'paga'
+    const completa = esFechaValida(fecha) && Number(fecha.slice(0, 4)) >= 1000
+    const rechazada = completa && !fechaCuadraConTipo(fecha, tipo, umbral, entrada)
+    setAcompanantes(acompanantes.map((x, j) => (j === i ? { ...x, fechaNacimiento: rechazada ? '' : fecha } : x)))
+    quitarErroresDe(i)
+    if (rechazada) setErrores((e) => ({ ...e, [`acompFecha${i}`]: mensajeFueraDeTipo(fecha, tipo, umbral) }))
+  }
 
   // ---------- Ocupantes ----------
   const datosTitular: TitularFormulario =
@@ -160,7 +247,11 @@ export function AsistenteReserva({ modo }: Props) {
           identificacionApartamento: idApartamento,
           fechaEntrada: entrada,
           fechaSalida: salida,
-          ocupantes: ocupantesParaCotizar(ocupantes, reglas.umbralEdad, entrada),
+          ocupantes: ocupantesParaCotizar(
+            [ocupantes[0], ...acompanantes.map((a) => ({ ...a, tipo: tipoDe(a) }))],
+            umbral,
+            entrada,
+          ),
         }
       : null,
   )
@@ -184,8 +275,11 @@ export function AsistenteReserva({ modo }: Props) {
       }
       acompanantes.forEach((a, i) => {
         if (!a.nombre.trim()) e[`acompNombre${i}`] = 'Escribe el nombre.'
-        if (!esFechaValida(a.fechaNacimiento)) e[`acompFecha${i}`] = 'Escribe la fecha de nacimiento.'
-        else if (a.fechaNacimiento > hoyISO()) e[`acompFecha${i}`] = 'La fecha no puede ser futura.'
+        const tipo = tipoDe(a)
+        if (umbral !== null && tipo === '') e[`acompTipo${i}`] = 'Elige si paga noche o es menor.'
+        else if (!esFechaValida(a.fechaNacimiento)) e[`acompFecha${i}`] = 'Escribe la fecha de nacimiento.'
+        else if (!fechaCuadraConTipo(a.fechaNacimiento, tipo || 'paga', umbral, entrada))
+          e[`acompFecha${i}`] = mensajeFueraDeTipo(a.fechaNacimiento, tipo || 'paga', umbral)
       })
       if (sobreCapacidad) e.capacidad = `El apartamento recibe máximo ${capacidad} personas.`
     }
@@ -252,6 +346,14 @@ export function AsistenteReserva({ modo }: Props) {
                   : 'La recepción solo crea reservas por el canal directo; el huésped reserva por el portal y a su nombre.',
               ),
             })
+            return
+          }
+          // La edad del titular se responde sobre su fecha de nacimiento: se muestra junto a ese campo
+          const errorEdadTitular = esErrorApi(error) && error.status === 400 ? error.errores['titular.fechaNacimiento'] : undefined
+          if (errorEdadTitular) {
+            setErrores({ titularFecha: errorEdadTitular })
+            setErrorServidor({ paso: 1, titulo: 'Revisa al titular', error: new Error(errorEdadTitular) })
+            setPaso(1)
             return
           }
           const destino = esErrorApi(error) && error.status === 409 ? pasoDelError(error.message) : 3
@@ -449,6 +551,9 @@ export function AsistenteReserva({ modo }: Props) {
                 }
                 descripcion={`El titular cuenta como ocupante. ${textoMenores(reglas.umbralEdad)}.`}
               >
+                {grupoCambio && (
+                  <AvisoError mensaje="El grupo cambió frente a la cotización; el valor se recalculó." />
+                )}
                 {acompanantes.length === 0 && (
                   <p className="text-sm text-muted-foreground">
                     Aún no agregas acompañantes.
@@ -458,52 +563,90 @@ export function AsistenteReserva({ modo }: Props) {
                   </p>
                 )}
                 <ul className="flex flex-col gap-4">
-                  {acompanantes.map((a, i) => (
-                    <li key={i} className="grid gap-3 rounded-campo border border-border p-3 sm:grid-cols-[1fr_11rem_auto] sm:items-start">
-                      <Campo id={`acomp-nombre-${i}`} etiqueta={`Acompañante ${i + 1}`} error={errores[`acompNombre${i}`]}>
-                        <Input
-                          placeholder="Nombre completo"
-                          value={a.nombre}
-                          onChange={(e) =>
-                            setAcompanantes(acompanantes.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))
-                          }
-                        />
-                      </Campo>
-                      <Campo id={`acomp-fecha-${i}`} etiqueta="Nacimiento" error={errores[`acompFecha${i}`]}>
-                        <Input
-                          type="date"
-                          max={hoyISO()}
-                          value={a.fechaNacimiento}
-                          onChange={(e) =>
-                            setAcompanantes(
-                              acompanantes.map((x, j) => (j === i ? { ...x, fechaNacimiento: e.target.value } : x)),
-                            )
-                          }
-                        />
-                      </Campo>
-                      <div className="flex items-center justify-between gap-2 sm:mt-7">
-                        {a.fechaNacimiento && (
-                          <EtiquetaPago fecha={a.fechaNacimiento} umbral={reglas.umbralEdad} referencia={entrada} />
+                  {acompanantes.map((a, i) => {
+                    const tipo = tipoDe(a)
+                    const sinTipo = umbral !== null && tipo === ''
+                    const rango = rangoNacimiento(tipo || 'paga', umbral, entrada)
+                    return (
+                      <li
+                        key={i}
+                        className="grid grid-cols-[1fr_auto] items-start gap-3 rounded-campo border border-border p-3 sm:grid-cols-[1fr_1fr_auto] lg:grid-cols-[1fr_9.5rem_10.5rem_auto]"
+                      >
+                        <Campo
+                          id={`acomp-nombre-${i}`}
+                          etiqueta={`Acompañante ${i + 1}`}
+                          error={errores[`acompNombre${i}`]}
+                          className="col-span-2 sm:col-span-3 lg:col-span-1"
+                        >
+                          <Input
+                            placeholder="Nombre completo"
+                            value={a.nombre}
+                            onChange={(e) =>
+                              setAcompanantes(acompanantes.map((x, j) => (j === i ? { ...x, nombre: e.target.value } : x)))
+                            }
+                          />
+                        </Campo>
+                        {umbral !== null && (
+                          <Campo
+                            id={`acomp-tipo-${i}`}
+                            etiqueta="Tipo"
+                            error={errores[`acompTipo${i}`]}
+                            className="col-span-2 sm:col-span-1"
+                          >
+                            <select
+                              className={claseSelect}
+                              value={tipo}
+                              onChange={(e) => cambiarTipo(i, e.target.value as TipoHuesped)}
+                            >
+                              {tipo === '' && (
+                                <option value="" disabled>
+                                  Elige el tipo
+                                </option>
+                              )}
+                              <option value="paga">{nombreTipo('paga', umbral)}</option>
+                              <option value="menor">{nombreTipo('menor', umbral)}</option>
+                            </select>
+                          </Campo>
                         )}
+                        <Campo
+                          id={`acomp-fecha-${i}`}
+                          etiqueta="Nacimiento"
+                          error={errores[`acompFecha${i}`]}
+                          ayuda={sinTipo ? 'Primero elige el tipo.' : undefined}
+                          className={umbral === null ? 'sm:col-span-2 lg:col-span-2' : undefined}
+                        >
+                          <Input
+                            type="date"
+                            min={rango.min}
+                            max={rango.max}
+                            disabled={sinTipo}
+                            value={a.fechaNacimiento}
+                            onChange={(e) => cambiarFecha(i, e.target.value)}
+                          />
+                        </Campo>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
+                          className="mt-7"
                           aria-label={`Quitar al acompañante ${i + 1}`}
-                          onClick={() => setAcompanantes(acompanantes.filter((_, j) => j !== i))}
+                          onClick={() => {
+                            setAcompanantes(acompanantes.filter((_, j) => j !== i))
+                            setErrores({})
+                          }}
                         >
                           <Trash2 aria-hidden="true" />
                         </Button>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
                 <Button
                   type="button"
                   variant="outline"
                   className="w-fit"
                   disabled={capacidad !== null && ocupantes.length >= capacidad}
-                  onClick={() => setAcompanantes([...acompanantes, { nombre: '', fechaNacimiento: '' }])}
+                  onClick={() => setAcompanantes([...acompanantes, { nombre: '', fechaNacimiento: '', tipo: '' }])}
                 >
                   <Plus aria-hidden="true" /> Agregar acompañante
                 </Button>
@@ -687,6 +830,7 @@ export function AsistenteReserva({ modo }: Props) {
           reglas={reglas}
           hora={hora}
           mascotas={mascotas}
+          grupoCambio={grupoCambio}
         />
       </div>
     </div>

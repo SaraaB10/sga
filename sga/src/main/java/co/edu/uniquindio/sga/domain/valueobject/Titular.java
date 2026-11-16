@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.domain.valueobject;
 
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -45,5 +46,18 @@ public record Titular(String nombre, DocumentoIdentidad documento, String email,
         return ocupantes.stream()
                 .filter(this::coincideConOcupante)
                 .anyMatch(o -> o.esFacturableEn(estancia, umbral));
+    }
+
+    /**
+     * El titular, reconocido en el grupo por su documento, no alcanza la edad mínima en la fecha dada.
+     * Si no está en el grupo no se puede saber su edad y responde false: esa falta la rechaza la regla 3.2.
+     */
+    public boolean esMenorDeEdadEn(List<Ocupante> ocupantes, LocalDate fecha, int edadMinima) {
+        if (ocupantes == null || fecha == null) {
+            return false;
+        }
+        return ocupantes.stream()
+                .filter(this::coincideConOcupante)
+                .anyMatch(o -> fecha.isBefore(o.fechaNacimiento()) || o.edadA(fecha) < edadMinima);
     }
 }

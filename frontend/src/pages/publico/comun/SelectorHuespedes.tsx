@@ -92,18 +92,16 @@ export function SelectorHuespedes({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p id={`${id}-adultos`} className="text-sm font-medium">
-            Adultos
+            {umbralEdad !== null ? `Adultos y niños desde ${umbralEdad} años` : 'Adultos'}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {umbralEdad !== null ? `Desde ${umbralEdad} años. Pagan noche.` : 'Pagan noche.'}
-          </p>
+          <p className="text-xs text-muted-foreground">Pagan noche.</p>
         </div>
         <div className="flex items-center gap-2" role="group" aria-labelledby={`${id}-adultos`}>
           <Button
             type="button"
             variant="outline"
             size="icon"
-            aria-label="Quitar un adulto"
+            aria-label="Quitar uno que paga noche"
             disabled={adultos.length <= 1}
             onClick={() => cambiarAdultos(adultos.length - 1)}
           >
@@ -116,7 +114,7 @@ export function SelectorHuespedes({
             type="button"
             variant="outline"
             size="icon"
-            aria-label="Agregar un adulto"
+            aria-label="Agregar uno que paga noche"
             disabled={lleno}
             onClick={() => cambiarAdultos(adultos.length + 1)}
           >

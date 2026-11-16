@@ -18,6 +18,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -62,6 +64,28 @@ class UsuarioControllerIntegracionTest {
         Integer id = JsonPath.read(resultado.getResponse().getContentAsString(), "$.id");
 
         assertTrue(resultado.getResponse().getHeader(HttpHeaders.LOCATION).endsWith("/api/usuarios/" + id));
+    }
+
+    @Test
+    @DisplayName("El administrador crea un usuario de 17 años: 400 sobre fechaNacimiento; con 18 cumplidos hoy, 201")
+    void crearUsuarioExigeLaEdadMinima() throws Exception {
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Bogota"));
+        int menor = SECUENCIA.incrementAndGet();
+        mvc.perform(como(MockMvcRequestBuilders.post("/api/usuarios"), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(usuario(correo(menor), documento(menor), "RECEPCIONISTA")
+                                .replace("1990-04-10", hoy.minusYears(17).toString())))
+                .andExpect(CuerpoError.validacion("/api/usuarios",
+                        Map.of("fechaNacimiento", "Debes tener al menos 18 años para crear una cuenta")));
+        assertTrue(usuarios.findByCorreo(correo(menor)).isEmpty());
+
+        int mayor = SECUENCIA.incrementAndGet();
+        mvc.perform(como(MockMvcRequestBuilders.post("/api/usuarios"), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(usuario(correo(mayor), documento(mayor), "HUESPED")
+                                .replace("1990-04-10", hoy.minusYears(18).toString())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.fechaNacimiento").value(hoy.minusYears(18).toString()));
     }
 
     @Test

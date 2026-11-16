@@ -150,6 +150,36 @@ class ReservaControllerIntegracionTest {
     }
 
     @Test
+    @DisplayName("400: por la recepción, el titular menor de 18 años no crea ni modifica la reserva")
+    void titularMenorDeEdadPorRecepcionResponde400() throws Exception {
+        LocalDate hoy = LocalDate.now(BOGOTA);
+        LocalDate entrada = hoy.plusDays(70);
+        String menor = hoy.minusYears(17).toString();
+        String errorTitular = "$.errores['titular.fechaNacimiento']";
+
+        String conTitularMenor = reserva("APT-301", entrada, entrada.plusDays(2), "16:00", "DIRECTO")
+                .replace("1990-05-20", menor);
+        post("/api/reservas", conTitularMenor)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath(errorTitular).value("El titular debe tener al menos 18 años"));
+
+        // Con 18 años cumplidos hoy ya puede ser titular
+        String conTitularDe18 = reserva("APT-301", entrada, entrada.plusDays(2), "16:00", "DIRECTO")
+                .replace("1990-05-20", hoy.minusYears(18).toString());
+        String codigo = codigo(post("/api/reservas", conTitularDe18).andExpect(status().isCreated()));
+
+        String ocupantesConTitularMenor = """
+                {"ocupantes":[{"nombre":"Ana Gomez","tipoDocumento":"CC","numeroDocumento":"1094000111",
+                               "fechaNacimiento":"%s"}]}
+                """.formatted(menor);
+        put("/api/reservas/" + codigo, ocupantesConTitularMenor)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath(errorTitular).value("El titular debe tener al menos 18 años"));
+        get("/api/reservas/" + codigo)
+                .andExpect(jsonPath("$.ocupantes[0].fechaNacimiento").value(hoy.minusYears(18).toString()));
+    }
+
+    @Test
     @DisplayName("404: la reserva no existe")
     void consultarReservaInexistenteResponde404() throws Exception {
         get("/api/reservas/RES-2026-99999").andExpect(status().isNotFound());
