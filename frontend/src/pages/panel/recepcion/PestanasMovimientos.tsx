@@ -17,7 +17,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { DialogoRegistrarLlegada, DialogoRegistrarSalida } from './DialogosRecepcion'
+import { DialogoSalida } from '../reservas/DialogoSalida'
+import { DialogoRegistrarLlegada } from './DialogosRecepcion'
 
 export type ClavePestana = 'llegadas' | 'salidas' | 'en-casa' | 'por-confirmar'
 
@@ -38,7 +39,7 @@ interface Props {
 const DEFINICION: { clave: ClavePestana; etiqueta: string; icono: LucideIcon }[] = [
   { clave: 'llegadas', etiqueta: 'Llegadas', icono: LogIn },
   { clave: 'salidas', etiqueta: 'Salidas', icono: LogOut },
-  { clave: 'en-casa', etiqueta: 'En casa', icono: DoorOpen },
+  { clave: 'en-casa', etiqueta: 'Hospedados', icono: DoorOpen },
   { clave: 'por-confirmar', etiqueta: 'Por confirmar', icono: Hourglass },
 ]
 
@@ -84,7 +85,7 @@ const colEstado: ColumnaTabla<ReservaResumenResponse> = {
   celda: (r) => <EstadoReserva estado={r.estado} />,
 }
 
-/** Llegadas, salidas, en casa y por confirmar en una tabla con pestañas */
+/** Llegadas, salidas, hospedados y por confirmar en una tabla con pestañas */
 export function PestanasMovimientos({ fecha, porcentajeAnticipo, pestanas }: Props) {
   const [activa, setActiva] = useState<ClavePestana>('llegadas')
   const [llegada, setLlegada] = useState<ReservaResumenResponse | null>(null)
@@ -148,9 +149,14 @@ export function PestanasMovimientos({ fecha, porcentajeAnticipo, pestanas }: Pro
       </div>
     ),
     'en-casa': (r) => (
-      <Button asChild size="sm" variant="ghost">
-        <Link to={enlaceReserva(r.codigo)}>Ver reserva</Link>
-      </Button>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button asChild size="sm" variant="ghost">
+          <Link to={enlaceReserva(r.codigo)}>Ver reserva</Link>
+        </Button>
+        <Button size="sm" onClick={() => setSalida(r)}>
+          <LogOut aria-hidden="true" /> Registrar salida
+        </Button>
+      </div>
     ),
     'por-confirmar': (r) => (
       <Button asChild size="sm" variant="outline">
@@ -257,7 +263,7 @@ export function PestanasMovimientos({ fecha, porcentajeAnticipo, pestanas }: Pro
       </div>
 
       <DialogoRegistrarLlegada reserva={llegada} alCerrar={() => setLlegada(null)} />
-      <DialogoRegistrarSalida reserva={salida} alCerrar={() => setSalida(null)} />
+      <DialogoSalida reserva={salida} alCerrar={() => setSalida(null)} />
     </section>
   )
 }

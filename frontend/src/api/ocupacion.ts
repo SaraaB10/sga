@@ -199,5 +199,11 @@ export function useRegistrarLlegada() {
 
 export function useRegistrarSalida() {
   const refrescar = useRefrescarOcupacion()
-  return useMutation({ mutationFn: registrarSalida, onSuccess: refrescar })
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: registrarSalida,
+    // También el detalle, el folio (se cierra al salir) y los listados de reservas
+    onSuccess: () =>
+      Promise.all([refrescar(), queryClient.invalidateQueries({ queryKey: ['reservas'] })]),
+  })
 }
