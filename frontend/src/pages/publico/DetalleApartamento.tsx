@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BedDouble, CalendarCheck, Clock, Dog, ShieldCheck, Users } from 'lucide-react'
+import { z } from 'zod'
 import { useApartamento } from '@/api/publico'
 import { useAuth } from '@/auth/AuthContext'
 import { ROLES_PANEL, tieneAlgunRol } from '@/auth/roles'
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { fechaOpcional, finDespuesDeInicio, validar } from '@/lib/validacion'
 import { CalendarioDisponibilidad } from './CalendarioDisponibilidad'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { DesgloseCotizacion } from './comun/DesgloseCotizacion'
@@ -287,6 +289,17 @@ function RangosTemporada({ temporada }: { temporada: { tipo: string; rangos: { f
 }
 
 /** Tarjeta fija con las fechas, los huéspedes y la cotización noche por noche */
+/*
+ * CotizarEstanciaRequest: la cotización se pide sola cuando las fechas son válidas. Mientras no se escriban no se
+ * marca nada; escritas, la llegada no es pasada y la salida va después de la llegada.
+ */
+const esquemaCotizacion = z
+  .object({
+    entrada: fechaOpcional().refine((f) => !f || f >= hoyISO(), 'La llegada no puede ser en el pasado.'),
+    salida: fechaOpcional(),
+  })
+  .superRefine(finDespuesDeInicio('entrada', 'salida', 'La salida debe ser después de la llegada.'))
+
 function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string; capacidad: number }) {
   const [params] = useSearchParams()
   const inicial = leerEstancia(params)
@@ -303,7 +316,9 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
   const avisoRP01 = avisoEstanciaMinima(entrada, salida, temporadas, reglas)
   const sobreCapacidad = huespedes.length > capacidad
   const sinAdultos = grupoSinAdultos(huespedes, reglas.umbralEdad, entrada)
-  const listo = reglasCargadas && noches > 0 && !avisoRP01 && !sobreCapacidad && !sinAdultos
+  // Mientras las fechas tengan errores no se pide la cotización
+  const { exito: fechasValidas, errores } = validar(esquemaCotizacion, { entrada, salida })
+  const listo = reglasCargadas && fechasValidas && noches > 0 && !avisoRP01 && !sobreCapacidad && !sinAdultos
 
   const cotizacion = useCotizacion(
     listo
@@ -336,7 +351,7 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
         Cotiza tu estancia
       </h2>
       <div className="grid grid-cols-2 gap-3">
-        <Campo id="cotizar-entrada" etiqueta="Llegada">
+        <Campo id="cotizar-entrada" etiqueta="Llegada" error={errores.entrada}>
           <Input
             type="date"
             min={hoyISO()}
@@ -348,7 +363,7 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
             }}
           />
         </Campo>
-        <Campo id="cotizar-salida" etiqueta="Salida">
+        <Campo id="cotizar-salida" etiqueta="Salida" error={errores.salida}>
           <Input
             type="date"
             min={entrada ? sumarDias(entrada, 1) : hoyISO()}

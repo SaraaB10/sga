@@ -1,18 +1,28 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { KeyRound, Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { esErrorApi } from '@/api/cliente'
 import { useActualizarMiPerfil, useCambiarMiContrasena } from '@/api/usuarios'
 import type { UsuarioResponse } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { AvisoError, Campo } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena } from '@/components/coral'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { erroresDe } from '@/pages/panel/folio/erroresDe'
-import { AYUDA_CONTRASENA, errorContrasena } from '@/pages/panel/usuarios/validaciones'
+import {
+  AYUDA_CONTRASENA,
+  contrasenaNueva,
+  erroresDelServidor,
+  esErrorDeCampos,
+  telefono,
+  textoObligatorio,
+  unirErrores,
+  urlOpcional,
+  useValidacion,
+} from '@/lib/validacion'
 
 export default function MiPerfil() {
   const { usuario, cargandoUsuario } = useAuth()
@@ -58,30 +68,44 @@ function iniciales(nombre: string): string {
 
 const esUrlFoto = (texto: string) => /^https?:\/\/\S+$/i.test(texto)
 
+// ActualizarPerfilRequest: nombre y teléfono obligatorios; la foto es opcional
+const esquemaPerfil = z.object({
+  nombre: textoObligatorio('Escribe tu nombre', 100, 'El nombre admite máximo 100 caracteres'),
+  telefono: telefono(),
+  fotoUrl: urlOpcional(),
+})
+
+// CambioContrasenaRequest, más la confirmación que solo pide la pantalla
+const esquemaContrasena = z
+  .object({
+    actual: z.string().min(1, 'Escribe tu contraseña actual'),
+    nueva: contrasenaNueva('Escribe la contraseña nueva'),
+    confirmacion: z.string().min(1, 'Repite la contraseña nueva'),
+  })
+  .refine((datos) => datos.confirmacion === datos.nueva, {
+    path: ['confirmacion'],
+    message: 'Las contraseñas no coinciden',
+  })
+
 // ---------- Datos ----------
 
 function DatosPerfil({ usuario }: { usuario: UsuarioResponse }) {
   const actualizar = useActualizarMiPerfil()
   const [nombre, setNombre] = useState(usuario.nombre)
-  const [telefono, setTelefono] = useState(usuario.telefono ?? '')
+  const [telefonoActual, setTelefono] = useState(usuario.telefono ?? '')
   const [fotoUrl, setFotoUrl] = useState(usuario.fotoUrl ?? '')
-  const [errores, setErrores] = useState<{ nombre?: string; telefono?: string; fotoUrl?: string }>({})
+  const validacion = useValidacion(esquemaPerfil, { nombre, telefono: telefonoActual, fotoUrl })
+  const errores = unirErrores(validacion.errores, erroresDelServidor(actualizar.error))
 
-  const deServidor = erroresDe(actualizar.error)
   const foto = fotoUrl.trim()
   const vistaPrevia = esUrlFoto(foto) ? foto : undefined
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos = {
-      nombre: nombre.trim() ? undefined : 'Escribe tu nombre',
-      telefono: telefono.trim() ? undefined : 'Escribe tu teléfono',
-      fotoUrl: foto && !esUrlFoto(foto) ? 'Debe empezar por http:// o https://' : undefined,
-    }
-    setErrores(nuevos)
-    if (Object.values(nuevos).some(Boolean)) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
     actualizar.mutate(
-      { nombre: nombre.trim(), telefono: telefono.trim(), ...(foto ? { fotoUrl: foto } : {}) },
+      { nombre: limpios.nombre, telefono: limpios.telefono, ...(limpios.fotoUrl ? { fotoUrl: limpios.fotoUrl } : {}) },
       { onSuccess: () => toast.success('Perfil actualizado') },
     )
   }
@@ -104,20 +128,26 @@ function DatosPerfil({ usuario }: { usuario: UsuarioResponse }) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Campo id="perfil-nombre" etiqueta="Nombre" error={errores.nombre ?? deServidor.nombre} className="sm:col-span-2">
+          <Campo id="perfil-nombre" etiqueta="Nombre" error={errores.nombre} className="sm:col-span-2">
             <Input autoComplete="name" maxLength={100} value={nombre} onChange={(e) => setNombre(e.target.value)} />
           </Campo>
           <Campo id="perfil-correo" etiqueta="Correo" ayuda="El correo no se puede cambiar.">
             <Input type="email" value={usuario.correo} readOnly disabled />
           </Campo>
-          <Campo id="perfil-telefono" etiqueta="Teléfono" error={errores.telefono ?? deServidor.telefono}>
-            <Input type="tel" autoComplete="tel" maxLength={20} value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+          <Campo id="perfil-telefono" etiqueta="Teléfono" error={errores.telefono}>
+            <Input
+              type="tel"
+              autoComplete="tel"
+              maxLength={20}
+              value={telefonoActual}
+              onChange={(e) => setTelefono(e.target.value)}
+            />
           </Campo>
           <Campo
             id="perfil-foto"
             etiqueta="Foto (URL)"
             ayuda="Opcional. Dirección de una imagen que empiece por https://"
-            error={errores.fotoUrl ?? deServidor.fotoUrl}
+            error={errores.fotoUrl}
             className="sm:col-span-2"
           >
             <Input
@@ -131,7 +161,9 @@ function DatosPerfil({ usuario }: { usuario: UsuarioResponse }) {
           </Campo>
         </div>
 
-        {actualizar.error && <AvisoError titulo="No se pudo guardar" error={actualizar.error} />}
+        {actualizar.error && !esErrorDeCampos(actualizar.error) && (
+          <AvisoError titulo="No se pudo guardar" error={actualizar.error} />
+        )}
         <div className="flex justify-end">
           <Button type="submit" disabled={actualizar.isPending} className="w-full sm:w-auto">
             {actualizar.isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Save aria-hidden="true" />}
@@ -152,9 +184,9 @@ interface ErroresContrasena {
 }
 
 /** Lleva el 400 del servidor al campo que corresponde; null si no es de un campo */
-function erroresDelServidor(error: unknown): ErroresContrasena | null {
+function erroresDeContrasena(error: unknown): ErroresContrasena | null {
   if (!esErrorApi(error) || error.status !== 400) return null
-  const { contrasenaActual, contrasenaNueva } = error.errores
+  const { contrasenaActual, contrasenaNueva } = erroresDelServidor(error)
   if (contrasenaActual || contrasenaNueva) return { actual: contrasenaActual, nueva: contrasenaNueva }
   // "La contraseña actual no es correcta" llega sin errores por campo
   if (/actual/i.test(error.message)) return { actual: error.message }
@@ -166,19 +198,14 @@ function CambioContrasena() {
   const [actual, setActual] = useState('')
   const [nueva, setNueva] = useState('')
   const [confirmacion, setConfirmacion] = useState('')
-  const [errores, setErrores] = useState<ErroresContrasena>({})
+  const validacion = useValidacion(esquemaContrasena, { actual, nueva, confirmacion })
+  const errores: ErroresContrasena = validacion.errores
 
-  const deServidor = erroresDelServidor(cambiar.error)
+  const deServidor = erroresDeContrasena(cambiar.error)
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos: ErroresContrasena = {
-      actual: actual ? undefined : 'Escribe tu contraseña actual',
-      nueva: errorContrasena(nueva),
-      confirmacion: confirmacion === nueva ? undefined : 'Las contraseñas no coinciden',
-    }
-    setErrores(nuevos)
-    if (Object.values(nuevos).some(Boolean)) return
+    if (!validacion.comprobar()) return
     cambiar.mutate(
       { contrasenaActual: actual, contrasenaNueva: nueva },
       {
@@ -186,6 +213,7 @@ function CambioContrasena() {
           setActual('')
           setNueva('')
           setConfirmacion('')
+          validacion.reiniciar()
           toast.success('Contraseña cambiada', { description: 'Úsala la próxima vez que inicies sesión.' })
         },
       },
@@ -196,8 +224,7 @@ function CambioContrasena() {
     <Tarjeta titulo="Contraseña">
       <form noValidate onSubmit={enviar} className="flex flex-col gap-4">
         <Campo id="contrasena-actual" etiqueta="Contraseña actual" error={errores.actual ?? deServidor?.actual}>
-          <Input
-            type="password"
+          <InputContrasena
             autoComplete="current-password"
             value={actual}
             onChange={(e) => {
@@ -208,11 +235,10 @@ function CambioContrasena() {
         </Campo>
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo id="contrasena-nueva" etiqueta="Contraseña nueva" ayuda={AYUDA_CONTRASENA} error={errores.nueva ?? deServidor?.nueva}>
-            <Input type="password" autoComplete="new-password" maxLength={72} value={nueva} onChange={(e) => setNueva(e.target.value)} />
+            <InputContrasena autoComplete="new-password" maxLength={72} value={nueva} onChange={(e) => setNueva(e.target.value)} />
           </Campo>
           <Campo id="contrasena-confirmacion" etiqueta="Repite la contraseña nueva" error={errores.confirmacion}>
-            <Input
-              type="password"
+            <InputContrasena
               autoComplete="new-password"
               maxLength={72}
               value={confirmacion}

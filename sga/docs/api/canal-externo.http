@@ -9,7 +9,8 @@
 #   1. Ponga la credencial del canal en @credencial (abajo). Es el valor de sga.canales.credencial-demo de
 #      src/main/resources/application-secrets.properties. Si no la configuró, la app genera una al arrancar y la
 #      escribe en el log: busque "Credencial generada para el canal externo 'booking'".
-#   2. Arranque la app desde cero (./gradlew bootRun; H2 en memoria carga los datos iniciales).
+#   2. Arranque la app en limpio: ./gradlew bootRun --args='--spring.profiles.active=memoria' (H2 en memoria
+#      carga los datos iniciales), o borre la carpeta data/ antes de arrancar normal.
 #   3. En IntelliJ use "Run All Requests in File". Corre COMPLETO y en orden; cada petición valida su respuesta
 #      con client.test y lleva arriba el resultado esperado.
 # Si lo ejecuta dos veces sin reiniciar, el paso 2 responde DUPLICADO_IGNORADO y el 5 RECHAZADO_INVALIDO (la

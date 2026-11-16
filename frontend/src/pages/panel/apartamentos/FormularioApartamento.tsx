@@ -12,37 +12,53 @@ import {
   type ActualizacionApartamentoResponse,
   type TarifaRequest,
 } from '@/api/apartamentos'
-import { esErrorApi } from '@/api/cliente'
 import { useApartamento } from '@/api/publico'
 import { AvisoError, Campo, FotoApartamento } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { claseTextarea } from '../calendario/estilos'
-import { aPesos } from './utilidades'
+import {
+  aPesos,
+  entero,
+  erroresDelServidor,
+  esErrorDeCampos,
+  pesosOpcional,
+  textoObligatorio,
+  urlObligatoria,
+} from '@/lib/validacion'
 
 const MAXIMO_IMAGENES = 10
 
-const entero = (mensaje: string) =>
-  z.string().trim().refine((v) => /^\d+$/.test(v) && Number(v) >= 1, mensaje)
-
-const esquema = z.object({
+/*
+ * RegistrarApartamentoRequest y ActualizarApartamentoRequest: identificación (solo al registrar), nombre,
+ * dormitorios, capacidad y dotación obligatorios; al registrar, entre 1 y 10 imágenes y tarifas opcionales mayores
+ * que cero.
+ */
+const base = z.object({
   identificacion: z.string().trim(),
-  nombre: z.string().trim().min(1, 'Escribe el nombre'),
+  nombre: textoObligatorio('Escribe el nombre'),
   descripcion: z.string(),
-  dormitorios: entero('Al menos 1 dormitorio'),
-  capacidadMaxima: entero('Al menos 1 persona'),
+  dormitorios: entero('Escribe un número entero de 1 o más dormitorios', { minimo: 1 }),
+  capacidadMaxima: entero('Escribe una capacidad entera de 1 o más personas', { minimo: 1 }),
   dotacion: z.string().refine((v) => lineas(v).length > 0, 'Escribe al menos un elemento'),
-  imagenes: z.array(
-    z.object({
-      url: z.string().trim().regex(/^https?:\/\/\S+$/, 'Debe empezar por http:// o https://'),
-    }),
-  ),
+  imagenes: z.array(z.object({ url: z.string() })),
   principal: z.string(),
   tarifas: z.record(z.string(), z.string()),
 })
 
-type Datos = z.infer<typeof esquema>
+const esquemaEdicion = base
+
+const esquemaRegistro = base.extend({
+  identificacion: textoObligatorio('Escribe la identificación, por ejemplo APT-401'),
+  imagenes: z
+    .array(z.object({ url: urlObligatoria('Escribe la URL de la imagen') }))
+    .min(1, 'Agrega al menos una imagen')
+    .max(MAXIMO_IMAGENES, `Máximo ${MAXIMO_IMAGENES} imágenes`),
+  tarifas: z.record(z.string(), pesosOpcional('Valor mayor que cero, sin decimales')),
+})
+
+type Datos = z.infer<typeof base>
 
 function lineas(texto: string): string[] {
   return texto
@@ -82,7 +98,7 @@ export default function FormularioApartamento() {
     setError,
     setValue,
     formState: { errors },
-  } = useForm<Datos>({ resolver: zodResolver(esquema), defaultValues: VACIO })
+  } = useForm<Datos>({ resolver: zodResolver(editando ? esquemaEdicion : esquemaRegistro), defaultValues: VACIO })
   const imagenes = useFieldArray({ control, name: 'imagenes' })
   const principal = useWatch({ control, name: 'principal' })
   const urls = useWatch({ control, name: 'imagenes' })
@@ -129,22 +145,10 @@ export default function FormularioApartamento() {
       return
     }
 
-    // Registro: validaciones propias del alta
-    let valido = true
-    if (!datos.identificacion.trim()) {
-      setError('identificacion', { message: 'Escribe la identificación, por ejemplo APT-401' })
-      valido = false
-    }
-    const tarifas: TarifaRequest[] = []
-    Object.entries(datos.tarifas).forEach(([idTemporada, texto]) => {
-      if (!texto?.trim()) return
-      const valor = aPesos(texto)
-      if (!Number.isInteger(valor) || valor <= 0) {
-        setError(`tarifas.${idTemporada}`, { message: 'Valor mayor que cero, sin decimales' })
-        valido = false
-      } else tarifas.push({ idTemporada, valorPorOcupante: valor })
-    })
-    if (!valido) return
+    // El esquema del registro ya validó la identificación, las imágenes y que cada tarifa escrita sea mayor que cero
+    const tarifas: TarifaRequest[] = Object.entries(datos.tarifas)
+      .filter(([, texto]) => !!texto?.trim())
+      .map(([idTemporada, texto]) => ({ idTemporada, valorPorOcupante: aPesos(texto) }))
 
     const principal = Number(datos.principal)
     registrar.mutate(
@@ -159,22 +163,30 @@ export default function FormularioApartamento() {
           toast.success('Apartamento registrado', { description: `${creado.identificacion} nace inactivo hasta que lo actives.` })
           navigate(`/panel/apartamentos/${encodeURIComponent(creado.identificacion)}`)
         },
-        onError: (error) => marcarErrores(error),
+        onError: (error) => marcarErrores(error, tarifas.map((t) => t.idTemporada)),
       },
     )
   }
 
   /** Los 400 traen campo → mensaje: se muestran junto a cada campo */
-  const marcarErrores = (error: unknown) => {
-    if (!esErrorApi(error) || error.status !== 400) return
-    Object.entries(error.errores).forEach(([campo, mensaje]) => {
-      const base = campo.split(/[.[]/)[0] as keyof Datos
-      if (base in VACIO) setError(base, { message: mensaje })
+  const marcarErrores = (error: unknown, temporadasDeTarifas: string[] = []) => {
+    Object.entries(erroresDelServidor(error)).forEach(([campo, mensaje]) => {
+      if (!mensaje) return
+      // imagenes.0.url va a la URL de esa imagen; tarifas.0.x va a la tarifa de esa posición
+      const imagen = /^imagenes\.(\d+)/.exec(campo)
+      const tarifa = /^tarifas\.(\d+)/.exec(campo)
+      if (imagen) setError(`imagenes.${Number(imagen[1])}.url`, { message: mensaje })
+      else if (tarifa) {
+        const idTemporada = temporadasDeTarifas[Number(tarifa[1])]
+        if (idTemporada) setError(`tarifas.${idTemporada}`, { message: mensaje })
+      } else {
+        const raiz = campo.split('.')[0] as keyof Datos
+        if (raiz in VACIO) setError(raiz, { message: mensaje })
+      }
     })
   }
 
-  const errorGeneral =
-    mutacion.error && !(esErrorApi(mutacion.error) && mutacion.error.status === 400) ? mutacion.error : null
+  const errorGeneral = mutacion.error && !esErrorDeCampos(mutacion.error) ? mutacion.error : null
   const rutaVolver = editando ? `/panel/apartamentos/${encodeURIComponent(id)}` : '/panel/apartamentos'
 
   if (editando && existente.error) {
@@ -340,6 +352,11 @@ export default function FormularioApartamento() {
             >
               <ImagePlus aria-hidden="true" /> Agregar imagen
             </Button>
+            {(errors.imagenes?.message ?? errors.imagenes?.root?.message) && (
+              <p className="mt-2 text-xs font-medium text-error">
+                {errors.imagenes?.message ?? errors.imagenes?.root?.message}
+              </p>
+            )}
           </fieldset>
         )}
 

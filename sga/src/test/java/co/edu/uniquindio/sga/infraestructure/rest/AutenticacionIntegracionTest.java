@@ -18,6 +18,7 @@ import java.util.Map;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.startsWith;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -98,6 +99,26 @@ class AutenticacionIntegracionTest {
         registrar(registro("mayor@correo.co", "1095000011").replace("1990-05-20", hoy.minusYears(18).toString()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.rol").value("HUESPED"));
+    }
+
+    @Test
+    @DisplayName("Registro: un teléfono con letras o con menos de 7 dígitos responde 400 sobre telefono; vacío, el obligatorio")
+    void registroValidaElTelefono() throws Exception {
+        registrar(registro("telefono.letras@correo.co", "1095000020").replace("3160000000", "316-ABC-0000"))
+                .andExpect(CuerpoError.validacion("/api/auth/registro", Map.of("telefono",
+                        "El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, "
+                                + "paréntesis y el signo + al inicio")));
+        registrar(registro("telefono.corto@correo.co", "1095000021").replace("3160000000", "(316) 12"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.telefono", startsWith("El teléfono debe tener al menos 7 dígitos")));
+        registrar(registro("telefono.vacio@correo.co", "1095000022").replace("3160000000", ""))
+                .andExpect(jsonPath("$.errores.telefono").value("El teléfono es obligatorio"));
+        assertTrue(usuarios.findByCorreo("telefono.letras@correo.co").isEmpty());
+
+        registrar(registro("telefono.valido@correo.co", "1095000023").replace("3160000000", "+57 (316) 000-0000"))
+                .andExpect(status().isCreated());
+        assertEquals("+57 (316) 000-0000",
+                usuarios.findByCorreo("telefono.valido@correo.co").orElseThrow().getTelefono());
     }
 
     @Test

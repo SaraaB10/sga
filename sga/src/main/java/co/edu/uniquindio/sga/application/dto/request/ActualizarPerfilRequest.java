@@ -14,7 +14,8 @@ public record ActualizarPerfilRequest(
         String nombre,
 
         @NotBlank(message = "El teléfono es obligatorio")
-        @Size(max = 20, message = "El teléfono admite máximo 20 caracteres")
+        @Size(max = ReglaTelefono.MAXIMO, message = ReglaTelefono.MENSAJE_MAXIMO)
+        @Pattern(regexp = ReglaTelefono.PATRON, message = ReglaTelefono.MENSAJE)
         String telefono,
 
         // Opcional: sin dato se quita la foto

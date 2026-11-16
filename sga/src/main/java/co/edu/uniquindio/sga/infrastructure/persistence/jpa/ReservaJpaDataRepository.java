@@ -62,6 +62,8 @@ public interface ReservaJpaDataRepository extends JpaRepository<ReservaEntity, L
      * CU-19 (7.5, 12.4). Cada criterio es opcional: si el parámetro llega en null, "(:x is null or ...)" lo anula.
      * desde y hasta acotan la fecha de entrada de la estancia (ambas incluidas). El orden y el tamaño de la
      * página llegan en el Pageable; Spring Data deriva solo la consulta count para el total de elementos.
+     * busqueda (en minúsculas y con %, _ y \ escapados) encuentra la reserva por una parte de su código o del
+     * nombre del titular.
      */
     @Query("""
             select r from ReservaEntity r
@@ -71,6 +73,9 @@ public interface ReservaJpaDataRepository extends JpaRepository<ReservaEntity, L
               and (:documentoTitular is null or r.titular.numeroDocumento = :documentoTitular)
               and (:desde is null or r.estancia.fechaEntrada >= :desde)
               and (:hasta is null or r.estancia.fechaEntrada <= :hasta)
+              and (:busqueda is null
+                   or lower(r.codigo) like concat('%', :busqueda, '%') escape '\\'
+                   or lower(r.titular.nombre) like concat('%', :busqueda, '%') escape '\\')
             """)
     Page<ReservaEntity> buscarConFiltro(@Param("estado") EstadoReserva estado,
                                         @Param("apartamentoId") String apartamentoId,
@@ -78,5 +83,6 @@ public interface ReservaJpaDataRepository extends JpaRepository<ReservaEntity, L
                                         @Param("documentoTitular") String documentoTitular,
                                         @Param("desde") LocalDate desde,
                                         @Param("hasta") LocalDate hasta,
+                                        @Param("busqueda") String busqueda,
                                         Pageable pageable);
 }

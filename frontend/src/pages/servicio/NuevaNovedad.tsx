@@ -2,15 +2,24 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2, Send, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useRegistrarNovedad, useTodosLosApartamentos, type GravedadNovedad } from '@/api/apartamentos'
-import { esErrorApi } from '@/api/cliente'
 import { useAuth } from '@/auth/AuthContext'
 import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { erroresDelServidor, esErrorDeCampos, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/panel/calendario/estilos'
 import { GRAVEDADES } from './gravedades'
 import { useSugerenciaGravedad } from './useSugerenciaGravedad'
+
+// RegistrarNovedadRequest: apartamento, autor, descripción y una de las gravedades
+const esquema = z.object({
+  apartamento: z.string().min(1, 'Elige el apartamento'),
+  autor: textoObligatorio('Falta el autor de la novedad'),
+  descripcion: textoObligatorio('Cuenta qué pasó'),
+  gravedad: z.enum(['BAJA', 'MEDIA', 'ALTA'], 'Elige la gravedad'),
+})
 
 export default function NuevaNovedad() {
   const [parametros] = useSearchParams()
@@ -22,8 +31,14 @@ export default function NuevaNovedad() {
   const [apartamento, setApartamento] = useState(parametros.get('apartamento') ?? '')
   const [descripcion, setDescripcion] = useState('')
   const [gravedad, setGravedad] = useState<GravedadNovedad | null>(null)
-  const [errores, setErrores] = useState<Record<string, string>>({})
   const { sugerencia, pedirSugerencia } = useSugerenciaGravedad()
+  const validacion = useValidacion(esquema, {
+    apartamento,
+    autor: usuario?.nombre ?? 'Personal de servicio',
+    descripcion,
+    gravedad,
+  })
+  const errores = unirErrores(validacion.errores, erroresDelServidor(registrar.error))
 
   const cambiarDescripcion = (texto: string) => {
     setDescripcion(texto)
@@ -32,32 +47,24 @@ export default function NuevaNovedad() {
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos: Record<string, string> = {}
-    if (!apartamento) nuevos.apartamento = 'Elige el apartamento'
-    if (!descripcion.trim()) nuevos.descripcion = 'Cuenta qué pasó'
-    if (!gravedad) nuevos.gravedad = 'Elige la gravedad'
-    setErrores(nuevos)
-    if (Object.keys(nuevos).length > 0 || !gravedad) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
 
     registrar.mutate(
       {
-        id: apartamento,
-        datos: { autor: usuario?.nombre ?? 'Personal de servicio', descripcion: descripcion.trim(), gravedad },
+        id: limpios.apartamento,
+        datos: { autor: limpios.autor, descripcion: limpios.descripcion, gravedad: limpios.gravedad },
       },
       {
         onSuccess: (novedad) => {
           toast.success('Novedad registrada', { description: novedad.identificacionApartamento })
           navigate(`/servicio/apartamentos/${encodeURIComponent(novedad.identificacionApartamento)}`)
         },
-        onError: (error) => {
-          if (esErrorApi(error) && error.status === 400) setErrores(error.errores)
-        },
       },
     )
   }
 
-  const errorGeneral =
-    registrar.error && !(esErrorApi(registrar.error) && registrar.error.status === 400) ? registrar.error : null
+  const errorGeneral = registrar.error && !esErrorDeCampos(registrar.error) ? registrar.error : null
 
   return (
     <form noValidate onSubmit={enviar} className="flex flex-col gap-5">

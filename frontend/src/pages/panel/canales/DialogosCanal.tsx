@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy, KeyRound, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import {
   useCrearCanal,
   useResolverConflictoCanal,
@@ -11,8 +12,8 @@ import { Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { erroresDelServidor, textoObligatorio, useValidacion } from '@/lib/validacion'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
-import { erroresDe } from '@/pages/panel/folio/erroresDe'
 import { useAlAbrir } from '@/pages/panel/folio/useAlAbrir'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 
@@ -23,7 +24,23 @@ interface Base {
 
 // ---------- Crear canal ----------
 
-const FORMATO_NOMBRE = /^[a-z0-9][a-z0-9-]{1,39}$/
+// CrearCanalVentaRequest: el nombre va en la ruta de la API, así que solo admite minúsculas, números y guiones
+const esquemaCanal = z.object({
+  nombre: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, 'Escribe el nombre del canal')
+    .regex(
+      /^[a-z0-9][a-z0-9-]{1,39}$/,
+      'De 2 a 40 caracteres entre minúsculas, números y guiones; empieza por letra o número',
+    ),
+})
+
+// ResolverConflictoCanalRequest: motivo obligatorio de hasta 1000 caracteres
+const esquemaConflicto = z.object({
+  motivo: textoObligatorio('Escribe el motivo de la resolución', 1000, 'El motivo no puede pasar de 1000 caracteres'),
+})
 
 export function DialogoCrearCanal({
   abierto,
@@ -32,22 +49,19 @@ export function DialogoCrearCanal({
 }: Base & { alCrear: (credencial: CredencialCanalResponse) => void }) {
   const crear = useCrearCanal()
   const [nombre, setNombre] = useState('')
-  const [aviso, setAviso] = useState<string>()
+  const validacion = useValidacion(esquemaCanal, { nombre })
+  const aviso = validacion.errores.nombre ?? erroresDelServidor(crear.error).nombre
 
   useAlAbrir(abierto, () => {
     setNombre('')
-    setAviso(undefined)
+    validacion.reiniciar()
     crear.reset()
   })
 
   const enviar = () => {
-    const valor = nombre.trim().toLowerCase()
-    if (!FORMATO_NOMBRE.test(valor)) {
-      setAviso('De 2 a 40 caracteres entre minúsculas, números y guiones; empieza por letra o número.')
-      return
-    }
-    setAviso(undefined)
-    crear.mutate(valor, {
+    const limpios = validacion.comprobar()
+    if (!limpios) return
+    crear.mutate(limpios.nombre, {
       onSuccess: (respuesta) => {
         alCambiar(false)
         alCrear(respuesta)
@@ -71,7 +85,7 @@ export function DialogoCrearCanal({
       <Campo
         id="canal-nombre"
         etiqueta="Nombre"
-        error={aviso ?? erroresDe(crear.error).nombre}
+        error={aviso}
         ayuda="Va en la ruta de la API: /api/canales/{nombre}/... Por ejemplo, expedia."
       >
         <Input autoComplete="off" maxLength={40} value={nombre} onChange={(e) => setNombre(e.target.value)} />
@@ -162,24 +176,22 @@ export function DialogoResolverConflicto({
 }: Base & { conflicto: ConflictoCanalResponse | null }) {
   const resolver = useResolverConflictoCanal()
   const [motivo, setMotivo] = useState('')
-  const [aviso, setAviso] = useState<string>()
+  const validacion = useValidacion(esquemaConflicto, { motivo })
+  const aviso = validacion.errores.motivo ?? erroresDelServidor(resolver.error).motivo
 
   useAlAbrir(abierto, () => {
     setMotivo('')
-    setAviso(undefined)
+    validacion.reiniciar()
     resolver.reset()
   })
 
   if (!conflicto) return null
 
   const enviar = () => {
-    if (!motivo.trim()) {
-      setAviso('Escribe el motivo de la resolución')
-      return
-    }
-    setAviso(undefined)
+    const limpios = validacion.comprobar()
+    if (!limpios) return
     resolver.mutate(
-      { id: conflicto.id, motivo: motivo.trim() },
+      { id: conflicto.id, motivo: limpios.motivo },
       {
         onSuccess: () => {
           toast.success('Conflicto resuelto', { description: `${conflicto.canal} · ${conflicto.identificadorExterno}` })
@@ -209,7 +221,7 @@ export function DialogoResolverConflicto({
       alEnviar={enviar}
     >
       <p className="rounded-campo bg-muted/60 px-3 py-2 text-sm">{conflicto.detalle}</p>
-      <Campo id="conflicto-motivo" etiqueta="Motivo" error={aviso ?? erroresDe(resolver.error).motivo}>
+      <Campo id="conflicto-motivo" etiqueta="Motivo" error={aviso}>
         <textarea
           className={claseTextarea}
           maxLength={1000}

@@ -136,6 +136,7 @@ public class ReservaRepositoryInMemory implements ReservaRepository {
                         || criterios.documentoTitular().equals(r.getTitular().documento().numero()))
                 .filter(r -> criterios.desde() == null || !r.getEstancia().fechaEntrada().isBefore(criterios.desde()))
                 .filter(r -> criterios.hasta() == null || !r.getEstancia().fechaEntrada().isAfter(criterios.hasta()))
+                .filter(r -> criterios.coincideConBusqueda(r.getCodigo().valor(), r.getTitular().nombre()))
                 .sorted(MAS_RECIENTE_PRIMERO.thenComparing(r -> r.getCodigo().valor(), Comparator.reverseOrder()))
                 .toList();
         return Pagina.de(filtradas, pagina, tamano);

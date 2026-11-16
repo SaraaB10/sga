@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Loader2, Lock, Save } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useActualizarAlojamiento, type ActualizarAlojamientoRequest } from '@/api/configuracion'
 import { useAlojamiento } from '@/api/publico'
 import type { AlojamientoResponse, ParametrosAlojamientoResponse } from '@/api/tipos'
@@ -8,7 +9,14 @@ import { AvisoError, Campo, Dinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { erroresDe } from '@/pages/panel/folio/erroresDe'
+import {
+  decimal,
+  erroresDelServidor,
+  esErrorDeCampos,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { formatearHora } from '@/pages/publico/comun/reglas'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 import { ServiciosAdicionales } from './ServiciosAdicionales'
@@ -38,6 +46,31 @@ const aFormulario = (a: AlojamientoResponse): Formulario => ({
 })
 
 const vacioANull = (texto: string) => (texto.trim() === '' ? null : texto.trim())
+
+const HORA = /^\d{2}:\d{2}$/
+
+// ActualizarAlojamientoRequest: nombre, ciudad, latitud y longitud obligatorios; el horario lleva las dos horas o ninguna
+const esquema = z
+  .object({
+    nombre: textoObligatorio('Escribe el nombre'),
+    descripcion: z.string(),
+    ciudad: textoObligatorio('Escribe la ciudad'),
+    direccion: z.string(),
+    latitud: decimal('Escribe una latitud entre -90 y 90', -90, 90),
+    longitud: decimal('Escribe una longitud entre -180 y 180', -180, 180),
+    horaEntrada: z.string().refine((h) => h === '' || HORA.test(h), 'Escribe una hora válida'),
+    horaSalida: z.string().refine((h) => h === '' || HORA.test(h), 'Escribe una hora válida'),
+    normaConvivencia: z.string(),
+  })
+  .superRefine((datos, contexto) => {
+    if (!!datos.horaEntrada !== !!datos.horaSalida) {
+      contexto.addIssue({
+        code: 'custom',
+        path: [datos.horaEntrada ? 'horaSalida' : 'horaEntrada'],
+        message: 'Escribe las dos horas del horario o ninguna',
+      })
+    }
+  })
 
 export default function Alojamiento() {
   const alojamiento = useAlojamiento()
@@ -69,40 +102,27 @@ export default function Alojamiento() {
 function FormularioAlojamiento({ alojamiento }: { alojamiento: AlojamientoResponse }) {
   const actualizar = useActualizarAlojamiento()
   const [datos, setDatos] = useState<Formulario>(() => aFormulario(alojamiento))
-  const [errores, setErrores] = useState<Partial<Record<keyof Formulario, string>>>({})
+  const validacion = useValidacion(esquema, datos)
+  const errores = unirErrores(validacion.errores, erroresDelServidor(actualizar.error))
 
   const campo = (clave: keyof Formulario) => ({
     value: datos[clave],
     onChange: (e: { target: { value: string } }) => setDatos((d) => ({ ...d, [clave]: e.target.value })),
   })
-  const deServidor = erroresDe(actualizar.error)
-  const error = (clave: keyof Formulario) => errores[clave] ?? deServidor[clave]
+  const error = (clave: keyof Formulario) => errores[clave]
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos: Partial<Record<keyof Formulario, string>> = {}
-    if (!datos.nombre.trim()) nuevos.nombre = 'Escribe el nombre'
-    if (!datos.ciudad.trim()) nuevos.ciudad = 'Escribe la ciudad'
-    const latitud = Number(datos.latitud)
-    const longitud = Number(datos.longitud)
-    if (datos.latitud.trim() === '' || Number.isNaN(latitud) || latitud < -90 || latitud > 90)
-      nuevos.latitud = 'Entre -90 y 90'
-    if (datos.longitud.trim() === '' || Number.isNaN(longitud) || longitud < -180 || longitud > 180)
-      nuevos.longitud = 'Entre -180 y 180'
-    // L-12: las dos horas o ninguna
-    if (!!datos.horaEntrada !== !!datos.horaSalida) {
-      nuevos[datos.horaEntrada ? 'horaSalida' : 'horaEntrada'] = 'Escribe las dos horas del horario o ninguna'
-    }
-    setErrores(nuevos)
-    if (Object.keys(nuevos).length > 0) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
 
     const solicitud: ActualizarAlojamientoRequest = {
-      nombre: datos.nombre.trim(),
+      nombre: limpios.nombre,
       descripcion: vacioANull(datos.descripcion),
-      ciudad: datos.ciudad.trim(),
+      ciudad: limpios.ciudad,
       direccion: vacioANull(datos.direccion),
-      latitud,
-      longitud,
+      latitud: Number(limpios.latitud.replace(',', '.')),
+      longitud: Number(limpios.longitud.replace(',', '.')),
       normaConvivencia: vacioANull(datos.normaConvivencia),
       horaEntrada: datos.horaEntrada || null,
       horaSalida: datos.horaSalida || null,
@@ -161,7 +181,9 @@ function FormularioAlojamiento({ alojamiento }: { alojamiento: AlojamientoRespon
         </Campo>
       </Seccion>
 
-      {actualizar.error && <AvisoError titulo="No se pudo guardar" error={actualizar.error} />}
+      {actualizar.error && !esErrorDeCampos(actualizar.error) && (
+        <AvisoError titulo="No se pudo guardar" error={actualizar.error} />
+      )}
       <div className="flex justify-end">
         <Button type="submit" disabled={actualizar.isPending} className="w-full sm:w-auto">
           {actualizar.isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Save aria-hidden="true" />}

@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Trash2 } from 'lucide-react'
+import { z } from 'zod'
 import { useTodosLosApartamentos } from '@/api/apartamentos'
 import { esErrorApi } from '@/api/cliente'
 import { useApartamento, usePoliticaVigente } from '@/api/publico'
@@ -12,6 +13,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import {
+  correo,
+  erroresDelServidor,
+  fecha,
+  fechaNoFutura,
+  finDespuesDeInicio,
+  telefono,
+  textoObligatorio,
+  validar,
+  type Errores,
+} from '@/lib/validacion'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from '@/pages/publico/comun/consultas'
 import {
   contarTipos,
@@ -100,6 +112,122 @@ function pasoDelError(mensaje: string): Paso {
   if (/L-16|mascota|RN-09|RP-03|hora|nocturn/i.test(mensaje)) return 2
   if (/RN-0|RN-20|RP-01|capacidad|fecha|noche|disponib|ocupante|edad|bloque|apartamento|estancia/i.test(mensaje)) return 1
   return 3
+}
+
+// ---------- Esquemas (CrearReservaRequest, TitularRequest y OcupanteRequest) ----------
+
+/** Paso 1: apartamento y fechas válidas; la llegada no es pasada y la salida va después de la llegada */
+const esquemaEstancia = z
+  .object({
+    apartamento: z.string().min(1, 'Elige el apartamento.'),
+    entrada: fecha('Elige la fecha de llegada.').refine((f) => f >= hoyISO(), 'La llegada no puede ser en el pasado.'),
+    salida: fecha('Elige la fecha de salida.'),
+  })
+  .superRefine(finDespuesDeInicio('entrada', 'salida', 'La salida debe ser después de la llegada.'))
+
+/** Titular que escribe la recepción: todos los datos obligatorios, con correo y teléfono válidos */
+const esquemaTitular = z.object({
+  nombre: textoObligatorio('Escribe el nombre del titular.'),
+  tipoDocumento: z.string().min(1, 'Elige el tipo de documento.'),
+  numeroDocumento: textoObligatorio('Escribe el número de documento.', 15, 'El documento admite máximo 15 caracteres'),
+  email: correo(),
+  telefono: telefono(),
+  fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
+})
+
+/** Acompañante: nombre y fecha de nacimiento no futura; el tipo se revisa aparte */
+const esquemaAcompanante = z.object({
+  nombre: textoObligatorio('Escribe el nombre.'),
+  fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento.'),
+})
+
+/** Paso 2: hora opcional y mascotas sin números negativos, con el peso de la más pesada si hay */
+function esquemaDetalles(maximoMascotas: number | null, pesoMaximo: number | null) {
+  return z
+    .object({
+      hora: z.string().refine((h) => h === '' || /^\d{2}:\d{2}(:\d{2})?$/.test(h), 'Escribe una hora válida.'),
+      mascotas: z
+        .number()
+        .int()
+        .min(0, 'La cantidad de mascotas no puede ser negativa.')
+        .refine(
+          (n) => maximoMascotas === null || n <= maximoMascotas,
+          `Se aceptan máximo ${maximoMascotas} mascotas.`,
+        ),
+      peso: z.string(),
+    })
+    .superRefine((datos, contexto) => {
+      if (datos.mascotas === 0) return
+      const kg = Number(datos.peso)
+      const mensaje =
+        !/^\d+$/.test(datos.peso.trim()) || kg <= 0
+          ? 'Escribe el peso de la mascota más pesada en kilos enteros, mayor que cero.'
+          : pesoMaximo !== null && kg > pesoMaximo
+            ? `Solo se aceptan mascotas de hasta ${pesoMaximo} kg.`
+            : null
+      if (mensaje) contexto.addIssue({ code: 'custom', path: ['peso'], message: mensaje })
+    })
+}
+
+/** Paso 3: aceptar la política de cancelación */
+const esquemaConfirmacion = z.object({
+  acepta: z.boolean().refine((v) => v, 'Debes aceptar la política de cancelación.'),
+})
+
+/** Campo del titular → clave del error en pantalla */
+const CAMPO_TITULAR: Record<string, string> = {
+  nombre: 'titularNombre',
+  tipoDocumento: 'titularTipo',
+  numeroDocumento: 'titularDocumento',
+  email: 'titularEmail',
+  telefono: 'titularTelefono',
+  fechaNacimiento: 'titularFecha',
+}
+
+/** Campo del backend → clave del error en pantalla */
+const CAMPO_DEL_BACKEND: Record<string, string> = {
+  identificacionApartamento: 'apartamento',
+  fechaEntrada: 'entrada',
+  fechaSalida: 'salida',
+  horaEstimadaLlegada: 'hora',
+  cantidadMascotas: 'mascotas',
+  pesoMascotaMasPesadaKg: 'peso',
+  canalOrigen: 'canal',
+  ...Object.fromEntries(Object.entries(CAMPO_TITULAR).map(([campo, clave]) => [`titular.${campo}`, clave])),
+}
+
+/** Paso donde está cada campo; los acompañantes van en el 1 */
+const PASO_DEL_CAMPO: Record<string, Paso> = {
+  apartamento: 1,
+  entrada: 1,
+  salida: 1,
+  canal: 1,
+  ...Object.fromEntries(Object.values(CAMPO_TITULAR).map((clave) => [clave, 1 as Paso])),
+  hora: 2,
+  mascotas: 2,
+  peso: 2,
+}
+
+/**
+ * Errores por campo de un 400 al crear la reserva, con las claves de la pantalla. El ocupante 0 es el titular y
+ * los demás son los acompañantes, en el mismo orden.
+ */
+function erroresDeCampos(error: unknown): Record<string, string> {
+  const resultado: Record<string, string> = {}
+  Object.entries(erroresDelServidor(error)).forEach(([campo, mensaje]) => {
+    if (!mensaje) return
+    const ocupante = /^ocupantes\.(\d+)\.(nombre|fechaNacimiento)$/.exec(campo)
+    if (ocupante) {
+      const i = Number(ocupante[1])
+      const esNombre = ocupante[2] === 'nombre'
+      const clave =
+        i === 0 ? (esNombre ? 'titularNombre' : 'titularFecha') : `${esNombre ? 'acompNombre' : 'acompFecha'}${i - 1}`
+      resultado[clave] = mensaje
+    } else {
+      resultado[CAMPO_DEL_BACKEND[campo] ?? campo] = mensaje
+    }
+  })
+  return resultado
 }
 
 interface Props {
@@ -257,49 +385,38 @@ export function AsistenteReserva({ modo }: Props) {
   )
 
   // ---------- Validación por paso ----------
-  function validar(p: Paso): Record<string, string> {
+  function validarPaso(p: Paso): Record<string, string> {
     const e: Record<string, string> = {}
+    const anotar = (errores: Errores, renombrar: (clave: string) => string = (c) => c) =>
+      Object.entries(errores).forEach(([clave, mensaje]) => {
+        if (mensaje && e[renombrar(clave)] === undefined) e[renombrar(clave)] = mensaje
+      })
     if (p === 1) {
-      if (!idApartamento) e.apartamento = 'Elige el apartamento.'
-      if (!esFechaValida(entrada)) e.entrada = 'Elige la fecha de llegada.'
-      else if (entrada < hoyISO()) e.entrada = 'La llegada no puede ser en el pasado.'
-      if (!esFechaValida(salida)) e.salida = 'Elige la fecha de salida.'
-      else if (noches < 1) e.salida = 'La salida debe ser después de la llegada.'
+      anotar(validar(esquemaEstancia, { apartamento: idApartamento, entrada, salida }).errores)
       if (avisoRP01) e.estancia = avisoRP01
-      if (modo === 'panel') {
-        if (!titular.nombre.trim()) e.titularNombre = 'Escribe el nombre del titular.'
-        if (!titular.numeroDocumento.trim()) e.titularDocumento = 'Escribe el número de documento.'
-        if (!/^\S+@\S+\.\S+$/.test(titular.email.trim())) e.titularEmail = 'Escribe un correo válido.'
-        if (!titular.telefono.trim()) e.titularTelefono = 'Escribe el teléfono.'
-        if (!esFechaValida(titular.fechaNacimiento)) e.titularFecha = 'Escribe la fecha de nacimiento.'
-      }
+      if (modo === 'panel') anotar(validar(esquemaTitular, titular).errores, (c) => CAMPO_TITULAR[c] ?? c)
       acompanantes.forEach((a, i) => {
-        if (!a.nombre.trim()) e[`acompNombre${i}`] = 'Escribe el nombre.'
+        anotar(validar(esquemaAcompanante, a).errores, (c) => (c === 'nombre' ? `acompNombre${i}` : `acompFecha${i}`))
         const tipo = tipoDe(a)
         if (umbral !== null && tipo === '') e[`acompTipo${i}`] = 'Elige si paga noche o es menor.'
-        else if (!esFechaValida(a.fechaNacimiento)) e[`acompFecha${i}`] = 'Escribe la fecha de nacimiento.'
-        else if (!fechaCuadraConTipo(a.fechaNacimiento, tipo || 'paga', umbral, entrada))
+        else if (
+          e[`acompFecha${i}`] === undefined &&
+          !fechaCuadraConTipo(a.fechaNacimiento, tipo || 'paga', umbral, entrada)
+        )
           e[`acompFecha${i}`] = mensajeFueraDeTipo(a.fechaNacimiento, tipo || 'paga', umbral)
       })
       if (sobreCapacidad) e.capacidad = `El apartamento recibe máximo ${capacidad} personas.`
     }
     if (p === 2) {
-      if (reglas.maximoMascotas !== null && mascotas > reglas.maximoMascotas)
-        e.mascotas = `Se aceptan máximo ${reglas.maximoMascotas} mascotas.`
-      if (mascotas > 0) {
-        const kg = Number(peso)
-        if (!peso || Number.isNaN(kg) || kg <= 0) e.peso = 'Escribe el peso de la mascota más pesada.'
-        else if (reglas.pesoMaximoMascotaKg !== null && kg > reglas.pesoMaximoMascotaKg)
-          e.peso = `Solo se aceptan mascotas de hasta ${reglas.pesoMaximoMascotaKg} kg.`
-      }
+      anotar(validar(esquemaDetalles(reglas.maximoMascotas, reglas.pesoMaximoMascotaKg), { hora, mascotas, peso }).errores)
     }
-    if (p === 3 && !acepta) e.acepta = 'Debes aceptar la política de cancelación.'
+    if (p === 3) anotar(validar(esquemaConfirmacion, { acepta }).errores)
     return e
   }
 
   function avanzar(e: FormEvent) {
     e.preventDefault()
-    const nuevos = validar(paso)
+    const nuevos = validarPaso(paso)
     setErrores(nuevos)
     if (Object.keys(nuevos).length > 0) return
     if (paso < 3) {
@@ -348,12 +465,21 @@ export function AsistenteReserva({ modo }: Props) {
             })
             return
           }
-          // La edad del titular se responde sobre su fecha de nacimiento: se muestra junto a ese campo
-          const errorEdadTitular = esErrorApi(error) && error.status === 400 ? error.errores['titular.fechaNacimiento'] : undefined
-          if (errorEdadTitular) {
-            setErrores({ titularFecha: errorEdadTitular })
-            setErrorServidor({ paso: 1, titulo: 'Revisa al titular', error: new Error(errorEdadTitular) })
-            setPaso(1)
+          // Los 400 por campo se muestran junto a su campo, en el paso donde está
+          const deCampos = erroresDeCampos(error)
+          if (Object.keys(deCampos).length > 0) {
+            const destino = Object.keys(deCampos).some((c) => PASO_DEL_CAMPO[c] === 1 || /^acomp/.test(c))
+              ? 1
+              : Object.keys(deCampos).some((c) => PASO_DEL_CAMPO[c] === 2)
+                ? 2
+                : 3
+            setErrores(deCampos)
+            setErrorServidor({
+              paso: destino,
+              titulo: 'Revisa los datos marcados',
+              error: new Error(Object.values(deCampos).join(' ')),
+            })
+            setPaso(destino)
             return
           }
           const destino = esErrorApi(error) && error.status === 409 ? pasoDelError(error.message) : 3
@@ -429,7 +555,7 @@ export function AsistenteReserva({ modo }: Props) {
                       </select>
                     </Campo>
                     {esAdmin && (
-                      <Campo id="res-canal" etiqueta="Canal" ayuda="Portal: a nombre del huésped. Directo: en recepción.">
+                      <Campo id="res-canal" etiqueta="Canal" error={errores.canal} ayuda="Portal: a nombre del huésped. Directo: en recepción.">
                         <select
                           className={claseSelect}
                           value={canal}
@@ -492,7 +618,7 @@ export function AsistenteReserva({ modo }: Props) {
                         onChange={(e) => setTitular({ ...titular, nombre: e.target.value })}
                       />
                     </Campo>
-                    <Campo id="tit-tipo" etiqueta="Tipo de documento">
+                    <Campo id="tit-tipo" etiqueta="Tipo de documento" error={errores.titularTipo}>
                       <select
                         className={claseSelect}
                         value={titular.tipoDocumento}
@@ -661,6 +787,7 @@ export function AsistenteReserva({ modo }: Props) {
               <Tarjeta titulo="Hora estimada de llegada">
                 <Campo
                   id="res-hora"
+                  error={errores.hora}
                   etiqueta="Hora"
                   ayuda={`${reglas.horaEntrada ? `${conPunto(conHora('La entrada es desde', reglas.horaEntrada))} ` : ''}Es necesaria para confirmar la reserva.`}
                   className="sm:max-w-60"

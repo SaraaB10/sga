@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useAutorizarCierreFolio } from '@/api/folio'
 import { Campo, Dinero } from '@/components/coral'
 import { Input } from '@/components/ui/input'
+import { textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 import { DialogoFormulario } from './DialogoFormulario'
 import type { BaseDialogoFolio } from './DialogosFolio'
@@ -10,6 +12,12 @@ import { erroresDe } from './erroresDe'
 import { useAlAbrir } from './useAlAbrir'
 
 // ---------- Autorizar cierre con saldo (solo ADMINISTRADOR) ----------
+
+// AutorizarCierreFolioRequest: quién autoriza y el motivo, los dos obligatorios
+const esquema = z.object({
+  autorizadoPor: textoObligatorio('Falta el nombre de quien autoriza'),
+  motivo: textoObligatorio('El motivo es obligatorio para cerrar con saldo'),
+})
 
 interface PropsAutorizar extends BaseDialogoFolio {
   saldo: number
@@ -20,22 +28,20 @@ interface PropsAutorizar extends BaseDialogoFolio {
 export function DialogoAutorizarCierre({ codigo, saldo, autorizadoPor, abierto, alCambiar }: PropsAutorizar) {
   const autorizar = useAutorizarCierreFolio(codigo)
   const [motivo, setMotivo] = useState('')
-  const [error, setError] = useState<string>()
+  const validacion = useValidacion(esquema, { autorizadoPor, motivo })
+  const errores = unirErrores(validacion.errores, erroresDe(autorizar.error))
 
   useAlAbrir(abierto, () => {
     setMotivo('')
-    setError(undefined)
+    validacion.reiniciar()
     autorizar.reset()
   })
 
   const enviar = () => {
-    if (!motivo.trim()) {
-      setError('El motivo es obligatorio para cerrar con saldo')
-      return
-    }
-    setError(undefined)
+    const limpios = validacion.comprobar()
+    if (!limpios) return
     autorizar.mutate(
-      { autorizadoPor: `${autorizadoPor} (administración)`, motivo: motivo.trim() },
+      { autorizadoPor: `${limpios.autorizadoPor} (administración)`, motivo: limpios.motivo },
       {
         onSuccess: () => {
           toast.success('Folio cerrado con autorización')
@@ -62,10 +68,10 @@ export function DialogoAutorizarCierre({ codigo, saldo, autorizadoPor, abierto, 
         <span>{saldo < 0 ? 'Saldo a favor' : 'Saldo pendiente'}</span>
         <Dinero valor={Math.abs(saldo)} className="font-semibold" />
       </p>
-      <Campo id="autorizar-por" etiqueta="Autoriza">
+      <Campo id="autorizar-por" etiqueta="Autoriza" error={errores.autorizadoPor}>
         <Input value={autorizadoPor} readOnly disabled />
       </Campo>
-      <Campo id="autorizar-motivo" etiqueta="Motivo" error={error ?? erroresDe(autorizar.error).motivo}>
+      <Campo id="autorizar-motivo" etiqueta="Motivo" error={errores.motivo}>
         <textarea
           className={claseTextarea}
           placeholder="Saldo de $5.000 por redondeo aceptado por el huésped"
