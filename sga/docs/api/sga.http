@@ -1,7 +1,8 @@
 # ====================================================================================================
 # SGA - Apartahotel Coral. Recorrido completo de la API (entrega 2)
 #
-# Cómo ejecutarlo: arranque la app desde cero (./gradlew bootRun; H2 en memoria carga los datos iniciales)
+# Cómo ejecutarlo: arranque la app en limpio (./gradlew bootRun --args='--spring.profiles.active=memoria', H2 en
+# memoria con los datos iniciales; o borre la carpeta data/ antes de arrancar normal)
 # y en IntelliJ use "Run All Requests in File". Corre COMPLETO y en orden, sin preparar nada a mano:
 #   - Las fechas se calculan en la petición 0.1 a partir de hoy en Colombia (UTC-5), igual que los datos
 #     iniciales, que también son relativos a hoy.

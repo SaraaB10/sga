@@ -4,5 +4,5 @@
 build/
 out/
 
-# Base H2 en archivo del perfil "persistente"
+# Base H2 en archivo (sga/data/sga.mv.db)
 data/

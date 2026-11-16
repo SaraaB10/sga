@@ -13,22 +13,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.core.env.Environment;
+import org.springframework.core.io.ClassPathResource;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Perfil "persistente": la base H2 queda en un archivo. Arranca la aplicación, crea una cuenta, la detiene y la
- * vuelve a arrancar sobre el mismo archivo: la cuenta sigue y los datos iniciales no se cargan otra vez.
+ * Por defecto la base H2 queda en un archivo. Arranca la aplicación sobre un archivo temporal, crea una cuenta, la
+ * detiene y la vuelve a arrancar sobre el mismo archivo: la cuenta sigue y los datos iniciales no se cargan otra vez.
+ * El perfil "memoria" deja la base en memoria para arrancar en limpio.
  */
-class PerfilPersistenteIntegracionTest {
+class PersistenciaEnArchivoIntegracionTest {
 
     private static final String CORREO = "persistente@sga.local";
 
@@ -36,14 +40,20 @@ class PerfilPersistenteIntegracionTest {
     Path carpeta;
 
     @Test
-    @DisplayName("Perfil persistente: los datos sobreviven al reinicio y los iniciales no se duplican")
+    @DisplayName("Por defecto la base es un archivo H2 y el perfil memoria la deja en memoria")
+    void laBasePorDefectoEsUnArchivoYElPerfilMemoriaLaDejaEnMemoria() throws IOException {
+        assertEquals("jdbc:h2:file:./data/sga", propiedad("application.properties", "spring.datasource.url"));
+        assertEquals("update", propiedad("application.properties", "spring.jpa.hibernate.ddl-auto"));
+        assertTrue(propiedad("application-memoria.properties", "spring.datasource.url").startsWith("jdbc:h2:mem:"));
+    }
+
+    @Test
+    @DisplayName("Base en archivo: los datos sobreviven al reinicio y los iniciales no se duplican")
     void losDatosSobrevivenAlReinicioSinDuplicarLosIniciales() {
         Map<String, Integer> alPrincipio;
         long usuariosConLaCuenta;
 
         try (ConfigurableApplicationContext app = arrancar()) {
-            assertEquals("jdbc:h2:file:" + carpeta.resolve("sga"),
-                    app.getBean(Environment.class).getProperty("spring.datasource.url"));
             alPrincipio = contar(app);
             assertTrue(alPrincipio.values().stream().allMatch(n -> n > 0), "Faltan datos iniciales: " + alPrincipio);
 
@@ -66,15 +76,22 @@ class PerfilPersistenteIntegracionTest {
         }
     }
 
+    /** Arranca sin perfil sobre un archivo temporal; como argumento manda sobre las propiedades, así no toca ./data */
     private ConfigurableApplicationContext arrancar() {
-        // Como argumentos: mandan sobre application-persistente.properties, así la prueba no toca ./data
         return new SpringApplicationBuilder(SgaApplication.class)
-                .profiles("persistente")
                 .run("--spring.datasource.url=jdbc:h2:file:" + carpeta.resolve("sga"),
                         "--server.port=0",
                         "--sga.recordatorios.activo=false",
                         "--sga.ia.proveedor=local",
                         "--sga.notificaciones.proveedor=local");
+    }
+
+    private static String propiedad(String archivo, String clave) throws IOException {
+        Properties propiedades = new Properties();
+        try (InputStream entrada = new ClassPathResource(archivo).getInputStream()) {
+            propiedades.load(entrada);
+        }
+        return propiedades.getProperty(clave);
     }
 
     private static Map<String, Integer> contar(ConfigurableApplicationContext app) {
