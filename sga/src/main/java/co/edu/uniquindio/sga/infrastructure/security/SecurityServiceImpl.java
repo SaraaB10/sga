@@ -4,9 +4,7 @@ import co.edu.uniquindio.sga.application.dto.request.LoginRequest;
 import co.edu.uniquindio.sga.application.dto.request.RegistroUsuarioRequest;
 import co.edu.uniquindio.sga.application.dto.response.TokenResponse;
 import co.edu.uniquindio.sga.application.dto.response.UsuarioRegistradoResponse;
-import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
 import co.edu.uniquindio.sga.application.exception.UsuarioYaRegistradoException;
-import co.edu.uniquindio.sga.application.security.EdadMinima;
 import co.edu.uniquindio.sga.application.security.SecurityService;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.UsuarioJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.UsuarioEntity;
@@ -33,7 +31,6 @@ public class SecurityServiceImpl implements SecurityService {
     private final JwtTokenProvider jwtTokenProvider;
     private final UsuarioJpaDataRepository usuarios;
     private final PasswordEncoder passwordEncoder;
-    private final EdadMinima edadMinima;
 
     @Value("${sga.jwt.expiracion-minutos}")
     private long expiracionMinutos;
@@ -64,9 +61,6 @@ public class SecurityServiceImpl implements SecurityService {
 
     @Override
     public UsuarioRegistradoResponse registrar(RegistroUsuarioRequest request) {
-        if (!edadMinima.laCumple(request.fechaNacimiento())) {
-            throw new EdadMinimaCuentaException(edadMinima.anios());
-        }
         if (usuarios.existsByCorreo(request.correo()) || usuarios.existsByDocumento(request.documento())) {
             throw new UsuarioYaRegistradoException();
         }

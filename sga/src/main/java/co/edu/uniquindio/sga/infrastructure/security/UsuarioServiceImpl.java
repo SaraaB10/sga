@@ -7,8 +7,6 @@ import co.edu.uniquindio.sga.application.dto.request.CrearUsuarioRequest;
 import co.edu.uniquindio.sga.application.dto.response.PaginaResponse;
 import co.edu.uniquindio.sga.application.dto.response.UsuarioResponse;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
-import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
-import co.edu.uniquindio.sga.application.security.EdadMinima;
 import co.edu.uniquindio.sga.application.exception.UsuarioNoDesactivableException;
 import co.edu.uniquindio.sga.application.exception.UsuarioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.UsuarioYaRegistradoException;
@@ -41,24 +39,18 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final ReservaRepository reservaRepository;
     private final PasswordEncoder passwordEncoder;
     private final int tamanoPagina;
-    private final EdadMinima edadMinima;
 
     public UsuarioServiceImpl(UsuarioJpaDataRepository usuarios, ReservaRepository reservaRepository,
-                              PasswordEncoder passwordEncoder, @Value("${sga.paginacion.tamano}") int tamanoPagina,
-                              EdadMinima edadMinima) {
+                              PasswordEncoder passwordEncoder, @Value("${sga.paginacion.tamano}") int tamanoPagina) {
         this.usuarios = usuarios;
         this.reservaRepository = reservaRepository;
         this.passwordEncoder = passwordEncoder;
         this.tamanoPagina = tamanoPagina;
-        this.edadMinima = edadMinima;
     }
 
     @Override
     @Transactional
     public UsuarioResponse crear(CrearUsuarioRequest request) {
-        if (!edadMinima.laCumple(request.fechaNacimiento())) {
-            throw new EdadMinimaCuentaException(edadMinima.anios());
-        }
         if (usuarios.existsByCorreo(request.correo()) || usuarios.existsByDocumento(request.documento())) {
             throw new UsuarioYaRegistradoException();
         }

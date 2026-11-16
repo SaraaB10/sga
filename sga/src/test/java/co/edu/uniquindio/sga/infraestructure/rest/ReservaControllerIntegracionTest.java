@@ -9,16 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Map;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
@@ -30,8 +27,6 @@ import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -147,36 +142,6 @@ class ReservaControllerIntegracionTest {
         post("/api/reservas", cuerpo)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.titular").exists());
-    }
-
-    @Test
-    @DisplayName("400: por la recepción, el titular menor de 18 años no crea ni modifica la reserva")
-    void titularMenorDeEdadPorRecepcionResponde400() throws Exception {
-        LocalDate hoy = LocalDate.now(BOGOTA);
-        LocalDate entrada = hoy.plusDays(70);
-        String menor = hoy.minusYears(17).toString();
-        String errorTitular = "$.errores['titular.fechaNacimiento']";
-
-        String conTitularMenor = reserva("APT-301", entrada, entrada.plusDays(2), "16:00", "DIRECTO")
-                .replace("1990-05-20", menor);
-        post("/api/reservas", conTitularMenor)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath(errorTitular).value("El titular debe tener al menos 18 años"));
-
-        // Con 18 años cumplidos hoy ya puede ser titular
-        String conTitularDe18 = reserva("APT-301", entrada, entrada.plusDays(2), "16:00", "DIRECTO")
-                .replace("1990-05-20", hoy.minusYears(18).toString());
-        String codigo = codigo(post("/api/reservas", conTitularDe18).andExpect(status().isCreated()));
-
-        String ocupantesConTitularMenor = """
-                {"ocupantes":[{"nombre":"Ana Gomez","tipoDocumento":"CC","numeroDocumento":"1094000111",
-                               "fechaNacimiento":"%s"}]}
-                """.formatted(menor);
-        put("/api/reservas/" + codigo, ocupantesConTitularMenor)
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath(errorTitular).value("El titular debe tener al menos 18 años"));
-        get("/api/reservas/" + codigo)
-                .andExpect(jsonPath("$.ocupantes[0].fechaNacimiento").value(hoy.minusYears(18).toString()));
     }
 
     @Test
@@ -300,32 +265,6 @@ class ReservaControllerIntegracionTest {
         return post("/api/reservas", reserva(apartamento, entrada, salida, hora, canal))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"));
-    }
-
-    @Test
-    @DisplayName("Cuerpos de error de /api/reservas: 400 con errores por campo, 401, 403, 404 y 409")
-    void cuerposDeErrorDeReservas() throws Exception {
-        mvc.perform(MockMvcRequestBuilders.post("/api/reservas").contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(CuerpoError.validacion("/api/reservas", Map.of(
-                        "fechaEntrada", "La fecha de entrada es obligatoria",
-                        "fechaSalida", "La fecha de salida es obligatoria")));
-
-        mvc.perform(MockMvcRequestBuilders.get("/api/reservas").with(anonymous()))
-                .andExpect(CuerpoError.error(HttpStatus.UNAUTHORIZED, CuerpoError.MENSAJE_401, "/api/reservas"));
-
-        mvc.perform(MockMvcRequestBuilders.get("/api/reservas")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("HUESPED"))))
-                .andExpect(CuerpoError.error(HttpStatus.FORBIDDEN, CuerpoError.MENSAJE_403, "/api/reservas"));
-
-        mvc.perform(MockMvcRequestBuilders.get("/api/reservas/RES-2026-99999"))
-                .andExpect(CuerpoError.error(HttpStatus.NOT_FOUND,
-                        "No se encontró la reserva con código: RES-2026-99999", "/api/reservas/RES-2026-99999"));
-
-        LocalDate desde = LocalDate.now(BOGOTA).plusDays(10);
-        mvc.perform(MockMvcRequestBuilders.get("/api/reservas/calendario").param("apartamento", "APT-101")
-                        .param("desde", desde.toString()).param("hasta", desde.minusDays(5).toString()))
-                .andExpect(CuerpoError.error(HttpStatus.CONFLICT,
-                        "7.1: la fecha desde debe ser anterior a la fecha hasta", "/api/reservas/calendario"));
     }
 
     private static String reserva(String apartamento, LocalDate entrada, LocalDate salida, String hora, String canal) {

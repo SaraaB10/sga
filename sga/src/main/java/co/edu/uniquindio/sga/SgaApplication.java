@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@EnableScheduling   // CU-14 y 7.8: activa VencimientoReservasScheduler y RecordatoriosScheduler
+@EnableScheduling   // CU-14: activa la tarea programada VencimientoReservasScheduler
 @EnableConfigurationProperties(DefaultUserProperties.class)   // Usuarios iniciales (Guía 12)
 public class SgaApplication {
 

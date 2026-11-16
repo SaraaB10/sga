@@ -1,13 +1,11 @@
 package co.edu.uniquindio.sga.application.usecase;
 
-import co.edu.uniquindio.sga.application.event.ReservaConfirmadaEvento;
 import co.edu.uniquindio.sga.application.exception.ReservaNoEncontradaException;
 import co.edu.uniquindio.sga.domain.entity.Reserva;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.service.ConfirmacionReservaService;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,15 +27,12 @@ public class ConfirmarReservaUseCase {
     private final ReservaRepository reservaRepository;
     private final ConfirmacionReservaService confirmacionService;
     private final Clock reloj;
-    private final ApplicationEventPublisher eventos;
 
-    /** @param eventos avisa que la reserva se confirmó; el correo al titular sale después de guardarla (7.8). */
     public ConfirmarReservaUseCase(ReservaRepository reservaRepository, ConfirmacionReservaService confirmacionService,
-                                   Clock reloj, ApplicationEventPublisher eventos) {
+                                   Clock reloj) {
         this.reservaRepository = Objects.requireNonNull(reservaRepository);
         this.confirmacionService = Objects.requireNonNull(confirmacionService);
         this.reloj = Objects.requireNonNull(reloj);
-        this.eventos = Objects.requireNonNull(eventos);
     }
 
     /**
@@ -53,9 +48,7 @@ public class ConfirmarReservaUseCase {
             reservaRepository.guardar(reserva);
         }
         confirmacionService.confirmar(codigo, LocalDateTime.now(reloj));
-        Reserva confirmada = reservaRepository.buscarPorCodigo(codigo).orElseThrow();
-        eventos.publishEvent(new ReservaConfirmadaEvento(confirmada));
-        return confirmada;
+        return reservaRepository.buscarPorCodigo(codigo).orElseThrow();
     }
 
     private void verificarQueExiste(CodigoReserva codigo) {

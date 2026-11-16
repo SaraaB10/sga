@@ -8,9 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -19,7 +17,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.endsWith;
@@ -32,8 +29,6 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -616,111 +611,6 @@ class ApartamentoControllerIntegracionTest {
         put("/api/apartamentos/APT-401", actualizacion(0))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.mensaje", startsWith("RN-02")));
-    }
-
-    @Test
-    @DisplayName("Cuerpos de error de /api/apartamentos: 400 con errores por campo, 401, 403, 404 y 409")
-    void cuerposDeErrorDeApartamentos() throws Exception {
-        put("/api/apartamentos/APT-101/tarifas", "{\"tarifas\":[]}")
-                .andExpect(CuerpoError.validacion("/api/apartamentos/APT-101/tarifas",
-                        Map.of("tarifas", "Debe indicar al menos una tarifa")));
-
-        mvc.perform(MockMvcRequestBuilders.get("/api/apartamentos/pendientes-preparacion").with(anonymous()))
-                .andExpect(CuerpoError.error(HttpStatus.UNAUTHORIZED, CuerpoError.MENSAJE_401,
-                        "/api/apartamentos/pendientes-preparacion"));
-
-        mvc.perform(MockMvcRequestBuilders.put("/api/apartamentos/APT-101/retirar")
-                        .with(jwt().authorities(new SimpleGrantedAuthority("HUESPED"))))
-                .andExpect(CuerpoError.error(HttpStatus.FORBIDDEN, CuerpoError.MENSAJE_403,
-                        "/api/apartamentos/APT-101/retirar"));
-
-        get("/api/apartamentos/APT-999")
-                .andExpect(CuerpoError.error(HttpStatus.NOT_FOUND,
-                        "No se encontró el apartamento con identificación: APT-999", "/api/apartamentos/APT-999"));
-
-        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 1, "&capacidadMinima=0"))
-                .andExpect(CuerpoError.error(HttpStatus.CONFLICT,
-                        "7.5: la capacidad mínima debe ser mayor que cero", "/api/apartamentos/disponibles"));
-    }
-
-    @Test
-    @DisplayName("Filtro por servicios: varios valores se aplican juntos sobre la dotación y las características")
-    void filtrarDisponiblesPorServicios() throws Exception {
-        LocalDate entrada = LocalDate.now(BOGOTA).plusDays(40);
-        // Un servicio: el hidromasaje está en la dotación de APT-101 y APT-201
-        mvc.perform(MockMvcRequestBuilders.get(disponibles(entrada, 1, "&servicios=HIDROMASAJE")).with(anonymous()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-201")));
-        // Dos servicios juntos: solo APT-101 tiene hidromasaje y vista al mar
-        get(disponibles(entrada, 1, "&servicios=hidromasaje&servicios=mar"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101")));
-        // También separados por coma, y sin distinguir tildes
-        get(disponibles(entrada, 1, "&servicios=cocina,terraza,bahia"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-102")));
-        // Ninguno ofrece sauna
-        get(disponibles(entrada, 1, "&servicios=cocina&servicios=sauna"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contenido", hasSize(0)))
-                .andExpect(jsonPath("$.totalElementos").value(0));
-    }
-
-    @Test
-    @DisplayName("Calendario público de disponibilidad: libre o no por noche, sin datos de las reservas")
-    void calendarioPublicoDeDisponibilidad() throws Exception {
-        LocalDate hoy = LocalDate.now(BOGOTA);
-        // APT-202 está bloqueado de hoy+3 a hoy+15 en los datos iniciales
-        String url = "/api/apartamentos/APT-202/disponibilidad?desde=" + hoy.minusDays(1) + "&hasta=" + hoy.plusDays(17);
-        mvc.perform(MockMvcRequestBuilders.get(url).with(anonymous()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.apartamento").value("APT-202"))
-                .andExpect(jsonPath("$.noches", hasSize(18)))
-                .andExpect(jsonPath("$.noches[0].fecha").value(hoy.minusDays(1).toString()))
-                .andExpect(jsonPath("$.noches[0].libre").value(false))     // noche pasada
-                .andExpect(jsonPath("$.noches[2].libre").value(true))      // hoy+1
-                .andExpect(jsonPath("$.noches[4].libre").value(false))     // hoy+3, bloqueada
-                .andExpect(jsonPath("$.noches[15].libre").value(false))    // hoy+14, bloqueada
-                .andExpect(jsonPath("$.noches[16].libre").value(true));    // hoy+15, ya libre
-
-        // Una reserva activa ocupa sus noches; la respuesta no dice de quién es ni por qué
-        LocalDate entrada = hoy.plusDays(95);
-        post("/api/reservas", reserva("APT-102", entrada, entrada.plusDays(2))).andExpect(status().isCreated());
-        String calendario = mvc.perform(MockMvcRequestBuilders.get("/api/apartamentos/APT-102/disponibilidad?desde="
-                        + entrada.minusDays(1) + "&hasta=" + entrada.plusDays(4)).with(anonymous()))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        List<Boolean> libres = JsonPath.read(calendario, "$.noches[*].libre");
-        assertEquals(List.of(true, false, false, true, true), libres);
-        assertFalse(calendario.contains("RES-"));
-        assertFalse(calendario.contains("Ana"));
-
-        // Las mismas reglas de la búsqueda: si una noche está libre, la búsqueda de esa noche trae el apartamento
-        get("/api/apartamentos/disponibles?entrada=" + entrada.minusDays(1) + "&salida=" + entrada + "&ocupantes=1")
-                .andExpect(jsonPath("$.contenido[*].identificacion", hasItem("APT-102")));
-        get("/api/apartamentos/disponibles?entrada=" + entrada + "&salida=" + entrada.plusDays(1) + "&ocupantes=1")
-                .andExpect(jsonPath("$.contenido[*].identificacion", not(hasItem("APT-102"))));
-    }
-
-    @Test
-    @DisplayName("Calendario de disponibilidad: 404 si el apartamento no existe y 409 si el rango no es válido")
-    void calendarioDeDisponibilidadErrores() throws Exception {
-        LocalDate hoy = LocalDate.now(BOGOTA);
-        get("/api/apartamentos/APT-999/disponibilidad?desde=" + hoy + "&hasta=" + hoy.plusDays(5))
-                .andExpect(CuerpoError.error(HttpStatus.NOT_FOUND,
-                        "No se encontró el apartamento con identificación: APT-999",
-                        "/api/apartamentos/APT-999/disponibilidad"));
-        get("/api/apartamentos/APT-101/disponibilidad?desde=" + hoy + "&hasta=" + hoy.plusDays(63))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.mensaje").value("La disponibilidad abarca máximo 62 noches y se pidieron 63"));
-        get("/api/apartamentos/APT-101/disponibilidad?desde=" + hoy.plusDays(5) + "&hasta=" + hoy)
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.mensaje").value("La fecha desde debe ser anterior a la fecha hasta"));
-        get("/api/apartamentos/APT-101/disponibilidad?desde=" + hoy)
-                .andExpect(status().isBadRequest());
-        get("/api/apartamentos/APT-101/disponibilidad?desde=" + hoy + "&hasta=" + hoy.plusDays(62))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.noches", hasSize(62)));
     }
 
     private static String apartamentoNuevo(String id, int capacidad, String tarifas) {

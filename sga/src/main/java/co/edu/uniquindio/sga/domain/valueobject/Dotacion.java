@@ -3,7 +3,6 @@ package co.edu.uniquindio.sga.domain.valueobject;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 
 import java.text.Normalizer;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -37,26 +36,6 @@ public record Dotacion(List<String> elementos) {
         }
         String buscada = normalizar(caracteristica.trim());
         return elementos.stream().anyMatch(e -> normalizar(e).contains(buscada));
-    }
-
-    /**
-     * Algún elemento ofrece el servicio: contiene todas sus palabras, en cualquier orden, sin distinguir mayúsculas
-     * ni tildes. Ej.: "vista al mar" coincide con "Vista frontal al mar Caribe".
-     */
-    public boolean ofreceServicio(String servicio) {
-        return elementos.stream().anyMatch(e -> textoMenciona(e, servicio));
-    }
-
-    /**
-     * El texto contiene todas las palabras de lo buscado, en cualquier orden, sin distinguir mayúsculas ni tildes.
-     * Un texto o una búsqueda vacía no coincide.
-     */
-    public static boolean textoMenciona(String texto, String buscado) {
-        if (texto == null || texto.isBlank() || buscado == null || buscado.isBlank()) {
-            return false;
-        }
-        String normalizado = normalizar(texto);
-        return Arrays.stream(normalizar(buscado.trim()).split("\\s+")).allMatch(normalizado::contains);
     }
 
     private static String normalizar(String texto) {

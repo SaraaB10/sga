@@ -8,8 +8,6 @@ import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.FolioEntity;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.mapper.FolioPersistenceMapper;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -59,14 +57,5 @@ public class FolioJpaRepository implements FolioRepository {
             return Optional.empty();
         }
         return dataRepository.findByCodigoReserva(codigoReserva.valor()).map(mapper::aDominio);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Folio> listarConPagosEntre(LocalDate desde, LocalDate hasta) {
-        if (desde == null || hasta == null) {
-            return List.of();
-        }
-        return dataRepository.buscarConPagosEntre(desde, hasta).stream().map(mapper::aDominio).toList();
     }
 }
