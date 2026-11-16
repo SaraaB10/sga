@@ -146,6 +146,8 @@ export interface FiltrosReservas {
   titular?: string
   desde?: FechaISO
   hasta?: FechaISO
+  /** Parte del código de la reserva o del nombre del titular, sin distinguir mayúsculas */
+  buscar?: string
 }
 
 // ---------- Funciones ----------

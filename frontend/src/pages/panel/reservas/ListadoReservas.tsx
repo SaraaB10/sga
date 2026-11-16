@@ -25,7 +25,8 @@ import { EncabezadoFiltros } from '@/pages/publico/comun/EncabezadoFiltros'
 import { claseContenidoPlegable, claseSelect } from '@/pages/publico/comun/estilos'
 import { nochesEntre } from '@/pages/publico/comun/reglas'
 
-const CLAVES = ['estado', 'apartamento', 'canal', 'titular', 'desde', 'hasta'] as const
+// buscar llega también desde la búsqueda del encabezado del panel (/panel/reservas?buscar=...)
+const CLAVES = ['buscar', 'estado', 'apartamento', 'canal', 'titular', 'desde', 'hasta'] as const
 type Clave = (typeof CLAVES)[number]
 
 const ESTADOS: { valor: Estado; texto: string }[] = [
@@ -51,6 +52,7 @@ export default function ListadoReservas() {
     titular: valores.titular.trim() || undefined,
     desde: valores.desde || undefined,
     hasta: valores.hasta || undefined,
+    buscar: valores.buscar.trim() || undefined,
   }
   const consulta = useReservas(filtros, pagina)
 
@@ -181,8 +183,10 @@ export default function ListadoReservas() {
   )
 }
 
-// Filtros de GET /api/reservas: documento del titular de hasta 15 caracteres y "llegada hasta" no antes de "desde"
+// Filtros de GET /api/reservas: búsqueda de hasta 100 caracteres, documento del titular de hasta 15 y
+// "llegada hasta" no antes de "desde"
 const esquemaFiltros = rangoFiltro().safeExtend({
+  buscar: textoOpcional(100, 'La búsqueda admite máximo 100 caracteres'),
   estado: z.string(),
   apartamento: z.string(),
   canal: z.string(),
@@ -234,6 +238,22 @@ function FiltrosListado({
         />
       </div>
       <div id="contenido-filtros-reservas" className={claseContenidoPlegable(abierto, 'md')}>
+      <Campo
+        id="fr-buscar"
+        etiqueta="Buscar"
+        ayuda="Código de la reserva o nombre del titular"
+        error={errores.buscar}
+        className="sm:col-span-2"
+      >
+        <Input
+          type="search"
+          autoComplete="off"
+          maxLength={100}
+          placeholder="RES-2026-00001 o Laura"
+          value={borrador.buscar}
+          onChange={(e) => cambiar('buscar', e.target.value)}
+        />
+      </Campo>
       <Campo id="fr-estado" etiqueta="Estado">
         <select className={claseSelect} value={borrador.estado} onChange={(e) => cambiar('estado', e.target.value)}>
           <option value="">Todos</option>

@@ -92,12 +92,12 @@ function MenuLateral({ alNavegar }: { alNavegar?: () => void }) {
   )
 }
 
-/** Panel de recepción y administración: menú lateral y barra superior */
-// Búsqueda de reservas del encabezado: un código o un documento, sin quedar vacía
+// Búsqueda de reservas del encabezado: un código o el nombre del titular, sin quedar vacía; la aplica /panel/reservas
 const esquemaBusqueda = z.object({
-  texto: textoObligatorio('Escribe un código de reserva o un documento', 60, 'Máximo 60 caracteres'),
+  texto: textoObligatorio('Escribe un código de reserva o el nombre del titular', 100, 'Máximo 100 caracteres'),
 })
 
+/** Panel de recepción y administración: menú lateral y barra superior */
 export function PanelLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()

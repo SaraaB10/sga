@@ -136,7 +136,7 @@ Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (v
 
 **Reservas**
 - `POST /api/reservas` crear una reserva (201 con `Location`); acepta mascotas opcionales (`cantidadMascotas`, `pesoMascotaMasPesadaKg`)
-- `GET /api/reservas` listar con filtros (estado, apartamento, canal, titular y fechas), de la más reciente a la más antigua
+- `GET /api/reservas` listar con filtros (estado, apartamento, canal, documento del titular, fechas y `buscar`, que encuentra por una parte del código o del nombre del titular), de la más reciente a la más antigua. El buscador del encabezado del panel abre **Reservas** con esa búsqueda aplicada
 - `GET /api/reservas/{codigo}` consultar una reserva
 - `PUT /api/reservas/{codigo}` modificar fechas, ocupantes, apartamento o mascotas
 - `PUT /api/reservas/{codigo}/confirmar` confirmar (el cuerpo con la hora de llegada es opcional)
@@ -206,7 +206,7 @@ Los errores siempre vuelven con el mismo formato (`ErrorResponse`): **400** cuan
 
 ## Probar la API
 
-En `sga/docs/api/sga.http` dejamos una colección de 259 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 265 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
+En `sga/docs/api/sga.http` dejamos una colección de 261 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 267 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
 
 1. Arranca la app en limpio, con el perfil `memoria` (`./gradlew bootRun --args='--spring.profiles.active=memoria'`) o después de borrar `sga/data/`. Con una base guardada de antes, las peticiones que esperan los datos iniciales fallan.
 2. Abre `sga.http` en IntelliJ y dale a **Run All Requests in File**. En VS Code se puede usar la extensión REST Client.
@@ -226,7 +226,7 @@ En `sga/docs/api/sga.http` dejamos una colección de 259 peticiones que recorre 
     - Apartamentos y operación: operaciones del estado operativo en lugar del cambio genérico, cada una con su estado de origen, `Location` en bloqueos y novedades con su consulta por id, historial de novedades y apartamentos pendientes de preparación.
     - Folio y transversal: depósito como `AJUSTE_MODIFICACION`, consulta del folio, cargos de servicios adicionales y correcciones (RN-16), `Location` en pagos y temporadas, consulta de una temporada y disponibilidad del canal paginada.
     - Pruebas unitarias de las reglas de configuración (L-03, L-06, L-09, L-12, L-13, L-14 y L-17), del titular facturable (3.2), del apartamento activo (3.3) y del formato del código de reserva.
-- **Verificación:** las 449 pruebas pasan (`./gradlew clean test`), las 259 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada en limpio, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
+- **Verificación:** las 453 pruebas pasan (`./gradlew clean test`), las 261 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada en limpio, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
 
 ## Seguridad
 

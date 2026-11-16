@@ -261,6 +261,28 @@ Authorization: Bearer {{tokenAdmin}}
     });
 %}
 
+### 1.10 Búsqueda por código de reserva (la CONFIRMADA capturada en 1.3)
+GET {{host}}/api/reservas?buscar={{confirmadaInicial}}
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("1.10 200 búsqueda por código", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.totalElementos === 1 && response.body.contenido[0].codigo === client.global.get("confirmadaInicial"), "Se esperaba solo la reserva buscada: " + JSON.stringify(response.body.contenido));
+    });
+%}
+
+### 1.11 Búsqueda por una parte del nombre del titular, sin distinguir mayúsculas (Emily Johnson, canal externo)
+GET {{host}}/api/reservas?buscar=EMILY
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("1.11 200 búsqueda por titular", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.totalElementos === 1 && response.body.contenido[0].nombreTitular === "Emily Johnson", "Se esperaba solo la reserva de Emily Johnson: " + JSON.stringify(response.body.contenido));
+    });
+%}
+
 ### Sección 2: CU-20 CONSULTAR APARTAMENTOS y CU-21 RETIRAR APARTAMENTO (7.3, 12.4)
 
 # ====================================================================================================
