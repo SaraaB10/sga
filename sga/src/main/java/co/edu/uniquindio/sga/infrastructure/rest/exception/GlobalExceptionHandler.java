@@ -6,6 +6,7 @@ import co.edu.uniquindio.sga.application.exception.ConflictoCanalNoEncontradoExc
 import co.edu.uniquindio.sga.application.exception.CodigoRecuperacionInvalidoException;
 import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
+import co.edu.uniquindio.sga.application.exception.ContrasenaNuevaIgualALaActualException;
 import co.edu.uniquindio.sga.application.exception.BloqueoNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.FolioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.NovedadNoEncontradaException;
@@ -87,6 +88,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> contrasenaActualIncorrecta(ContrasenaActualIncorrectaException ex,
                                                                     HttpServletRequest req) {
         return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), req, null);
+    }
+
+    /** 400: la contraseña nueva es la misma que la actual; se reporta sobre el campo contrasenaNueva. */
+    @ExceptionHandler(ContrasenaNuevaIgualALaActualException.class)
+    public ResponseEntity<ErrorResponse> contrasenaNuevaIgual(ContrasenaNuevaIgualALaActualException ex,
+                                                              HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
+                Map.of("contrasenaNueva", ex.getMessage()));
     }
 
     /**

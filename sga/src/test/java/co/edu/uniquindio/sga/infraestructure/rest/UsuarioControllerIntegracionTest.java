@@ -205,6 +205,29 @@ class UsuarioControllerIntegracionTest {
     }
 
     @Test
+    @DisplayName("Cambio de contraseña: la nueva igual a la actual responde 400 sobre contrasenaNueva y no cambia nada")
+    void contrasenaNuevaIgualALaActual() throws Exception {
+        int n = SECUENCIA.incrementAndGet();
+        crear(correo(n), documento(n), "HUESPED");
+
+        cambiarContrasena(correo(n), CONTRASENA, CONTRASENA)
+                .andExpect(CuerpoError.validacion("/api/usuarios/me/contrasena",
+                        Map.of("contrasenaNueva", "La contraseña nueva debe ser distinta de la actual")));
+        login(correo(n), CONTRASENA).andExpect(status().isOk());
+
+        // La actual errada se informa primero: no se revela si la nueva coincide con la guardada
+        cambiarContrasena(correo(n), "Errada2026", CONTRASENA)
+                .andExpect(jsonPath("$.mensaje").value("La contraseña actual no es correcta"));
+
+        // Tras cambiarla, la anterior ya no es la actual y vuelve a ser válida como nueva
+        cambiarContrasena(correo(n), CONTRASENA, "Nueva2027").andExpect(status().isNoContent());
+        cambiarContrasena(correo(n), "Nueva2027", "Nueva2027")
+                .andExpect(jsonPath("$.errores.contrasenaNueva")
+                        .value("La contraseña nueva debe ser distinta de la actual"));
+        cambiarContrasena(correo(n), "Nueva2027", CONTRASENA).andExpect(status().isNoContent());
+    }
+
+    @Test
     @DisplayName("Cuerpos de error de /api/usuarios: 400 con errores por campo, 401, 403, 404 y 409")
     void cuerposDeErrorDeUsuarios() throws Exception {
         mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/1/rol"), "ADMINISTRADOR", CORREO_ADMIN)

@@ -77,6 +77,8 @@ const esquemaPerfil = z.object({
   fotoUrl: urlOpcional(),
 })
 
+const MENSAJE_CONTRASENA_REPETIDA = 'La contraseña nueva debe ser distinta de la actual'
+
 // CambioContrasenaRequest, más la confirmación que solo pide la pantalla
 const esquemaContrasena = z
   .object({
@@ -87,6 +89,11 @@ const esquemaContrasena = z
   .refine((datos) => datos.confirmacion === datos.nueva, {
     path: ['confirmacion'],
     message: 'Las contraseñas no coinciden',
+  })
+  // El backend lo confirma con el hash guardado (400 sobre contrasenaNueva, con el mismo mensaje)
+  .refine((datos) => datos.actual === '' || datos.nueva !== datos.actual, {
+    path: ['nueva'],
+    message: MENSAJE_CONTRASENA_REPETIDA,
   })
 
 // ---------- Datos ----------
@@ -236,7 +243,15 @@ function CambioContrasena() {
         </Campo>
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo id="contrasena-nueva" etiqueta="Contraseña nueva" ayuda={AYUDA_CONTRASENA} error={errores.nueva ?? deServidor?.nueva}>
-            <InputContrasena autoComplete="new-password" maxLength={72} value={nueva} onChange={(e) => setNueva(e.target.value)} />
+            <InputContrasena
+              autoComplete="new-password"
+              maxLength={72}
+              value={nueva}
+              onChange={(e) => {
+                setNueva(e.target.value)
+                if (deServidor?.nueva) cambiar.reset()
+              }}
+            />
           </Campo>
           <Campo id="contrasena-confirmacion" etiqueta="Repite la contraseña nueva" error={errores.confirmacion}>
             <InputContrasena

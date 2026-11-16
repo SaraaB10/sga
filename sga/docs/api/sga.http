@@ -4047,6 +4047,24 @@ Content-Type: application/json
     });
 %}
 
+### 14.12b 400 La contraseña nueva es igual a la actual (se compara con el hash guardado)
+PUT {{host}}/api/usuarios/me/contrasena
+Authorization: Bearer {{tokenNuevo}}
+Content-Type: application/json
+
+{ "contrasenaActual": "Noche2026", "contrasenaNueva": "Noche2026" }
+
+> {%
+    client.test("14.12b cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/usuarios/me/contrasena", "path: " + e.path);
+        client.assert(e.timestamp != null, "timestamp: " + e.timestamp);
+        client.assert(e.errores.contrasenaNueva === "La contraseña nueva debe ser distinta de la actual", "errores: " + JSON.stringify(e.errores));
+    });
+%}
+
 ### 14.13 Cambio de contraseña con la actual correcta: 204
 PUT {{host}}/api/usuarios/me/contrasena
 Authorization: Bearer {{tokenNuevo}}
