@@ -45,6 +45,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Datos de prueba de reservas (12.3): al menos una reserva en cada estado del ciclo de vida (sección 8) y al menos
@@ -72,6 +73,22 @@ public class DatosInicialesReservasConfig {
     private static final Logger log = LoggerFactory.getLogger(DatosInicialesReservasConfig.class);
 
     private static final LocalTime HORA_LLEGADA = LocalTime.of(16, 0);
+
+    /*
+     * Las titulares de la PENDIENTE del portal y del NO_SHOW son las huéspedes con cuenta de application.properties
+     * (sga.usuarios-iniciales: huesped1 y huesped2): mismo nombre, documento, correo y fecha de nacimiento, para que
+     * cada una vea su reserva en "Mis reservas". Si cambian esos usuarios, deben cambiar también aquí.
+     */
+    private static final String LAURA_NOMBRE = "Laura Gomez";
+    private static final String LAURA_DOCUMENTO = "1094777888";
+    private static final String VALENTINA_NOMBRE = "Valentina Rios";
+    private static final String VALENTINA_DOCUMENTO = "1094333444";
+
+    /** Fecha de nacimiento de cada titular por su documento; los demás titulares de prueba nacieron el 12-04-1988. */
+    private static final Map<String, LocalDate> NACIMIENTO_POR_DOCUMENTO = Map.of(
+            LAURA_DOCUMENTO, LocalDate.of(1995, 1, 30),
+            VALENTINA_DOCUMENTO, LocalDate.of(1988, 9, 12));
+    private static final LocalDate NACIMIENTO_POR_DEFECTO = LocalDate.of(1988, 4, 12);
 
     /**
      * @param cargarPoliticaCancelacion el runner de la política de cancelación. Se invoca primero porque cada
@@ -143,7 +160,7 @@ public class DatosInicialesReservasConfig {
 
             // NO_SHOW: confirmada, pero el grupo no llegó antes de la hora límite (L-15); retiene el 50 % (RN-13).
             ReservaConFolio noShow = confirmadaEnElPasado("APT-102", hoy.minusDays(5), hoy.minusDays(3),
-                    titular("Valentina Ríos", "CC", "1094333444", "valentina.rios@correo.co", "3115550202"),
+                    titular(VALENTINA_NOMBRE, "CC", VALENTINA_DOCUMENTO, "huesped2@sga.local", "3115550202"),
                     CanalOrigen.PORTAL);
             reserva = noShow.reserva();
             folio = noShow.folio();
@@ -170,7 +187,7 @@ public class DatosInicialesReservasConfig {
 
             // PENDIENTE por el portal: aún no paga el anticipo ni se confirma.
             nueva("APT-101", hoy.plusDays(10), hoy.plusDays(12),
-                    titular("Laura Gómez", "CC", "1094777888", "laura.gomez@correo.co", "3135550404"),
+                    titular(LAURA_NOMBRE, "CC", LAURA_DOCUMENTO, "huesped1@sga.local", "3135550404"),
                     CanalOrigen.PORTAL, HORA_LLEGADA, null);
 
             // CONFIRMADA en recepción: paga el anticipo del 50 % (L-11) y se confirma (RN-09, RN-21).
@@ -265,6 +282,7 @@ public class DatosInicialesReservasConfig {
 
     /** 3.2: el titular viaja y es un ocupante facturable (adulto). */
     private static Ocupante ocupante(Titular titular) {
-        return new Ocupante(titular.nombre(), titular.documento(), LocalDate.of(1988, 4, 12));
+        return new Ocupante(titular.nombre(), titular.documento(),
+                NACIMIENTO_POR_DOCUMENTO.getOrDefault(titular.documento().numero(), NACIMIENTO_POR_DEFECTO));
     }
 }
