@@ -3,3 +3,6 @@
 .gradle/
 build/
 out/
+
+# Base H2 en archivo del perfil "persistente"
+data/
