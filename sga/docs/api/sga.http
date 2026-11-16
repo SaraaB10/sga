@@ -138,6 +138,8 @@ Authorization: Bearer {{tokenAdmin}}
     client.global.set("hoyMas50", fecha(50));
     client.global.set("hoyMas52", fecha(52));
     client.global.set("hoyMas60", fecha(60));
+    client.global.set("hoyMas70", fecha(70));
+    client.global.set("hoyMas73", fecha(73));
     // RP-01: primer viernes en temporada Alta (10-dic-2026 al 20-ene-2027) a más de 25 días de hoy (fuera de
     // los datos iniciales). Una sola noche, de viernes a sábado.
     var viernes = new Date(Math.max(hoy.getTime() + 26 * DIA, Date.UTC(2026, 11, 10)));
@@ -820,6 +822,67 @@ Authorization: Bearer {{tokenAdmin}}
         client.assert(response.body.id === client.global.get("idBloqueo"), "Debía ser el bloqueo creado en 4.2");
         client.assert(response.body.identificacionApartamento === "APT-102", "El bloqueo era de APT-102");
         client.assert(response.body.vigente === true, "El bloqueo debía seguir vigente");
+    });
+%}
+
+### 4.16b CU-13 Registrar un bloqueo en APT-102 de hoy+70 a hoy+73 para levantarlo
+POST {{host}}/api/apartamentos/APT-102/bloqueos
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "fechaInicio": "{{hoyMas70}}",
+  "fechaFin": "{{hoyMas73}}",
+  "motivo": "Registrado por error"
+}
+
+> {%
+    client.test("4.16b 201 bloqueo para levantar", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+    });
+    client.global.set("idBloqueoALevantar", response.body.id);
+%}
+
+### 4.16c La recepción no puede levantar un bloqueo: 403 (solo el administrador)
+PUT {{host}}/api/apartamentos/APT-102/bloqueos/{{idBloqueoALevantar}}/levantar
+Authorization: Bearer {{tokenRecepcion}}
+
+> {%
+    client.test("4.16c 403 recepción", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 4.16d CU-13 Levantar el bloqueo: queda no vigente, con la fecha de hoy, y no se borra
+PUT {{host}}/api/apartamentos/APT-102/bloqueos/{{idBloqueoALevantar}}/levantar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("4.16d 200 bloqueo levantado", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.id === client.global.get("idBloqueoALevantar"), "Debía ser el bloqueo de 4.16b");
+        client.assert(response.body.vigente === false, "El bloqueo debía quedar no vigente");
+        client.assert(response.body.fechaLevantamiento === client.global.get("hoy"), "fechaLevantamiento: " + response.body.fechaLevantamiento);
+    });
+%}
+
+### 4.16e RN-07 Sus noches vuelven a la venta: APT-102 está libre de hoy+70 a hoy+73
+GET {{host}}/api/apartamentos/APT-102/disponibilidad?desde={{hoyMas70}}&hasta={{hoyMas73}}
+
+> {%
+    client.test("4.16e noches libres otra vez", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.noches.every(function (n) { return n.libre && !n.bloqueada; }), "Alguna noche sigue bloqueada");
+    });
+%}
+
+### 4.16f Levantar otra vez el mismo bloqueo: 409
+PUT {{host}}/api/apartamentos/APT-102/bloqueos/{{idBloqueoALevantar}}/levantar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("4.16f 409 ya levantado", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
     });
 %}
 

@@ -167,6 +167,14 @@ export async function registrarBloqueo(id: string, datos: RegistrarBloqueoReques
   return data
 }
 
+/** Levanta un bloqueo vigente: sus noches vuelven a la venta; el bloqueo se conserva como no vigente */
+export async function levantarBloqueo(id: string, idBloqueo: string): Promise<BloqueoResponse> {
+  const { data } = await cliente.put<BloqueoResponse>(
+    `${ruta(id)}/bloqueos/${encodeURIComponent(idBloqueo)}/levantar`,
+  )
+  return data
+}
+
 export async function listarPendientesPreparacion(pagina = 0): Promise<Pagina<ApartamentoResponse>> {
   const { data } = await cliente.get<Pagina<ApartamentoResponse>>('/api/apartamentos/pendientes-preparacion', {
     params: { pagina },
@@ -322,6 +330,11 @@ export function useRegistrarBloqueo(id: string) {
     mutationFn: (datos: RegistrarBloqueoRequest) => registrarBloqueo(id, datos),
     onSuccess: refrescar,
   })
+}
+
+export function useLevantarBloqueo(id: string) {
+  const refrescar = useRefrescarApartamentos()
+  return useMutation({ mutationFn: (idBloqueo: string) => levantarBloqueo(id, idBloqueo), onSuccess: refrescar })
 }
 
 export function useIniciarPreparacion() {

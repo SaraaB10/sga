@@ -200,6 +200,40 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(jsonPath("$.mensaje", startsWith("No se encontró el apartamento")));
     }
 
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    @DisplayName("CU-13: levantar un bloqueo devuelve sus noches a la venta y lo conserva como no vigente")
+    void levantarBloqueo() throws Exception {
+        LocalDate hoy = LocalDate.now(BOGOTA);
+        LocalDate inicio = hoy.plusDays(160);
+        String idBloqueo = JsonPath.read(post("/api/apartamentos/APT-102/bloqueos",
+                "{\"fechaInicio\":\"" + inicio + "\",\"fechaFin\":\"" + inicio.plusDays(3) + "\",\"motivo\":\"Pintura\"}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.id");
+        get(disponibles(inicio, 2, "")).andExpect(jsonPath("$.contenido[*].identificacion", not(hasItem("APT-102"))));
+
+        put("/api/apartamentos/APT-102/bloqueos/" + idBloqueo + "/levantar", null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(idBloqueo))
+                .andExpect(jsonPath("$.vigente").value(false))
+                .andExpect(jsonPath("$.fechaLevantamiento").value(hoy.toString()));
+
+        // Sus noches vuelven a la venta y deja de salir entre los vigentes, pero se conserva (eliminación lógica)
+        get(disponibles(inicio, 2, "")).andExpect(jsonPath("$.contenido[*].identificacion", hasItem("APT-102")));
+        get("/api/apartamentos/APT-102")
+                .andExpect(jsonPath("$.bloqueosVigentes[*].id", not(hasItem(idBloqueo))));
+        get("/api/apartamentos/APT-102/bloqueos/" + idBloqueo)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vigente").value(false));
+
+        // Ya levantado: 409; de otro apartamento o inexistente: 404
+        put("/api/apartamentos/APT-102/bloqueos/" + idBloqueo + "/levantar", null)
+                .andExpect(status().isConflict());
+        put("/api/apartamentos/APT-101/bloqueos/" + idBloqueo + "/levantar", null)
+                .andExpect(status().isNotFound());
+        put("/api/apartamentos/APT-102/bloqueos/BLQ-no-existe/levantar", null)
+                .andExpect(status().isNotFound());
+    }
+
     // ==================== 7.6: historial de novedades ====================
 
     @Test
@@ -890,6 +924,10 @@ class ApartamentoControllerIntegracionTest {
     }
 
     private ResultActions put(String url, String json) throws Exception {
-        return mvc.perform(MockMvcRequestBuilders.put(url).contentType(MediaType.APPLICATION_JSON).content(json));
+        var peticion = MockMvcRequestBuilders.put(url);
+        if (json != null) {
+            peticion.contentType(MediaType.APPLICATION_JSON).content(json);
+        }
+        return mvc.perform(peticion);
     }
 }

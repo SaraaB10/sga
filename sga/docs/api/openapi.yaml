@@ -888,6 +888,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/apartamentos/{id}/bloqueos/{idBloqueo}/levantar:
+    parameters:
+      - $ref: '#/components/parameters/IdApartamento'
+      - name: idBloqueo
+        in: path
+        required: true
+        description: Id del bloqueo vigente que se levanta
+        schema: { type: string, example: BLQ-3f2a9c1e-7b4d-4e8a-9f10-2c6d5e8b1a47 }
+    put:
+      tags: [Apartamentos]
+      summary: Levantar un bloqueo (CU-13)
+      description: |
+        Sus noches vuelven a la venta (RN-07). La eliminación es lógica: el bloqueo se conserva como no vigente,
+        con la fecha en que se levantó (`fechaLevantamiento`), y deja de salir en `bloqueosVigentes`.
+        Mapea a `LevantarBloqueoUseCase.ejecutar`.
+      operationId: levantarBloqueo
+      responses:
+        '200':
+          description: Bloqueo levantado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BloqueoResponse'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No existe el apartamento, no existe el bloqueo o el bloqueo es de otro apartamento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: El bloqueo ya estaba levantado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/apartamentos/{id}/iniciar-preparacion:
     parameters:
       - $ref: '#/components/parameters/IdApartamento'
@@ -3600,6 +3644,7 @@ components:
         fechaFin: { type: string, format: date }
         motivo: { type: string }
         vigente: { type: boolean }
+        fechaLevantamiento: { type: string, format: date, nullable: true, description: Día en que se levantó; null si sigue vigente }
 
     NovedadResponse:
       type: object

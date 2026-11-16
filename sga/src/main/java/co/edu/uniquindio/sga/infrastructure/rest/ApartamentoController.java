@@ -26,6 +26,7 @@ import co.edu.uniquindio.sga.application.usecase.ConsultarDisponibilidadApartame
 import co.edu.uniquindio.sga.application.usecase.ConsultarNovedadesUseCase;
 import co.edu.uniquindio.sga.application.usecase.EstadoOperativoApartamentoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarApartamentoUseCase;
+import co.edu.uniquindio.sga.application.usecase.LevantarBloqueoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarBloqueoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarNovedadUseCase;
 import co.edu.uniquindio.sga.application.usecase.RetirarApartamentoUseCase;
@@ -84,6 +85,7 @@ public class ApartamentoController {
     private final BuscarApartamentoDisponibleUseCase buscarApartamentoDisponibleUseCase;
     private final RegistrarBloqueoUseCase registrarBloqueoUseCase;
     private final ConsultarBloqueoUseCase consultarBloqueoUseCase;
+    private final LevantarBloqueoUseCase levantarBloqueoUseCase;
     private final EstadoOperativoApartamentoUseCase estadoOperativoUseCase;
     private final RegistrarNovedadUseCase registrarNovedadUseCase;
     private final ConsultarNovedadesUseCase consultarNovedadesUseCase;
@@ -275,6 +277,23 @@ public class ApartamentoController {
             + "apartamento")
     public ResponseEntity<BloqueoResponse> consultarBloqueo(@PathVariable String id, @PathVariable String idBloqueo) {
         Bloqueo bloqueo = consultarBloqueoUseCase.consultar(new IdentificacionApartamento(id), idBloqueo);
+        return ResponseEntity.ok(mapper.aBloqueoResponse(bloqueo));
+    }
+
+    /** CU-13. PUT /api/apartamentos/{id}/bloqueos/{idBloqueo}/levantar */
+    @PutMapping("/{id}/bloqueos/{idBloqueo}/levantar")
+    @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
+    @Operation(summary = "Levantar un bloqueo",
+            description = "Sus noches vuelven a la venta (RN-07). Eliminación lógica: el bloqueo se conserva como no "
+                    + "vigente, con la fecha en que se levantó")
+    @ApiResponse(responseCode = "200", description = "Bloqueo levantado")
+    @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
+    @ApiResponse(responseCode = "403", description = "El rol no lo permite")
+    @ApiResponse(responseCode = "404", description = "No existe el apartamento, no existe el bloqueo o es de otro "
+            + "apartamento")
+    @ApiResponse(responseCode = "409", description = "El bloqueo ya estaba levantado")
+    public ResponseEntity<BloqueoResponse> levantarBloqueo(@PathVariable String id, @PathVariable String idBloqueo) {
+        Bloqueo bloqueo = levantarBloqueoUseCase.ejecutar(new IdentificacionApartamento(id), idBloqueo);
         return ResponseEntity.ok(mapper.aBloqueoResponse(bloqueo));
     }
 

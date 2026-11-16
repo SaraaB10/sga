@@ -5,13 +5,14 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import {
   useActivarApartamento,
+  useLevantarBloqueo,
   usePonerFueraDeServicio,
   useRegistrarBloqueo,
   useRestablecerServicio,
   useRetirarApartamento,
 } from '@/api/apartamentos'
-import type { EstadoOperativo } from '@/api/tipos'
-import { AvisoError, Campo, ConfirmarDialogo } from '@/components/coral'
+import type { BloqueoResponse, EstadoOperativo } from '@/api/tipos'
+import { AvisoError, Campo, ConfirmarDialogo, formatearFecha } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
@@ -260,6 +261,57 @@ export function DialogoRetirar({
       }
     >
       {retirar.error && <AvisoError error={retirar.error} />}
+    </ConfirmarDialogo>
+  )
+}
+
+// ---------- Levantar un bloqueo ----------
+
+/** Confirma y levanta un bloqueo vigente: sus noches vuelven a la venta y el bloqueo queda en el historial */
+export function DialogoLevantarBloqueo({
+  apartamento,
+  bloqueo,
+  alCambiar,
+}: {
+  apartamento: ApartamentoBasico
+  bloqueo: BloqueoResponse | null
+  alCambiar: (abierto: boolean) => void
+}) {
+  const levantar = useLevantarBloqueo(apartamento.identificacion)
+
+  const cambiar = (valor: boolean) => {
+    if (levantar.isPending) return
+    if (!valor) levantar.reset()
+    alCambiar(valor)
+  }
+
+  return (
+    <ConfirmarDialogo
+      abierto={bloqueo !== null}
+      alCambiar={cambiar}
+      titulo="Levantar bloqueo"
+      descripcion={
+        bloqueo && (
+          <>
+            Las noches de {apartamento.identificacion} desde el {formatearFecha(bloqueo.fechaInicio, "d 'de' MMMM")}{' '}
+            hasta el {formatearFecha(sumarDias(bloqueo.fechaFin, -1), "d 'de' MMMM")} vuelven a la venta. El bloqueo
+            («{bloqueo.motivo}») no se borra: queda registrado como levantado hoy.
+          </>
+        )
+      }
+      textoConfirmar="Levantar"
+      cargando={levantar.isPending}
+      alConfirmar={() =>
+        bloqueo &&
+        levantar.mutate(bloqueo.id, {
+          onSuccess: () => {
+            toast.success('Bloqueo levantado', { description: `${apartamento.identificacion} · ${bloqueo.motivo}` })
+            cambiar(false)
+          },
+        })
+      }
+    >
+      {levantar.error && <AvisoError error={levantar.error} />}
     </ConfirmarDialogo>
   )
 }
