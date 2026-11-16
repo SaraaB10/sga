@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.infraestructure.config;
 
 import co.edu.uniquindio.sga.domain.entity.Apartamento;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ApartamentoJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.ApartamentoEntity;
@@ -70,6 +71,27 @@ class DatosInicialesCaracteristicasIntegracionTest {
         apartamentoRepository.guardar(apt101);
         cargador.run();
         assertTrue(apartamento("APT-101").getCaracteristicas().elementos().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Una base con \"Admite mascotas\" de los datos anteriores se corrige; si el administrador las cambió, no")
+    void corrigeLasCaracteristicasConMascotas() throws Exception {
+        conCaracteristicas("APT-301", List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto",
+                "Admite mascotas"));
+        conCaracteristicas("APT-201", List.of("Terraza", "Admite mascotas", "Piso alto"));     // la cambió el administrador
+
+        cargador.run();
+
+        assertEquals(List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto"),
+                apartamento("APT-301").getCaracteristicas().elementos());
+        assertEquals(List.of("Terraza", "Admite mascotas", "Piso alto"),
+                apartamento("APT-201").getCaracteristicas().elementos());
+    }
+
+    private void conCaracteristicas(String id, List<String> caracteristicas) {
+        Apartamento a = apartamento(id);
+        a.definirCaracteristicas(new Caracteristicas(caracteristicas));
+        apartamentoRepository.guardar(a);
     }
 
     private void comoBaseAnterior(String id, List<String> dotacion) {

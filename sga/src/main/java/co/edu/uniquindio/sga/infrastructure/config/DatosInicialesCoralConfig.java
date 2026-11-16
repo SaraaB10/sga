@@ -192,13 +192,16 @@ public class DatosInicialesCoralConfig {
             "APT-301", List.of("Dormitorio principal con vestier y baño privado", "2 dormitorios dobles",
                     "3 baños completos", "Sala", "Cocina amplia", "Piscina de inmersión"));
 
-    /** 7.3: rasgos de cada apartamento (características), aparte de su dotación */
+    /**
+     * 7.3: rasgos de cada apartamento (características), aparte de su dotación. Las mascotas no son un rasgo del
+     * apartamento: las admite o no la política del alojamiento (L-16), igual para todos sus apartamentos.
+     */
     static final Map<String, List<String>> CARACTERISTICAS = Map.of(
             "APT-101", List.of("Vista al mar", "Frente a la playa", "Balcón"),
             "APT-102", List.of("Vista a la bahía", "Terraza"),
-            "APT-201", List.of("Terraza", "Admite mascotas"),
-            "APT-202", List.of("Balcón", "Admite mascotas"),
-            "APT-301", List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto", "Admite mascotas"));
+            "APT-201", List.of("Terraza"),
+            "APT-202", List.of("Balcón"),
+            "APT-301", List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto"));
 
     private static Apartamento apartamento(String id, String nombre, String descripcion, int dormitorios,
                                            int capacidad, long tarifaBase, long tarifaMedia, long tarifaAlta) {

@@ -344,7 +344,7 @@ export default function FormularioApartamento() {
           >
             <textarea
               className={claseTextarea}
-              placeholder={'Vista al mar\nFrente a la playa\nBalcón\nAdmite mascotas'}
+              placeholder={'Vista al mar\nFrente a la playa\nBalcón\nPiso alto'}
               {...register('caracteristicas')}
             />
           </Campo>

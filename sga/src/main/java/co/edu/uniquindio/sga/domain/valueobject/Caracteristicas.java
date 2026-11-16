@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Características del apartamento (7.3): rasgos del espacio y de su ubicación, por ejemplo "Vista al mar", "Frente a
- * la playa", "Balcón", "Terraza", "Piso alto" o "Admite mascotas". Son distintas de la dotación (Dotacion), que es lo
+ * la playa", "Balcón", "Terraza" o "Piso alto". Son distintas de la dotación (Dotacion), que es lo
  * que trae el apartamento (hidromasaje, cocina, cava de vinos). Pueden ser ninguna; no se repiten (sin distinguir
  * mayúsculas ni tildes) y cada una tiene entre 2 y 60 caracteres.
  */

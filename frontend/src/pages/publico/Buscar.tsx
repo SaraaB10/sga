@@ -315,7 +315,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
       <Campo
         id="filtro-caracteristica"
         etiqueta="Características"
-        ayuda="Rasgos del apartamento: vista, balcón, terraza, si admite mascotas…"
+        ayuda="Rasgos del apartamento: vista, balcón, terraza, piso alto…"
         error={errores.caracteristica}
       >
         <select

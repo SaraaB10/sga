@@ -3970,8 +3970,9 @@ components:
         caracteristicas:
           type: array
           description: |
-            Opcional. Rasgos del apartamento (Vista al mar, Frente a la playa, Balcón, Terraza, Piso alto, Admite
-            mascotas...), aparte de la dotación. Máximo 20, cada una de 2 a 60 caracteres y sin repetir
+            Opcional. Rasgos del apartamento (Vista al mar, Frente a la playa, Balcón, Terraza, Piso alto...),
+            aparte de la dotación. Máximo 20, cada una de 2 a 60 caracteres y sin repetir. Las mascotas no van
+            aquí: las admite la política del alojamiento (L-16), igual para todos los apartamentos
           maxItems: 20
           items: { type: string, minLength: 2, maxLength: 60 }
           example: [ Vista al mar, Balcón ]

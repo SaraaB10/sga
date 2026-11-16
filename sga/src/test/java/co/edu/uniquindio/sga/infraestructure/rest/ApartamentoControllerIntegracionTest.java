@@ -344,8 +344,10 @@ class ApartamentoControllerIntegracionTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dormitorios", contains(1, 2, 3)))
                 .andExpect(jsonPath("$.caracteristicas", hasItems("Vista al mar", "Frente a la playa", "Balcón",
-                        "Terraza", "Piso alto", "Admite mascotas")))
-                .andExpect(jsonPath("$.caracteristicas", hasSize(8)))               // sin repetir
+                        "Terraza", "Piso alto")))
+                .andExpect(jsonPath("$.caracteristicas", hasSize(7)))               // sin repetir
+                // Las mascotas las admite la política del alojamiento (L-16), no un rasgo del apartamento
+                .andExpect(jsonPath("$.caracteristicas", not(hasItem("Admite mascotas"))))
                 .andExpect(jsonPath("$.servicios", hasItem("Cava refrigerada de vinos")))
                 .andExpect(jsonPath("$.servicios", hasItem("Hamaca artesanal de San Jacinto")))
                 .andExpect(jsonPath("$.servicios", not(hasItem("Vista frontal al mar Caribe"))));

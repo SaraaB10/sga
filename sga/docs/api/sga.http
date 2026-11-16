@@ -379,9 +379,10 @@ GET {{host}}/api/apartamentos/filtros
     client.test("3.2b 200 opciones de filtro", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.dormitorios.join(",") === "1,2,3", "Dormitorios: " + response.body.dormitorios);
-        ["Vista al mar", "Frente a la playa", "Balcón", "Terraza", "Piso alto", "Admite mascotas"].forEach(function (c) {
+        ["Vista al mar", "Frente a la playa", "Balcón", "Terraza", "Piso alto"].forEach(function (c) {
             client.assert(response.body.caracteristicas.indexOf(c) >= 0, "Falta la característica " + c + ": " + response.body.caracteristicas);
         });
+        client.assert(response.body.caracteristicas.indexOf("Admite mascotas") < 0, "Las mascotas las admite el alojamiento (L-16), no son característica: " + response.body.caracteristicas);
         client.assert(response.body.servicios.indexOf("Cava refrigerada de vinos") >= 0, "Servicios: " + response.body.servicios);
         client.assert(response.body.servicios.indexOf("Vista frontal al mar Caribe") < 0, "La vista no es dotación: " + response.body.servicios);
     });

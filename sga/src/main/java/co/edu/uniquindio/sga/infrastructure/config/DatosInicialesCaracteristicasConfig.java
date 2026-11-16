@@ -27,6 +27,8 @@ import java.util.Map;
  *       Si su dotación sigue siendo la de los datos iniciales anteriores, que mezclaba rasgos como "Vista frontal al
  *       mar Caribe", se reemplaza por la dotación actual; si el administrador ya la cambió, se conserva.</li>
  *   <li>Los demás apartamentos quedan sin características: el administrador las define en el panel.</li>
+ *   <li>Si un apartamento de los datos iniciales conserva las características de la versión que incluía "Admite
+ *       mascotas", se reemplazan por las actuales; si el administrador las cambió, se conservan.</li>
  * </ul>
  * Corre con @Order(1) e invoca antes el cargador del alojamiento (idempotente).
  */
@@ -52,6 +54,15 @@ public class DatosInicialesCaracteristicasConfig {
                     "3 baños completos", "Sala", "Cocina amplia",
                     "Terraza privada con piscina de inmersión y vista a las murallas y al mar"));
 
+    /**
+     * Características de una versión anterior de los datos iniciales que incluían "Admite mascotas". Las mascotas no
+     * son un rasgo del apartamento (las admite la política del alojamiento, L-16): si siguen así, se corrigen.
+     */
+    private static final Map<String, List<String>> CARACTERISTICAS_ANTERIORES = Map.of(
+            "APT-201", List.of("Terraza", "Admite mascotas"),
+            "APT-202", List.of("Balcón", "Admite mascotas"),
+            "APT-301", List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto", "Admite mascotas"));
+
     @Bean
     @Order(1)
     public CommandLineRunner cargarCaracteristicasApartamentos(
@@ -61,6 +72,7 @@ public class DatosInicialesCaracteristicasConfig {
             TransactionTemplate transaccion) {
         return args -> {
             cargarDatosCoral.run(args);
+            CARACTERISTICAS_ANTERIORES.keySet().forEach(id -> corregirAnteriores(apartamentoRepository, id));
             List<String> pendientes = transaccion.execute(estado -> apartamentosJpa
                     .findByCaracteristicasDefinidasIsNull().stream()
                     .map(ApartamentoEntity::getIdentificacion)
@@ -73,6 +85,17 @@ public class DatosInicialesCaracteristicasConfig {
             }
             log.info("Características completadas en {} apartamentos de una base existente", pendientes.size());
         };
+    }
+
+    /** Si el apartamento conserva las características anteriores de los datos iniciales, pone las actuales */
+    static void corregirAnteriores(ApartamentoRepository apartamentoRepository, String id) {
+        apartamentoRepository.buscarPorIdentificacion(new IdentificacionApartamento(id))
+                .filter(a -> CARACTERISTICAS_ANTERIORES.get(id).equals(a.getCaracteristicas().elementos()))
+                .ifPresent(a -> {
+                    a.definirCaracteristicas(new Caracteristicas(DatosInicialesCoralConfig.CARACTERISTICAS.get(id)));
+                    apartamentoRepository.guardar(a);
+                    log.info("Características de {} corregidas: las mascotas las define el alojamiento", id);
+                });
     }
 
     /** Pone las características (o ninguna) y, si la dotación es la anterior de los datos iniciales, la actualiza */
