@@ -25,7 +25,7 @@
 
 @host = http://localhost:8080
 @canal = booking
-@credencial = pegue-aqui-la-credencial-del-canal
+@credencial = PJ48v_xUYhBToobVVZ13b0UFNaXbXk5-5hrlVWv7wFc
 
 ### 1. Consultar disponibilidad
 # Esperado: 200 con la página 0 de apartamentos libres (10 por página, 12.4); APT-301 está entre ellos.
