@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { esErrorApi } from '@/api/cliente'
 import { useAuth } from '@/auth/AuthContext'
 import { rutaDespuesDeLogin } from '@/auth/destino'
-import { AvisoError, Campo } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PanelBienvenida } from './PanelBienvenida'
@@ -71,7 +71,7 @@ export default function Login() {
             <Input type="email" autoComplete="email" inputMode="email" {...register('correo')} />
           </Campo>
           <Campo id="contrasena" etiqueta="Contraseña" error={errors.contrasena?.message}>
-            <Input type="password" autoComplete="current-password" {...register('contrasena')} />
+            <InputContrasena autoComplete="current-password" {...register('contrasena')} />
           </Campo>
           <Link
             to="/recuperar"

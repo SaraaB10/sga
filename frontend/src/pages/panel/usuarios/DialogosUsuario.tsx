@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useCambiarRolUsuario, useCrearUsuario, type CrearUsuarioRequest } from '@/api/usuarios'
 import type { Rol, UsuarioResponse } from '@/api/tipos'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { Campo } from '@/components/coral'
+import { Campo, InputContrasena } from '@/components/coral'
 import { Input } from '@/components/ui/input'
 import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
 import { AYUDA_CONTRASENA, erroresDelServidor, unirErrores, useValidacion } from '@/lib/validacion'
@@ -89,7 +89,7 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
           <Input type="email" autoComplete="off" maxLength={120} {...campo('correo')} />
         </Campo>
         <Campo id="usuario-contrasena" etiqueta="Contraseña" error={error('contrasena')} ayuda={AYUDA_CONTRASENA} className="sm:col-span-2">
-          <Input type="password" autoComplete="new-password" maxLength={72} {...campo('contrasena')} />
+          <InputContrasena autoComplete="new-password" maxLength={72} {...campo('contrasena')} />
         </Campo>
         <Campo id="usuario-telefono" etiqueta="Teléfono" error={error('telefono')}>
           <Input type="tel" maxLength={20} {...campo('telefono')} />

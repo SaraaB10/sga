@@ -7,7 +7,7 @@ import { useActualizarMiPerfil, useCambiarMiContrasena } from '@/api/usuarios'
 import type { UsuarioResponse } from '@/api/tipos'
 import { useAuth } from '@/auth/AuthContext'
 import { NOMBRE_ROL } from '@/auth/roles'
-import { AvisoError, Campo } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena } from '@/components/coral'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -224,8 +224,7 @@ function CambioContrasena() {
     <Tarjeta titulo="Contraseña">
       <form noValidate onSubmit={enviar} className="flex flex-col gap-4">
         <Campo id="contrasena-actual" etiqueta="Contraseña actual" error={errores.actual ?? deServidor?.actual}>
-          <Input
-            type="password"
+          <InputContrasena
             autoComplete="current-password"
             value={actual}
             onChange={(e) => {
@@ -236,11 +235,10 @@ function CambioContrasena() {
         </Campo>
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo id="contrasena-nueva" etiqueta="Contraseña nueva" ayuda={AYUDA_CONTRASENA} error={errores.nueva ?? deServidor?.nueva}>
-            <Input type="password" autoComplete="new-password" maxLength={72} value={nueva} onChange={(e) => setNueva(e.target.value)} />
+            <InputContrasena autoComplete="new-password" maxLength={72} value={nueva} onChange={(e) => setNueva(e.target.value)} />
           </Campo>
           <Campo id="contrasena-confirmacion" etiqueta="Repite la contraseña nueva" error={errores.confirmacion}>
-            <Input
-              type="password"
+            <InputContrasena
               autoComplete="new-password"
               maxLength={72}
               value={confirmacion}

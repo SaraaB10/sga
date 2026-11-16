@@ -9,7 +9,7 @@ import { registrarHuesped } from '@/api/auth'
 import { esErrorApi } from '@/api/cliente'
 import { useAuth } from '@/auth/AuthContext'
 import { rutaDespuesDeLogin } from '@/auth/destino'
-import { AvisoError, Campo } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
@@ -110,7 +110,7 @@ export default function Registro() {
             ayuda={AYUDA_CONTRASENA}
             className="sm:col-span-2"
           >
-            <Input type="password" autoComplete="new-password" {...register('contrasena')} />
+            <InputContrasena autoComplete="new-password" {...register('contrasena')} />
           </Campo>
           <Campo id="telefono" etiqueta="Teléfono" error={errors.telefono?.message}>
             <Input type="tel" autoComplete="tel" inputMode="tel" {...register('telefono')} />

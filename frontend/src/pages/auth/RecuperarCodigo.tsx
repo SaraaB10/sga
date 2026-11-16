@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 import { restablecerContrasena } from '@/api/auth'
 import { esErrorApi } from '@/api/cliente'
-import { AvisoError, Campo } from '@/components/coral'
+import { AvisoError, Campo, InputContrasena } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AYUDA_CONTRASENA, contrasenaNueva, correo, erroresDelServidor } from '@/lib/validacion'
@@ -110,10 +110,10 @@ export default function RecuperarCodigo() {
             error={errors.nuevaContrasena?.message}
             ayuda={AYUDA_CONTRASENA}
           >
-            <Input type="password" autoComplete="new-password" {...register('nuevaContrasena')} />
+            <InputContrasena autoComplete="new-password" {...register('nuevaContrasena')} />
           </Campo>
           <Campo id="confirmacion" etiqueta="Repite la contraseña nueva" error={errors.confirmacion?.message}>
-            <Input type="password" autoComplete="new-password" {...register('confirmacion')} />
+            <InputContrasena autoComplete="new-password" {...register('confirmacion')} />
           </Campo>
 
           <Button type="submit" size="lg" className="mt-2 w-full" disabled={cambio.isPending}>
