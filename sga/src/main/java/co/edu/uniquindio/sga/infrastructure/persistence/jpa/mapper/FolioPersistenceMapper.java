@@ -38,7 +38,7 @@ public class FolioPersistenceMapper {
                 .map(c -> new CargoEmbedable(c.tipo(), c.concepto(), c.valor().monto(), c.fecha()))
                 .toList()));
         e.setPagos(new ArrayList<>(f.getPagos().stream()
-                .map(p -> new PagoEmbedable(p.valor().monto(), p.medio().codigo(), p.fecha()))
+                .map(p -> new PagoEmbedable(p.valor().monto(), p.medio().codigo(), p.fecha(), p.devolucion()))
                 .toList()));
         e.setCerrado(f.isCerrado());
         e.setFechaCierre(f.getFechaCierre());
@@ -63,7 +63,8 @@ public class FolioPersistenceMapper {
                         .map(c -> new Cargo(c.getTipo(), c.getConcepto(), new Dinero(c.getValor()), c.getFecha()))
                         .toList(),
                 e.getPagos().stream()
-                        .map(p -> new Pago(new Dinero(p.getValor()), new MedioPago(p.getMedio()), p.getFecha()))
+                        .map(p -> new Pago(new Dinero(p.getValor()), new MedioPago(p.getMedio()), p.getFecha(),
+                                Boolean.TRUE.equals(p.getDevolucion())))
                         .toList(),
                 e.isCerrado(), e.getFechaCierre(),
                 autorizacion == null || autorizacion.getAutorizadoPor() == null ? null

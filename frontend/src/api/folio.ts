@@ -58,6 +58,12 @@ export async function cerrarFolio(codigo: string): Promise<FolioResponse> {
   return data
 }
 
+/** Inverso del cargo del depósito y devolución del dinero ya pagado de él, con el medio indicado */
+export async function devolverDeposito(codigo: string, medio: MedioPago): Promise<FolioResponse> {
+  const { data } = await cliente.post<FolioResponse>(`${ruta(codigo)}/devolucion-deposito`, { medio })
+  return data
+}
+
 export async function autorizarCierreFolio(codigo: string, datos: AutorizarCierreFolioRequest): Promise<FolioResponse> {
   const { data } = await cliente.post<FolioResponse>(`${ruta(codigo)}/autorizacion-cierre`, datos)
   return data
@@ -104,6 +110,11 @@ export function useRegistrarCorreccion(codigo: string) {
 export function useCerrarFolio(codigo: string) {
   const alActualizar = useAlActualizarFolio(codigo)
   return useMutation({ mutationFn: () => cerrarFolio(codigo), onSuccess: alActualizar })
+}
+
+export function useDevolverDeposito(codigo: string) {
+  const alActualizar = useAlActualizarFolio(codigo)
+  return useMutation({ mutationFn: (medio: MedioPago) => devolverDeposito(codigo, medio), onSuccess: alActualizar })
 }
 
 export function useAutorizarCierreFolio(codigo: string) {

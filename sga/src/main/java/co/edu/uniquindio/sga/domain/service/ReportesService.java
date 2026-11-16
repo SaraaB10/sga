@@ -118,8 +118,9 @@ public class ReportesService {
         for (Folio folio : folios.listarConPagosEntre(desde, hasta)) {
             for (Pago pago : folio.getPagos()) {
                 if (dentroDelPeriodo(pago.fecha(), desde, hasta)) {
-                    totales.merge(pago.medio(), pago.valor(), (a, b) -> a.sumar(b));
-                    cantidades.merge(pago.medio(), 1, Integer::sum);
+                    // La devolución del depósito (RP-02) resta del ingreso de su medio y no cuenta como pago
+                    totales.merge(pago.medio(), pago.valorNeto(), (a, b) -> a.sumar(b));
+                    cantidades.merge(pago.medio(), pago.devolucion() ? 0 : 1, Integer::sum);
                 }
             }
         }

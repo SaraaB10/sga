@@ -124,18 +124,24 @@ export interface CargoResponse {
 }
 
 export interface PagoResponse {
+  /** Siempre positivo */
   valor: number
   medio: MedioPago
   fecha: FechaISO
+  /** Dinero devuelto al huésped (el depósito de garantía): resta del total pagado */
+  devolucion: boolean
 }
 
 export interface FolioResponse {
   codigoReserva: string
   fechaApertura: FechaISO
   depositoGarantia: number
+  /** Ya se devolvió el depósito de garantía */
+  depositoReembolsado: boolean
   cargos: CargoResponse[]
   pagos: PagoResponse[]
   totalCargos: number
+  /** Abonos menos devoluciones */
   totalPagado: number
   /** Cargos menos pagos; negativo si hay saldo a favor */
   saldo: number

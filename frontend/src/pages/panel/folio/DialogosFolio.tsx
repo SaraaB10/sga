@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
-import { useRegistrarCargoServicio, useRegistrarCorreccion, useRegistrarPago } from '@/api/folio'
+import { useDevolverDeposito, useRegistrarCargoServicio, useRegistrarCorreccion, useRegistrarPago } from '@/api/folio'
 import { useMediosPago } from '@/api/publico'
 import type { MedioPago } from '@/api/reservas'
 import type { ServicioAdicionalResponse } from '@/api/tipos'
@@ -153,6 +153,100 @@ export function DialogoPago({
         id="pago-medio"
         etiqueta="Medio de pago"
         error={errores.medio ?? (mediosPago.error ? 'No se pudieron consultar los medios de pago' : undefined)}
+      >
+        <select
+          className={claseSelect}
+          value={medio}
+          disabled={activos.length === 0}
+          onChange={(e) => setMedio(e.target.value)}
+        >
+          {activos.length === 0 && <option value="">{mediosPago.isPending ? 'Cargando…' : 'Sin medios activos'}</option>}
+          {activos.map((m) => (
+            <option key={m.codigo} value={m.codigo}>
+              {m.nombre}
+            </option>
+          ))}
+        </select>
+      </Campo>
+    </DialogoFormulario>
+  )
+}
+
+// ---------- Devolver el depósito de garantía ----------
+
+/**
+ * Lo que se devuelve al huésped: tras anular el cargo del depósito, el saldo a favor, hasta el valor del depósito.
+ * Es el mismo cálculo de Folio.devolverDeposito en el servidor.
+ */
+function dineroADevolver(saldo: number, deposito: number): number {
+  return Math.min(deposito, Math.max(0, deposito - saldo))
+}
+
+export function DialogoDevolverDeposito({
+  codigo,
+  saldo,
+  deposito,
+  abierto,
+  alCambiar,
+}: BaseDialogoFolio & { saldo: number; deposito: number }) {
+  const devolver = useDevolverDeposito(codigo)
+  const mediosPago = useMediosPago()
+  const activos = (mediosPago.data ?? []).filter((m) => m.activo)
+  const [elegido, setMedio] = useState<MedioPago>('')
+  const medio = activos.some((m) => m.codigo === elegido) ? elegido : (activos[0]?.codigo ?? '')
+  const aDevolver = dineroADevolver(saldo, deposito)
+
+  useAlAbrir(abierto, () => {
+    setMedio('')
+    devolver.reset()
+  })
+
+  const enviar = () => {
+    if (!medio) return
+    devolver.mutate(medio, {
+      onSuccess: (folio) => {
+        toast.success('Depósito devuelto', {
+          description:
+            aDevolver > 0
+              ? `${formatearDinero(aDevolver)} devueltos al huésped. Saldo: ${formatearDinero(folio.saldo)}`
+              : `Se anuló el cargo del depósito. Saldo: ${formatearDinero(folio.saldo)}`,
+        })
+        alCambiar(false)
+      },
+    })
+  }
+
+  return (
+    <DialogoFormulario
+      id="form-devolver-deposito"
+      abierto={abierto}
+      alCambiar={alCambiar}
+      titulo="Devolver depósito"
+      descripcion={
+        <>
+          Se asienta el movimiento inverso del depósito de garantía (<Dinero valor={deposito} />)
+          {aDevolver > 0 ? (
+            <>
+              {' '}
+              y se registra la devolución de <Dinero valor={aDevolver} /> al huésped. El sistema solo la registra: el
+              dinero se entrega por fuera.
+            </>
+          ) : (
+            '. El huésped no había pagado el depósito, así que no hay dinero que devolver.'
+          )}{' '}
+          Solo se hace una vez.
+        </>
+      }
+      textoEnviar="Devolver depósito"
+      cargando={devolver.isPending}
+      error={devolver.error}
+      tituloError="No se pudo devolver el depósito"
+      alEnviar={enviar}
+    >
+      <Campo
+        id="devolucion-medio"
+        etiqueta="Medio de la devolución"
+        error={mediosPago.error ? 'No se pudieron consultar los medios de pago' : undefined}
       >
         <select
           className={claseSelect}

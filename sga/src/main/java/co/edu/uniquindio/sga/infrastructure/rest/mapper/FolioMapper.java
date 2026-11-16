@@ -26,6 +26,7 @@ public interface FolioMapper {
 
     @Mapping(target = "codigoReserva", source = "reserva.valor")
     @Mapping(target = "depositoGarantia", source = "depositoGarantia.monto")
+    @Mapping(target = "depositoReembolsado", source = "depositoGarantia.reembolsado")
     @Mapping(target = "totalCargos", expression = "java(aPesos(folio.totalCargos()))")
     @Mapping(target = "totalPagado", expression = "java(aPesos(folio.totalPagado()))")
     @Mapping(target = "saldo", expression = "java(aPesos(folio.saldo()))")
