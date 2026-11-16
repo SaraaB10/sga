@@ -154,14 +154,33 @@ class ValidacionesLogicasTest {
         assertTrue(errores(new CancelarReservaRequest("a".repeat(ReglaTexto.MAXIMO_MOTIVO)), "motivo").isEmpty());
 
         ActualizarApartamentoRequest soloEspacios = new ActualizarApartamentoRequest("Suite", "   ", 1, 2,
-                List.of("Cama doble"));
+                List.of("Cama doble"), null);
         assertEquals(List.of("La descripción no puede quedar solo en espacios"), errores(soloEspacios, "descripcion"));
         ActualizarApartamentoRequest sinDescripcion = new ActualizarApartamentoRequest("Suite", "", 1, 2,
-                List.of("Cama doble"));
+                List.of("Cama doble"), null);
         assertTrue(errores(sinDescripcion, "descripcion").isEmpty());
         ActualizarApartamentoRequest larga = new ActualizarApartamentoRequest("Suite", "a".repeat(1001), 1, 2,
-                List.of("Cama doble"));
+                List.of("Cama doble"), null);
         assertEquals(List.of("La descripción admite máximo 1000 caracteres"), errores(larga, "descripcion"));
+    }
+
+    @Test
+    @DisplayName("Características del apartamento: opcionales, sin vacías, de 2 a 60 caracteres y máximo 20")
+    void caracteristicasDelApartamento() {
+        ActualizarApartamentoRequest valida = new ActualizarApartamentoRequest("Suite", "", 1, 2,
+                List.of("Cama doble"), List.of("Vista al mar", "Balcón"));
+        assertTrue(validador.validate(valida).isEmpty());
+        ActualizarApartamentoRequest vacia = new ActualizarApartamentoRequest("Suite", "", 1, 2,
+                List.of("Cama doble"), List.of(" "));
+        assertTrue(validador.validate(vacia).stream()
+                .anyMatch(v -> v.getMessage().equals("Las características no pueden estar vacías")));
+        ActualizarApartamentoRequest larga = new ActualizarApartamentoRequest("Suite", "", 1, 2,
+                List.of("Cama doble"), List.of("x".repeat(61)));
+        assertTrue(validador.validate(larga).stream()
+                .anyMatch(v -> v.getMessage().equals("Cada característica debe tener entre 2 y 60 caracteres")));
+        ActualizarApartamentoRequest muchas = new ActualizarApartamentoRequest("Suite", "", 1, 2,
+                List.of("Cama doble"), java.util.stream.IntStream.range(0, 21).mapToObj(i -> "Rasgo " + i).toList());
+        assertEquals(List.of("El apartamento admite máximo 20 características"), errores(muchas, "caracteristicas"));
     }
 
     @Test

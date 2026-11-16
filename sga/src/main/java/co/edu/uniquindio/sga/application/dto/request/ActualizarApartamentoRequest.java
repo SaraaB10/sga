@@ -30,6 +30,12 @@ public record ActualizarApartamentoRequest(
 
         @NotNull(message = "La dotación es obligatoria")
         List<@Size(max = ReglaTexto.MAXIMO_NOMBRE,
-                message = "Cada elemento de la dotación admite máximo 100 caracteres") String> dotacion
+                message = "Cada elemento de la dotación admite máximo 100 caracteres") String> dotacion,
+
+        // Opcional: rasgos del apartamento (Vista al mar, Balcón...); sin dato queda sin características
+        @Size(max = 20, message = "El apartamento admite máximo 20 características")
+        List<@NotBlank(message = "Las características no pueden estar vacías")
+             @Size(min = 2, max = 60, message = "Cada característica debe tener entre 2 y 60 caracteres") String>
+                caracteristicas
 ) {
 }

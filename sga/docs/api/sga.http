@@ -360,26 +360,41 @@ Authorization: Bearer {{tokenAdmin}}
     });
 %}
 
-### 3.2 CU-01 con filtros de 7.5: capacidad mínima, característica del apartamento, servicio de la dotación y precio
-GET {{host}}/api/apartamentos/disponibles?entrada={{hoy}}&salida={{hoyMas3}}&ocupantes=2&capacidadMinima=4&caracteristica=3%20dormitorios&servicios=piscina&precioMinimo=500000&precioMaximo=5000000&pagina=0
+### 3.2 CU-01 con filtros de 7.5: capacidad mínima, dormitorios, característica del apartamento, servicio de la dotación y precio
+GET {{host}}/api/apartamentos/disponibles?entrada={{hoy}}&salida={{hoyMas3}}&ocupantes=2&capacidadMinima=4&dormitorios=3&caracteristica=Vista%20al%20mar&servicios=piscina&precioMinimo=500000&precioMaximo=5000000&pagina=0
 Authorization: Bearer {{tokenAdmin}}
 
 > {%
     client.test("3.2 200 disponibles con filtros", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.contenido.every(function (a) { return a.capacidadMaxima >= 4; }), "Hay apartamentos con capacidad menor que 4");
-        client.assert(response.body.contenido.length === 1 && response.body.contenido[0].identificacion === "APT-301", "Solo APT-301 tiene 3 dormitorios y piscina: " + JSON.stringify(response.body.contenido.map(function (a) { return a.identificacion; })));
+        client.assert(response.body.contenido.length === 1 && response.body.contenido[0].identificacion === "APT-301", "Solo APT-301 tiene 3 dormitorios, vista al mar y piscina: " + JSON.stringify(response.body.contenido.map(function (a) { return a.identificacion; })));
     });
 %}
 
-### 3.2b Opciones reales de los filtros (sin token): características y servicios de los apartamentos activos
+### 3.2b Opciones reales de los filtros (sin token): dormitorios, características y servicios de los apartamentos activos
 GET {{host}}/api/apartamentos/filtros
 
 > {%
     client.test("3.2b 200 opciones de filtro", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
-        client.assert(response.body.caracteristicas.join(",") === "1 dormitorio,2 dormitorios,3 dormitorios", "Características: " + response.body.caracteristicas);
+        client.assert(response.body.dormitorios.join(",") === "1,2,3", "Dormitorios: " + response.body.dormitorios);
+        ["Vista al mar", "Frente a la playa", "Balcón", "Terraza", "Piso alto", "Admite mascotas"].forEach(function (c) {
+            client.assert(response.body.caracteristicas.indexOf(c) >= 0, "Falta la característica " + c + ": " + response.body.caracteristicas);
+        });
         client.assert(response.body.servicios.indexOf("Cava refrigerada de vinos") >= 0, "Servicios: " + response.body.servicios);
+        client.assert(response.body.servicios.indexOf("Vista frontal al mar Caribe") < 0, "La vista no es dotación: " + response.body.servicios);
+    });
+%}
+
+### 3.2c Detalle público: las características van aparte de la dotación
+GET {{host}}/api/apartamentos/APT-101
+
+> {%
+    client.test("3.2c 200 características de APT-101", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.caracteristicas.join(",") === "Vista al mar,Frente a la playa,Balcón", "Características: " + response.body.caracteristicas);
+        client.assert(response.body.dotacion.indexOf("Tina de hidromasaje privada") >= 0, "Dotación: " + response.body.dotacion);
     });
 %}
 
@@ -2070,7 +2085,8 @@ Content-Type: application/json
   "descripcion": "Unidad nueva con vista a la bahía, pensada para familias pequeñas.",
   "dormitorios": 2,
   "capacidadMaxima": 4,
-  "dotacion": ["Cama extragrande", "Dormitorio con dos camas sencillas", "Cocina equipada", "Balcón con vista a la bahía"],
+  "dotacion": ["Cama extragrande", "Dormitorio con dos camas sencillas", "Cocina equipada"],
+  "caracteristicas": ["Vista a la bahía", "Balcón"],
   "imagenes": [
     { "url": "https://coral.co/img/apt-401-sala.jpg", "principal": true },
     { "url": "https://coral.co/img/apt-401-balcon.jpg", "principal": false }
@@ -2086,6 +2102,8 @@ Content-Type: application/json
         client.assert(response.headers.valueOf("Location") != null, "Falta la cabecera Location");
         client.assert(response.body.activo === false, "El apartamento nuevo debe nacer inactivo (7.4)");
         client.assert(response.body.estadoOperativo === "PREPARADO", "El apartamento nuevo nace PREPARADO");
+        client.assert(response.body.caracteristicas.join(",") === "Vista a la bahía,Balcón", "Características: " + response.body.caracteristicas);
+        client.assert(response.body.dotacion.indexOf("Balcón") < 0, "El balcón es característica, no dotación");
     });
     client.global.set("locationApt401", response.headers.valueOf("Location"));
 %}
@@ -2334,13 +2352,15 @@ Content-Type: application/json
   "descripcion": "Remodelado como suite para parejas.",
   "dormitorios": 1,
   "capacidadMaxima": 2,
-  "dotacion": ["Cama extragrande", "Cocina equipada", "Balcón con tina de hidromasaje"]
+  "dotacion": ["Cama extragrande", "Cocina equipada", "Tina de hidromasaje"],
+  "caracteristicas": ["Vista a la bahía", "Balcón", "Piso alto"]
 }
 
 > {%
     client.test("9.13 200 actualizado con advertencia de capacidad", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.apartamento.capacidadMaxima === 2, "La capacidad debía quedar en 2");
+        client.assert(response.body.apartamento.caracteristicas.join(",") === "Vista a la bahía,Balcón,Piso alto", "Características: " + response.body.apartamento.caracteristicas);
         client.assert(response.body.reservasSobreCapacidad.indexOf(client.global.get("codigoApt401")) >= 0,
             "Debía listar la reserva " + client.global.get("codigoApt401"));
         client.assert(response.body.advertencia.indexOf("7.3") === 0, "La advertencia debía citar 7.3");
@@ -4916,21 +4936,32 @@ GET {{host}}/api/apartamentos/APT-999/disponibilidad?desde={{s17Hoy}}&hasta={{s1
     });
 %}
 
-### 17.7 Filtro por servicios (sin token): hidromasaje y vista al mar a la vez solo los tiene APT-101
-GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=hidromasaje&servicios=mar
+### 17.7 Filtro por servicios (sin token): hidromasaje y cocina integral a la vez solo los tiene APT-101
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=hidromasaje&servicios=cocina%20integral
 
 > {%
     client.test("17.7 200 los dos servicios se aplican juntos", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         var ids = response.body.contenido.map(function (a) { return a.identificacion; });
         client.assert(ids.indexOf("APT-101") >= 0, "Debía venir APT-101: " + ids);
-        client.assert(ids.indexOf("APT-201") < 0, "APT-201 tiene hidromasaje pero no vista al mar: " + ids);
+        client.assert(ids.indexOf("APT-201") < 0, "APT-201 tiene hidromasaje pero no cocina integral: " + ids);
         client.assert(ids.indexOf("APT-102") < 0, "APT-102 no tiene hidromasaje: " + ids);
     });
 %}
 
-### 17.8 Filtro por servicios separados por coma y sin tildes: cocina, terraza y bahía solo los tiene APT-102
-GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=cocina,terraza,bahia
+### 17.7b Filtro por característica (sin token): "vista al mar" es una característica, no un servicio de la dotación
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&caracteristica=vista%20al%20mar
+
+> {%
+    client.test("17.7b 200 solo los que tienen vista al mar", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var ids = response.body.contenido.map(function (a) { return a.identificacion; });
+        client.assert(ids.join() === "APT-101,APT-301", "Se esperaban APT-101 y APT-301: " + ids);
+    });
+%}
+
+### 17.8 Filtro por servicios separados por coma y sin tildes: cocina, cava y cama balinesa solo los tiene APT-102
+GET {{host}}/api/apartamentos/disponibles?entrada={{s17HoyMas200}}&salida={{s17HoyMas203}}&ocupantes=1&servicios=cocina,cava,balinesa
 
 > {%
     client.test("17.8 200 solo APT-102", function () {

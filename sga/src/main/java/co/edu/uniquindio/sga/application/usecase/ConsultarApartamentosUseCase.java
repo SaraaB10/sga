@@ -52,26 +52,33 @@ public class ConsultarApartamentosUseCase {
     }
 
     /** Opciones de los filtros de la búsqueda, con los valores reales de los apartamentos activos */
-    public record OpcionesFiltro(List<String> caracteristicas, List<String> servicios) {
+    public record OpcionesFiltro(List<Integer> dormitorios, List<String> caracteristicas, List<String> servicios) {
     }
 
     /**
-     * 7.5: las características (por ejemplo "2 dormitorios") y los elementos de la dotación de los apartamentos que
-     * están a la venta, sin repetir y en orden alfabético (las características, por su número).
+     * 7.5: los números de dormitorios, las características (por ejemplo "Vista al mar") y los elementos de la
+     * dotación de los apartamentos que están a la venta, sin repetir; los textos en orden alfabético.
      */
     @Transactional(readOnly = true)
     public OpcionesFiltro opcionesDeFiltro() {
         List<Apartamento> activos = apartamentoRepository.listarVigentesParaVenta();
-        List<String> caracteristicas = activos.stream()
-                .sorted(Comparator.comparingInt(Apartamento::getDormitorios))
-                .flatMap(a -> a.getCaracteristicas().stream())
+        List<Integer> dormitorios = activos.stream()
+                .map(Apartamento::getDormitorios)
                 .distinct()
+                .sorted(Comparator.naturalOrder())
                 .toList();
+        return new OpcionesFiltro(dormitorios,
+                sinRepetir(activos.stream().flatMap(a -> a.getCaracteristicas().elementos().stream()).toList()),
+                sinRepetir(activos.stream().flatMap(a -> a.getDotacion().elementos().stream()).toList()));
+    }
+
+    /** Sin repetir aunque cambie la mayúscula, en orden alfabético del español */
+    private static List<String> sinRepetir(List<String> textos) {
         Collator orden = Collator.getInstance(Locale.forLanguageTag("es-CO"));
-        orden.setStrength(Collator.SECONDARY);                           // sin distinguir mayúsculas
-        Map<String, String> servicios = new TreeMap<>(orden);           // sin repetir aunque cambie la mayúscula
-        activos.forEach(a -> a.getDotacion().elementos().forEach(e -> servicios.putIfAbsent(e.trim(), e.trim())));
-        return new OpcionesFiltro(caracteristicas, List.copyOf(servicios.values()));
+        orden.setStrength(Collator.SECONDARY);
+        Map<String, String> unicos = new TreeMap<>(orden);
+        textos.forEach(t -> unicos.putIfAbsent(t.trim(), t.trim()));
+        return List.copyOf(unicos.values());
     }
 
     /** 404 si no existe o si fue retirado de la venta (eliminado lógicamente). */

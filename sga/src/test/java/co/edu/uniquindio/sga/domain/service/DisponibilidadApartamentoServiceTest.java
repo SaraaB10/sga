@@ -7,6 +7,7 @@ import co.edu.uniquindio.sga.domain.entity.Temporada;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.valueobject.ApartamentoDisponible;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.CriterioBusqueda;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
@@ -252,12 +253,16 @@ class DisponibilidadApartamentoServiceTest {
     }
 
     @Test
-    @DisplayName("7.5: los filtros de capacidad, característica y precio se aplican sobre los disponibles")
+    @DisplayName("7.5: los filtros de capacidad, dormitorios, característica y precio se aplican sobre los disponibles")
     void filtrarDisponibles() {
+        escenario.apartamento.definirCaracteristicas(new Caracteristicas(List.of("Vista al mar")));
+        escenario.apartamentos.guardar(escenario.apartamento);
         assertTrue(buscar(new CriterioBusqueda(4, null, null, null)).isEmpty());
         assertEquals(1, buscar(new CriterioBusqueda(3, null, null, null)).size());
-        assertEquals(1, buscar(new CriterioBusqueda(null, null, null, "1 dormitorio")).size());
-        assertTrue(buscar(new CriterioBusqueda(null, null, null, "3 dormitorios")).isEmpty());
+        assertEquals(1, buscar(new CriterioBusqueda(null, null, null, null, List.of(), 1)).size());
+        assertTrue(buscar(new CriterioBusqueda(null, null, null, null, List.of(), 3)).isEmpty());
+        assertEquals(1, buscar(new CriterioBusqueda(null, null, null, "vista al mar")).size());
+        assertTrue(buscar(new CriterioBusqueda(null, null, null, "Piso alto")).isEmpty());
         assertTrue(buscar(new CriterioBusqueda(null, null, Dinero.de(1_000_000), null)).isEmpty());
         assertEquals(1, buscar(new CriterioBusqueda(null, Dinero.de(1_240_000), Dinero.de(1_240_000), null)).size());
     }

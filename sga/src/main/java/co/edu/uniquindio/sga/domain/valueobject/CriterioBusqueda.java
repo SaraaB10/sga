@@ -8,16 +8,19 @@ import java.util.List;
  * Filtros opcionales de la búsqueda de apartamentos disponibles (7.5). Un campo null significa "sin ese filtro".
  * Los precios se comparan con el valor estimado de toda la estancia, no con la tarifa de una noche.
  *
- * La característica es cómo es el apartamento como espacio (por ejemplo "2 dormitorios"); los servicios son lo que
- * trae su dotación (por ejemplo "Cocina integral abierta"). Se pueden pedir varios servicios y se aplican juntos: el
- * apartamento debe ofrecerlos todos.
+ * La característica es un rasgo del apartamento (por ejemplo "Vista al mar"); los servicios son lo que trae su
+ * dotación (por ejemplo "Cocina integral abierta"); los dormitorios son un filtro aparte (número exacto). Se pueden
+ * pedir varios servicios y se aplican juntos: el apartamento debe ofrecerlos todos.
  */
 public record CriterioBusqueda(Integer capacidadMinima, Dinero precioMinimo, Dinero precioMaximo,
-                               String caracteristica, List<String> servicios) {
+                               String caracteristica, List<String> servicios, Integer dormitorios) {
 
     public CriterioBusqueda {
         if (capacidadMinima != null && capacidadMinima <= 0) {
             throw new ReglaDominioException("7.5: la capacidad mínima debe ser mayor que cero");
+        }
+        if (dormitorios != null && dormitorios <= 0) {
+            throw new ReglaDominioException("7.5: el número de dormitorios debe ser mayor que cero");
         }
         if (precioMinimo != null && precioMinimo.esNegativo()) {
             throw new ReglaDominioException("7.5: el precio mínimo no puede ser negativo");
@@ -36,27 +39,37 @@ public record CriterioBusqueda(Integer capacidadMinima, Dinero precioMinimo, Din
                 .toList();
     }
 
-    /** Búsqueda sin filtro de servicios. */
+    /** Búsqueda sin filtro de dormitorios. */
+    public CriterioBusqueda(Integer capacidadMinima, Dinero precioMinimo, Dinero precioMaximo, String caracteristica,
+                            List<String> servicios) {
+        this(capacidadMinima, precioMinimo, precioMaximo, caracteristica, servicios, null);
+    }
+
+    /** Búsqueda sin filtro de servicios ni de dormitorios. */
     public CriterioBusqueda(Integer capacidadMinima, Dinero precioMinimo, Dinero precioMaximo, String caracteristica) {
-        this(capacidadMinima, precioMinimo, precioMaximo, caracteristica, List.of());
+        this(capacidadMinima, precioMinimo, precioMaximo, caracteristica, List.of(), null);
     }
 
     /** Búsqueda sin filtros adicionales: solo estancia y ocupantes. */
     public static CriterioBusqueda sinFiltros() {
-        return new CriterioBusqueda(null, null, null, null, List.of());
+        return new CriterioBusqueda(null, null, null, null, List.of(), null);
     }
 
     public boolean cumpleCapacidad(Capacidad capacidad) {
         return capacidadMinima == null || capacidad.maximo() >= capacidadMinima;
     }
 
+    /** El apartamento tiene exactamente los dormitorios pedidos. Sin dormitorios pedidos siempre se cumple. */
+    public boolean cumpleDormitorios(int dormitoriosDelApartamento) {
+        return dormitorios == null || dormitoriosDelApartamento == dormitorios;
+    }
+
     /**
-     * La característica pedida es una de las del apartamento (Apartamento.getCaracteristicas, por ejemplo
-     * "2 dormitorios"), sin distinguir mayúsculas ni tildes. Sin característica pedida siempre se cumple.
+     * La característica pedida es una de las del apartamento (por ejemplo "Vista al mar"), sin distinguir mayúsculas
+     * ni tildes. Sin característica pedida siempre se cumple.
      */
-    public boolean cumpleCaracteristica(List<String> caracteristicas) {
-        return caracteristica == null || (caracteristicas != null && caracteristicas.stream()
-                .anyMatch(c -> Dotacion.normalizar(c).equals(Dotacion.normalizar(caracteristica))));
+    public boolean cumpleCaracteristica(Caracteristicas caracteristicas) {
+        return caracteristica == null || (caracteristicas != null && caracteristicas.contiene(caracteristica));
     }
 
     /**

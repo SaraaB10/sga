@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BedDouble, CalendarCheck, Clock, CreditCard, Dog, ScrollText, ShieldCheck, Users } from 'lucide-react'
+import { ArrowLeft, BedDouble, CalendarCheck, Check, Clock, CreditCard, Dog, ScrollText, ShieldCheck, Users } from 'lucide-react'
 import { z } from 'zod'
 import { useApartamento, useMediosPago, usePoliticaVigente } from '@/api/publico'
 import { useAuth } from '@/auth/AuthContext'
@@ -129,6 +129,25 @@ export default function DetalleApartamento() {
                 Sobre el apartamento
               </h2>
               <p className="mt-3 leading-relaxed whitespace-pre-line text-muted-foreground">{apto.descripcion}</p>
+            </section>
+          )}
+
+          {(apto.caracteristicas ?? []).length > 0 && (
+            <section aria-labelledby="titulo-caracteristicas">
+              <h2 id="titulo-caracteristicas" className="font-titulo text-2xl font-semibold">
+                Características
+              </h2>
+              <ul className="mt-4 flex flex-wrap gap-2">
+                {apto.caracteristicas.map((c) => (
+                  <li
+                    key={c}
+                    className="flex items-center gap-1.5 rounded-full border border-coral/40 bg-crema px-3 py-1.5 text-sm"
+                  >
+                    <Check aria-hidden="true" className="size-4 text-coral" />
+                    {c}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 

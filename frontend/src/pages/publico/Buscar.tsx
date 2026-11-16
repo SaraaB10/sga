@@ -26,7 +26,14 @@ import { avisoEstanciaMinima, nochesEntre } from './comun/reglas'
 import { TarjetaApartamento } from './comun/TarjetaApartamento'
 import { MapaAlojamiento } from './MapaAlojamiento'
 
-const FILTROS = ['capacidadMinima', 'caracteristica', 'servicios', 'precioMinimo', 'precioMaximo'] as const
+const FILTROS = [
+  'capacidadMinima',
+  'dormitorios',
+  'caracteristica',
+  'servicios',
+  'precioMinimo',
+  'precioMaximo',
+] as const
 type Filtro = (typeof FILTROS)[number]
 
 /** En la URL los servicios van separados por coma: servicios=Hidromasaje,Cocina */
@@ -64,6 +71,7 @@ export default function Buscar() {
           ocupantes: estancia.huespedes.length,
           fechasNacimiento: fechasCompletas(estancia.huespedes),
           capacidadMinima: aNumero(params.get('capacidadMinima')),
+          dormitorios: aNumero(params.get('dormitorios')),
           caracteristica: params.get('caracteristica')?.trim() || undefined,
           servicios: aServicios(params.get('servicios')),
           precioMinimo: aNumero(params.get('precioMinimo')),
@@ -200,7 +208,11 @@ const esquemaFiltros = z
       .string()
       .trim()
       .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Escribe una capacidad entera de 1 o más'),
-    caracteristica: textoOpcional(100, 'La característica admite máximo 100 caracteres'),
+    dormitorios: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Elige un número de dormitorios'),
+    caracteristica: textoOpcional(60, 'La característica admite máximo 60 caracteres'),
     servicios: z.string(),
     precioMinimo: pesosFiltro,
     precioMaximo: pesosFiltro,
@@ -217,8 +229,9 @@ const esquemaFiltros = z
   })
 
 /**
- * Capacidad mínima, característica del apartamento, servicios de su dotación y rango del valor estimado. Las opciones
- * de características y servicios salen de los apartamentos activos (GET /api/apartamentos/filtros).
+ * Capacidad mínima, dormitorios, característica del apartamento, servicios de su dotación y rango del valor estimado.
+ * Las opciones de dormitorios, características y servicios salen de los apartamentos activos
+ * (GET /api/apartamentos/filtros).
  */
 function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
   const opciones = useOpcionesFiltro()
@@ -242,7 +255,14 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
   }
 
   const limpiar = () => {
-    const vacios = { capacidadMinima: '', caracteristica: '', servicios: '', precioMinimo: '', precioMaximo: '' }
+    const vacios = {
+      capacidadMinima: '',
+      dormitorios: '',
+      caracteristica: '',
+      servicios: '',
+      precioMinimo: '',
+      precioMaximo: '',
+    }
     setBorrador(vacios)
     validacion.reiniciar()
     alAplicar(vacios)
@@ -274,10 +294,28 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
           onChange={(e) => cambiar('capacidadMinima', e.target.value)}
         />
       </Campo>
+      <Campo id="filtro-dormitorios" etiqueta="Dormitorios" error={errores.dormitorios}>
+        <select
+          className={claseSelect}
+          value={borrador.dormitorios}
+          onChange={(e) => cambiar('dormitorios', e.target.value)}
+        >
+          <option value="">Cualquiera</option>
+          {/* Un número de la URL que ya no tiene ningún apartamento sigue visible para poder quitarlo */}
+          {borrador.dormitorios && !opciones.data?.dormitorios.map(String).includes(borrador.dormitorios) && (
+            <option value={borrador.dormitorios}>{borrador.dormitorios}</option>
+          )}
+          {(opciones.data?.dormitorios ?? []).map((d) => (
+            <option key={d} value={String(d)}>
+              {d} {d === 1 ? 'dormitorio' : 'dormitorios'}
+            </option>
+          ))}
+        </select>
+      </Campo>
       <Campo
         id="filtro-caracteristica"
         etiqueta="Características"
-        ayuda="Cómo es el apartamento: cuántos dormitorios tiene."
+        ayuda="Rasgos del apartamento: vista, balcón, terraza, si admite mascotas…"
         error={errores.caracteristica}
       >
         <select

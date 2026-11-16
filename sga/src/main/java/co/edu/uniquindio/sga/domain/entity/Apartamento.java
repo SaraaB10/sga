@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.domain.entity;
 
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.EstadoOperativo;
 import co.edu.uniquindio.sga.domain.valueobject.Estancia;
@@ -41,6 +42,8 @@ public class Apartamento {
     private int dormitorios;
     private Capacidad capacidad;
     private Dotacion dotacion;
+    /** 7.3: rasgos del apartamento (vista al mar, balcón...), distintos de la dotación; ninguno hasta definirlos */
+    private Caracteristicas caracteristicas = Caracteristicas.ninguna();
     private final List<Imagen> imagenes;
     private EstadoOperativo estadoOperativo;
     private boolean activo;
@@ -414,6 +417,11 @@ public class Apartamento {
         this.dotacion = dotacion;
     }
 
+    /** 7.3: reemplaza las características del apartamento (pueden quedar en ninguna). */
+    public void definirCaracteristicas(Caracteristicas nuevas) {
+        this.caracteristicas = nuevas == null ? Caracteristicas.ninguna() : nuevas;
+    }
+
     public void agregarImagen(Imagen imagen) {
         requerido(imagen, "La imagen es obligatoria");
         List<Imagen> nuevas = new ArrayList<>(imagenes);
@@ -456,13 +464,8 @@ public class Apartamento {
     public String getDescripcion() { return descripcion; }
     public int getDormitorios() { return dormitorios; }
 
-    /**
-     * 7.5: características del apartamento como espacio (no lo que trae su dotación): hoy, cuántos dormitorios tiene,
-     * por ejemplo "2 dormitorios". Son los valores que ofrece el filtro "Características" de la búsqueda.
-     */
-    public List<String> getCaracteristicas() {
-        return List.of(dormitorios + (dormitorios == 1 ? " dormitorio" : " dormitorios"));
-    }
+    /** 7.3 y 7.5: rasgos del apartamento; son las opciones del filtro "Características" de la búsqueda */
+    public Caracteristicas getCaracteristicas() { return caracteristicas; }
     public Capacidad getCapacidad() { return capacidad; }
     public Dotacion getDotacion() { return dotacion; }
     public List<Imagen> getImagenes() { return Collections.unmodifiableList(imagenes); }

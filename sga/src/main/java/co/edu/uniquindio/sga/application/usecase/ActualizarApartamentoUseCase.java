@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.application.exception.ApartamentoNoEncontradoExcept
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
 import co.edu.uniquindio.sga.domain.service.AdministracionApartamentoService;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.ResultadoActualizacionApartamento;
@@ -38,7 +39,7 @@ public class ActualizarApartamentoUseCase {
     @Transactional
     public ResultadoActualizacionApartamento ejecutar(IdentificacionApartamento identificacion, String nombre,
                                                       String descripcion, int dormitorios, Dotacion dotacion,
-                                                      Capacidad capacidad) {
+                                                      Caracteristicas caracteristicas, Capacidad capacidad) {
         boolean vigente = apartamentoRepository.buscarPorIdentificacion(identificacion)
                 .filter(apartamento -> !apartamento.isEliminado())
                 .isPresent();
@@ -46,6 +47,6 @@ public class ActualizarApartamentoUseCase {
             throw new ApartamentoNoEncontradoException(identificacion);
         }
         return administracionService.actualizar(identificacion, nombre, descripcion, dormitorios, dotacion,
-                capacidad, LocalDate.now(reloj));
+                caracteristicas, capacidad, LocalDate.now(reloj));
     }
 }

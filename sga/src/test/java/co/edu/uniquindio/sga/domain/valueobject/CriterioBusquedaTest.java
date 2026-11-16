@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -43,14 +44,36 @@ class CriterioBusquedaTest {
     @Test
     @DisplayName("7.5: la característica es una de las del apartamento, sin distinguir mayúsculas ni tildes")
     void buscarCaracteristicaDelApartamento() {
-        List<String> caracteristicas = List.of("2 dormitorios");
+        Caracteristicas caracteristicas = new Caracteristicas(List.of("Vista al mar", "Balcón"));
 
-        assertTrue(new CriterioBusqueda(null, null, null, "2 dormitorios").cumpleCaracteristica(caracteristicas));
-        assertTrue(new CriterioBusqueda(null, null, null, " 2 DORMITORIOS ").cumpleCaracteristica(caracteristicas));
-        assertFalse(new CriterioBusqueda(null, null, null, "1 dormitorio").cumpleCaracteristica(caracteristicas));
+        assertTrue(new CriterioBusqueda(null, null, null, "Vista al mar").cumpleCaracteristica(caracteristicas));
+        assertTrue(new CriterioBusqueda(null, null, null, " BALCON ").cumpleCaracteristica(caracteristicas));
+        assertFalse(new CriterioBusqueda(null, null, null, "Terraza").cumpleCaracteristica(caracteristicas));
         // La característica no se busca en la dotación: eso es el filtro de servicios
         assertFalse(new CriterioBusqueda(null, null, null, "hidromasaje").cumpleCaracteristica(caracteristicas));
         assertTrue(CriterioBusqueda.sinFiltros().cumpleCaracteristica(caracteristicas));
+        assertFalse(new CriterioBusqueda(null, null, null, "Balcón").cumpleCaracteristica(Caracteristicas.ninguna()));
+    }
+
+    @Test
+    @DisplayName("7.5: los dormitorios son un filtro aparte, por número exacto")
+    void filtrarPorDormitorios() {
+        CriterioBusqueda dos = new CriterioBusqueda(null, null, null, null, List.of(), 2);
+        assertTrue(dos.cumpleDormitorios(2));
+        assertFalse(dos.cumpleDormitorios(1));
+        assertTrue(CriterioBusqueda.sinFiltros().cumpleDormitorios(3));
+        assertThrows(ReglaDominioException.class, () -> new CriterioBusqueda(null, null, null, null, List.of(), 0));
+    }
+
+    @Test
+    @DisplayName("7.3: las características no se repiten, no están vacías y tienen de 2 a 60 caracteres")
+    void reglasDeLasCaracteristicas() {
+        assertEquals(List.of("Vista al mar", "Balcón"),
+                new Caracteristicas(List.of(" Vista al mar ", "Balcón")).elementos());
+        assertThrows(ReglaDominioException.class, () -> new Caracteristicas(List.of("Balcón", "balcon")));
+        assertThrows(ReglaDominioException.class, () -> new Caracteristicas(List.of(" ")));
+        assertThrows(ReglaDominioException.class, () -> new Caracteristicas(List.of("x".repeat(61))));
+        assertTrue(new Caracteristicas(null).elementos().isEmpty());
     }
 
     @Test

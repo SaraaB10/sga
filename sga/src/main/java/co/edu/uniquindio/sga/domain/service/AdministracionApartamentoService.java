@@ -9,6 +9,7 @@ import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.ResultadoActualizacionApartamento;
@@ -66,10 +67,12 @@ public class AdministracionApartamentoService {
      */
     public ResultadoActualizacionApartamento actualizar(IdentificacionApartamento aptoId, String nombre,
                                                         String descripcion, int dormitorios, Dotacion dotacion,
+                                                        Caracteristicas caracteristicas,
                                                         Capacidad nuevaCapacidad, LocalDate hoy) {
         requerirFecha(hoy);
         Apartamento apartamento = buscarApartamento(aptoId);
         apartamento.actualizarDatos(nombre, descripcion, dormitorios, dotacion);
+        apartamento.definirCaracteristicas(caracteristicas);
         apartamento.cambiarCapacidad(nuevaCapacidad);
         List<CodigoReserva> afectadas = reservasQueExcedenCapacidad(aptoId, nuevaCapacidad, hoy);
         return new ResultadoActualizacionApartamento(apartamentoRepository.guardar(apartamento), afectadas);

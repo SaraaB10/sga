@@ -31,6 +31,14 @@ import {
 } from '@/lib/validacion'
 
 const MAXIMO_IMAGENES = 10
+const MAXIMO_CARACTERISTICAS = 20
+
+/** Para comparar sin distinguir mayúsculas ni tildes, como el servidor */
+const sinTildes = (texto: string) =>
+  texto
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
 
 /*
  * RegistrarApartamentoRequest y ActualizarApartamentoRequest: identificación (solo al registrar), nombre,
@@ -47,6 +55,18 @@ const base = z.object({
     .string()
     .refine((v) => lineas(v).length > 0, 'Escribe al menos un elemento')
     .refine((v) => lineas(v).every((l) => l.length <= 100), 'Cada elemento de la dotación admite máximo 100 caracteres'),
+  // Opcionales: rasgos del apartamento, aparte de la dotación (las mismas reglas que valida el servidor)
+  caracteristicas: z
+    .string()
+    .refine((v) => lineas(v).length <= MAXIMO_CARACTERISTICAS, `Máximo ${MAXIMO_CARACTERISTICAS} características`)
+    .refine(
+      (v) => lineas(v).every((l) => l.length >= 2 && l.length <= 60),
+      'Cada característica debe tener entre 2 y 60 caracteres',
+    )
+    .refine((v) => {
+      const claves = lineas(v).map(sinTildes)
+      return new Set(claves).size === claves.length
+    }, 'Hay características repetidas'),
   imagenes: z.array(z.object({ url: z.string() })),
   principal: z.string(),
   tarifas: z.record(z.string(), z.string()),
@@ -83,6 +103,7 @@ const VACIO: Datos = {
   dormitorios: '1',
   capacidadMaxima: '2',
   dotacion: '',
+  caracteristicas: '',
   imagenes: [{ url: '' }],
   principal: '0',
   tarifas: {},
@@ -124,6 +145,7 @@ export default function FormularioApartamento() {
       dormitorios: String(datosActuales.dormitorios),
       capacidadMaxima: String(datosActuales.capacidadMaxima),
       dotacion: datosActuales.dotacion.join('\n'),
+      caracteristicas: (datosActuales.caracteristicas ?? []).join('\n'),
       // Las imágenes no se editan aquí
       imagenes: [],
     })
@@ -136,6 +158,7 @@ export default function FormularioApartamento() {
       dormitorios: Number(datos.dormitorios),
       capacidadMaxima: Number(datos.capacidadMaxima),
       dotacion: lineas(datos.dotacion),
+      caracteristicas: lineas(datos.caracteristicas),
     }
 
     if (editando) {
@@ -301,11 +324,28 @@ export default function FormularioApartamento() {
               <Input type="number" min={1} inputMode="numeric" {...register('capacidadMaxima')} />
             </Campo>
           </div>
-          <Campo id="dotacion" etiqueta="Dotación" ayuda="Un elemento por línea" error={errors.dotacion?.message}>
+          <Campo
+            id="dotacion"
+            etiqueta="Dotación"
+            ayuda="Lo que trae el apartamento, un elemento por línea"
+            error={errors.dotacion?.message}
+          >
             <textarea
               className={claseTextarea}
-              placeholder={'Cama extragrande\nCocina integral\nBalcón con vista al mar'}
+              placeholder={'Cama extragrande\nCocina integral\nTina de hidromasaje'}
               {...register('dotacion')}
+            />
+          </Campo>
+          <Campo
+            id="caracteristicas"
+            etiqueta="Características (opcional)"
+            ayuda={`Rasgos del apartamento, una por línea (máximo ${MAXIMO_CARACTERISTICAS}). Se ofrecen en el filtro de la búsqueda.`}
+            error={errors.caracteristicas?.message}
+          >
+            <textarea
+              className={claseTextarea}
+              placeholder={'Vista al mar\nFrente a la playa\nBalcón\nAdmite mascotas'}
+              {...register('caracteristicas')}
             />
           </Campo>
         </fieldset>

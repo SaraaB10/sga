@@ -38,6 +38,12 @@ public record RegistrarApartamentoRequest(
         List<@Size(max = ReglaTexto.MAXIMO_NOMBRE,
                 message = "Cada elemento de la dotación admite máximo 100 caracteres") String> dotacion,
 
+        // Opcional: rasgos del apartamento (Vista al mar, Balcón...), distintos de la dotación
+        @Size(max = 20, message = "El apartamento admite máximo 20 características")
+        List<@NotBlank(message = "Las características no pueden estar vacías")
+             @Size(min = 2, max = 60, message = "Cada característica debe tener entre 2 y 60 caracteres") String>
+                caracteristicas,
+
         @NotNull(message = "Las imágenes son obligatorias")
         List<@Valid @NotNull(message = "La imagen no puede ser nula") ImagenRequest> imagenes,
 

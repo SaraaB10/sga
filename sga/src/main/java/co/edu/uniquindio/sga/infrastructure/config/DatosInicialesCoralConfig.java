@@ -8,6 +8,7 @@ import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
 import co.edu.uniquindio.sga.domain.service.RegistrarBloqueoService;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
@@ -115,31 +116,19 @@ public class DatosInicialesCoralConfig {
                     "Cena en balcón por cocinero privado", "Cena para 2 personas en el balcón", Dinero.de(260_000)));
 
             // A.2 Inventario y tarifas de A.3 (Base, Media, Alta por ocupante facturable)
+            // A.2: la dotación es lo que trae cada apartamento; sus rasgos (vista, balcón, terraza...) van en
+            // CARACTERISTICAS
             List<Apartamento> inventario = List.of(
                     apartamento("APT-101", "Coral Luminoso", "Pensado para parejas o viajes de descanso individual.",
-                            1, 2, List.of("Cama extragrande con lencería de algodón egipcio",
-                                    "Baño privado en mármol con doble ducha", "Cocina integral abierta",
-                                    "Balcón con tina de hidromasaje privada", "Vista frontal al mar Caribe"),
-                            310_000, 430_000, 620_000),
+                            1, 2, 310_000, 430_000, 620_000),
                     apartamento("APT-102", "Arrecife Rosado", "Orientado a parejas jóvenes o profesionales.",
-                            1, 2, List.of("Cama extragrande", "Baño de lujo", "Cocina equipada con barra de cuarzo",
-                                    "Cava refrigerada de vinos", "Terraza privada con cama balinesa y vista a la bahía"),
-                            330_000, 460_000, 660_000),
+                            1, 2, 330_000, 460_000, 660_000),
                     apartamento("APT-201", "Marea Dorada", "Diseñado para familias o pequeños grupos.",
-                            2, 4, List.of("Dormitorio principal con cama extragrande",
-                                    "Dormitorio auxiliar con dos camas semidobles", "2 baños completos",
-                                    "Salón comedor", "Cocina completa", "Terraza con hidromasaje exterior"),
-                            270_000, 380_000, 560_000),
+                            2, 4, 270_000, 380_000, 560_000),
                     apartamento("APT-202", "Bahía Cristal", "Distribución funcional para grupos familiares.",
-                            2, 4, List.of("Dormitorio principal extragrande", "Dormitorio con dos camas individuales",
-                                    "2 baños privados", "Cocina integral", "Comedor en balcón panorámico",
-                                    "Hamaca artesanal de San Jacinto"),
-                            280_000, 390_000, 580_000),
+                            2, 4, 280_000, 390_000, 580_000),
                     apartamento("APT-301", "Gran Coral Imperial", "La unidad insignia de máxima capacidad.",
-                            3, 6, List.of("Dormitorio principal con vestier y baño privado", "2 dormitorios dobles",
-                                    "3 baños completos", "Sala", "Cocina amplia",
-                                    "Terraza privada con piscina de inmersión y vista a las murallas y al mar"),
-                            250_000, 350_000, 520_000));
+                            3, 6, 250_000, 350_000, 520_000));
 
             for (Apartamento apartamento : inventario) {
                 apartamento.activar(coral.getTemporadas());          // 7.4: exige tarifa en todas las temporadas
@@ -189,11 +178,33 @@ public class DatosInicialesCoralConfig {
                     CLOUDINARY + "apt-301-2.jpg",
                     CLOUDINARY + "apt-301-3.jpg"));
 
+    /** A.2: lo que trae cada apartamento (dotación), sin los rasgos del espacio */
+    static final Map<String, List<String>> DOTACION = Map.of(
+            "APT-101", List.of("Cama extragrande con lencería de algodón egipcio",
+                    "Baño privado en mármol con doble ducha", "Cocina integral abierta", "Tina de hidromasaje privada"),
+            "APT-102", List.of("Cama extragrande", "Baño de lujo", "Cocina equipada con barra de cuarzo",
+                    "Cava refrigerada de vinos", "Cama balinesa"),
+            "APT-201", List.of("Dormitorio principal con cama extragrande",
+                    "Dormitorio auxiliar con dos camas semidobles", "2 baños completos", "Salón comedor",
+                    "Cocina completa", "Hidromasaje exterior"),
+            "APT-202", List.of("Dormitorio principal extragrande", "Dormitorio con dos camas individuales",
+                    "2 baños privados", "Cocina integral", "Comedor", "Hamaca artesanal de San Jacinto"),
+            "APT-301", List.of("Dormitorio principal con vestier y baño privado", "2 dormitorios dobles",
+                    "3 baños completos", "Sala", "Cocina amplia", "Piscina de inmersión"));
+
+    /** 7.3: rasgos de cada apartamento (características), aparte de su dotación */
+    static final Map<String, List<String>> CARACTERISTICAS = Map.of(
+            "APT-101", List.of("Vista al mar", "Frente a la playa", "Balcón"),
+            "APT-102", List.of("Vista a la bahía", "Terraza"),
+            "APT-201", List.of("Terraza", "Admite mascotas"),
+            "APT-202", List.of("Balcón", "Admite mascotas"),
+            "APT-301", List.of("Vista al mar", "Vista a las murallas", "Terraza", "Piso alto", "Admite mascotas"));
+
     private static Apartamento apartamento(String id, String nombre, String descripcion, int dormitorios,
-                                           int capacidad, List<String> dotacion,
-                                           long tarifaBase, long tarifaMedia, long tarifaAlta) {
+                                           int capacidad, long tarifaBase, long tarifaMedia, long tarifaAlta) {
         Apartamento apartamento = Apartamento.crear(new IdentificacionApartamento(id), nombre, descripcion,
-                dormitorios, new Capacidad(capacidad), new Dotacion(dotacion), imagenes(id));
+                dormitorios, new Capacidad(capacidad), new Dotacion(DOTACION.get(id)), imagenes(id));
+        apartamento.definirCaracteristicas(new Caracteristicas(CARACTERISTICAS.get(id)));
         apartamento.definirTarifa(new Tarifa(BASE, Dinero.de(tarifaBase)));
         apartamento.definirTarifa(new Tarifa(MEDIA, Dinero.de(tarifaMedia)));
         apartamento.definirTarifa(new Tarifa(ALTA, Dinero.de(tarifaAlta)));

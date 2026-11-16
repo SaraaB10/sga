@@ -106,9 +106,11 @@ export const llavesPublicas = {
   opcionesFiltro: ['apartamentos', 'filtros'] as const,
 }
 
-/** GET /api/apartamentos/filtros: opciones reales de los filtros "Características" y "Servicios" */
+/** GET /api/apartamentos/filtros: opciones reales de los filtros "Dormitorios", "Características" y "Servicios" */
 export interface OpcionesFiltroResponse {
-  /** Cómo es el apartamento, por ejemplo "2 dormitorios" */
+  /** Números de dormitorios de los apartamentos activos */
+  dormitorios: number[]
+  /** Rasgos de los apartamentos activos, por ejemplo "Vista al mar" */
   caracteristicas: string[]
   /** Elementos de la dotación de los apartamentos activos */
   servicios: string[]

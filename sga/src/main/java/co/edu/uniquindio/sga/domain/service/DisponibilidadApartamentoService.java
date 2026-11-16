@@ -87,6 +87,7 @@ public class DisponibilidadApartamentoService {
         Coordenada ubicacion = obtenerAlojamiento().getUbicacion();
         return buscarDisponibles(estancia, totalOcupantes).stream()
                 .filter(apartamento -> filtros.cumpleCapacidad(apartamento.getCapacidad()))
+                .filter(apartamento -> filtros.cumpleDormitorios(apartamento.getDormitorios()))
                 .filter(apartamento -> filtros.cumpleCaracteristica(apartamento.getCaracteristicas()))
                 .filter(apartamento -> filtros.cumpleServicios(apartamento.getDotacion()))
                 .map(apartamento -> new ApartamentoDisponible(apartamento,
