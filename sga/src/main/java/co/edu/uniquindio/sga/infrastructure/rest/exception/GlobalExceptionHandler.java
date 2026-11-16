@@ -16,6 +16,7 @@ import co.edu.uniquindio.sga.application.exception.UsuarioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.UsuarioYaRegistradoException;
 import co.edu.uniquindio.sga.domain.exception.GrupoSinOcupanteFacturableException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
+import co.edu.uniquindio.sga.domain.exception.TitularMenorDeEdadException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -96,6 +97,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> grupoSinFacturable(GrupoSinOcupanteFacturableException ex,
                                                             HttpServletRequest req) {
         return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), req, null);
+    }
+
+    /**
+     * 400: en una reserva de la recepción el titular no alcanza la edad mínima. Se reporta sobre el campo
+     * titular.fechaNacimiento para que el cliente lo muestre junto a esa fecha.
+     */
+    @ExceptionHandler(TitularMenorDeEdadException.class)
+    public ResponseEntity<ErrorResponse> titularMenorDeEdad(TitularMenorDeEdadException ex, HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
+                Map.of("titular.fechaNacimiento", ex.getMessage()));
     }
 
     /** 400: el código para restablecer la contraseña no sirve (7.2). Mismo mensaje en todos los casos. */

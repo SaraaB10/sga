@@ -25,6 +25,8 @@ interface Props {
   reglas: ReglasAlojamiento
   hora: string
   mascotas: number
+  /** Los tipos de los acompañantes ya no son los de la cotización con la que se llegó */
+  grupoCambio?: boolean
   className?: string
 }
 
@@ -60,6 +62,7 @@ export function ResumenReserva({
   reglas,
   hora,
   mascotas,
+  grupoCambio = false,
   className,
 }: Props) {
   const valores = calcularValores(cotizacion, reglas, hora, mascotas)
@@ -102,6 +105,11 @@ export function ResumenReserva({
         )
       ) : (
         <div className={cn('flex flex-col gap-4', cargandoCotizacion && 'opacity-60')}>
+          {grupoCambio && (
+            <p className="rounded-campo bg-crema px-3 py-2 text-xs font-medium">
+              El grupo cambió frente a la cotización; el valor se recalculó.
+            </p>
+          )}
           <ul className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1" aria-label="Valor de cada noche">
             {cotizacion.detalles.map((n) => (
               <li key={n.fecha} className="flex items-center justify-between gap-2 text-sm">

@@ -1,4 +1,4 @@
-import { format, parseISO, subDays, subYears } from 'date-fns'
+import { addDays, format, parseISO, subDays, subYears } from 'date-fns'
 import type { FechaISO, OcupanteRequest } from '@/api/tipos'
 import { esFechaValida, esMenorNoPaga } from './reglas'
 
@@ -82,15 +82,85 @@ export function fechasCompletas(huespedes: string[]): FechaISO[] | undefined {
   return huespedes.length > 0 && huespedes.every(esFechaValida) ? huespedes : undefined
 }
 
-/** Ocupantes para cotizar: los que no tienen fecha cuentan como adultos (pagan noche) */
+/** Ocupantes para cotizar: sin fecha, el menor cuenta como menor y los demás como adultos (pagan noche) */
 export function ocupantesParaCotizar(
-  huespedes: { nombre?: string; fechaNacimiento: string }[],
+  huespedes: { nombre?: string; fechaNacimiento: string; tipo?: TipoHuesped | '' }[],
   umbral: number | null,
   referencia?: string,
 ): OcupanteRequest[] {
   const adulto = fechaQuePaga(umbral, referencia)
+  const menor = fechaQueNoPaga(umbral, referencia)
   return huespedes.map((h, i) => ({
     nombre: h.nombre?.trim() || `Huésped ${i + 1}`,
-    fechaNacimiento: esFechaValida(h.fechaNacimiento) ? h.fechaNacimiento : adulto,
+    fechaNacimiento: esFechaValida(h.fechaNacimiento)
+      ? h.fechaNacimiento
+      : h.tipo === 'menor' && menor
+        ? menor
+        : adulto,
   }))
+}
+
+// ---------- Tipo de cada huésped ----------
+
+/** "paga": tiene el umbral de edad o más a la fecha de entrada; "menor": aún no lo cumple */
+export type TipoHuesped = 'paga' | 'menor'
+
+/** Nombre del tipo: "Paga noche" o "Menor de 6" con el umbral del alojamiento */
+export function nombreTipo(tipo: TipoHuesped, umbral: number | null): string {
+  return tipo === 'paga' ? 'Paga noche' : umbral !== null ? `Menor de ${umbral}` : 'Menor'
+}
+
+/** Tipo según la fecha de nacimiento; sin fecha válida, el huésped cuenta como adulto */
+export function tipoDeFecha(fecha: string, umbral: number | null, referencia?: string): TipoHuesped {
+  return esMenorNoPaga(fecha, umbral, referencia) ? 'menor' : 'paga'
+}
+
+const aISO = (fecha: Date): FechaISO => format(fecha, 'yyyy-MM-dd')
+const menorFecha = (a: FechaISO, b: FechaISO): FechaISO => (a < b ? a : b)
+
+/**
+ * Fechas de nacimiento que admite cada tipo, con el umbral y la fecha de entrada (o hoy, si no hay entrada).
+ * Paga noche: nació a más tardar el día en que cumple el umbral a la entrada. Menor: nació después de ese día
+ * y no después de la entrada. Ninguna fecha puede ser futura. Sin umbral no hay menores y no se limita el tipo.
+ */
+export function rangoNacimiento(
+  tipo: TipoHuesped,
+  umbral: number | null,
+  referencia?: string,
+): { min?: FechaISO; max: FechaISO } {
+  const hoy = aISO(new Date())
+  if (umbral === null) return { max: hoy }
+  const base = esFechaValida(referencia) ? parseISO(referencia) : new Date()
+  const cumpleUmbral = aISO(subYears(base, umbral))
+  if (tipo === 'paga') return { max: menorFecha(cumpleUmbral, hoy) }
+  return { min: aISO(addDays(parseISO(cumpleUmbral), 1)), max: menorFecha(aISO(base), hoy) }
+}
+
+/** La fecha cae dentro del rango de su tipo */
+export function fechaCuadraConTipo(
+  fecha: string,
+  tipo: TipoHuesped,
+  umbral: number | null,
+  referencia?: string,
+): boolean {
+  if (!esFechaValida(fecha)) return false
+  const { min, max } = rangoNacimiento(tipo, umbral, referencia)
+  return fecha <= max && (min === undefined || fecha >= min)
+}
+
+/**
+ * Fecha que representa a un menor del umbral que aún no indicó su fecha de nacimiento: el día después de la
+ * última fecha que paga noche. null si no hay umbral o si esa fecha sería futura.
+ */
+export function fechaQueNoPaga(umbral: number | null, referencia?: string): FechaISO | null {
+  const { min, max } = rangoNacimiento('menor', umbral, referencia)
+  return min !== undefined && min <= max ? min : null
+}
+
+/** Cuántos huéspedes de cada tipo hay en el grupo */
+export function contarTipos(tipos: (TipoHuesped | '')[]): { paga: number; menor: number } {
+  return {
+    paga: tipos.filter((t) => t === 'paga').length,
+    menor: tipos.filter((t) => t === 'menor').length,
+  }
 }
