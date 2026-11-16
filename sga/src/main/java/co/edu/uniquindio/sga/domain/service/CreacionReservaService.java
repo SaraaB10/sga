@@ -140,12 +140,14 @@ public class CreacionReservaService {
                     + " con el identificador " + identificadorExterno);
         }
 
+        // Las seis condiciones de creación, en su orden (ver DisponibilidadApartamentoService)
+        int totalOcupantes = ocupantes == null ? 0 : ocupantes.size();
+        disponibilidadService.validarCondicionesDeReserva(apartamento, estancia, totalOcupantes, null,
+                ahora.toLocalDate());
+
         // L-16: la política del alojamiento debe admitir la cantidad y el peso de las mascotas.
         Mascotas mascotasDelGrupo = mascotas == null ? Mascotas.ninguna() : mascotas;
         mascotasDelGrupo.validarContra(alojamiento.getPoliticaMascotas());
-
-        int totalOcupantes = ocupantes == null ? 0 : ocupantes.size();
-        disponibilidadService.validarDisponibilidad(apartamento, estancia, totalOcupantes, null);
 
         Cotizacion vigente = cotizadorService.cotizar(apartamento, estancia, ocupantes,
                 alojamiento.getUmbralEdadFacturable());
