@@ -92,6 +92,7 @@ public class SecurityConfig {
                                 "/api/apartamentos/{id}",
                                 "/api/apartamentos/{id}/disponibilidad",
                                 "/api/alojamiento",
+                                "/api/medios-pago",
                                 "/api/politica-cancelacion",
                                 "/api/temporadas",
                                 "/api/temporadas/{id}"

@@ -124,7 +124,10 @@ class FolioControllerIntegracionTest {
         post(folio + "/pagos", "{\"valor\":5000}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.medio").exists());
-        post(folio + "/pagos", "{\"valor\":5000,\"medio\":\"EFECTIVO\"}").andExpect(status().isBadRequest());
+        // Un medio que no está en el catálogo (L-18) es una regla del negocio, no un mensaje mal formado: 409
+        post(folio + "/pagos", "{\"valor\":5000,\"medio\":\"EFECTIVO\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("L-18: el medio de pago EFECTIVO no está entre los medios aceptados"));
         post(folio + "/autorizacion-cierre", "{\"autorizadoPor\":\"Marta\"}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.motivo").exists());

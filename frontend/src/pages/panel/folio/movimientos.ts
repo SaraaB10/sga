@@ -7,11 +7,6 @@ export const NOMBRE_TIPO_CARGO: Record<TipoCargo, string> = {
   PENALIDAD_CANCELACION_NOSHOW: 'Penalidad',
 }
 
-export const NOMBRE_MEDIO: Record<MedioPago, string> = {
-  TARJETA_DEBITO_CREDITO: 'Tarjeta débito o crédito',
-  TRANSFERENCIA_BANCARIA: 'Transferencia bancaria',
-}
-
 export type ClaseMovimiento = 'cargo' | 'correccion' | 'pago'
 
 export interface Movimiento {
@@ -68,7 +63,8 @@ export function enlazarCorrecciones(cargos: CargoResponse[]): Map<number, number
 }
 
 /** Cargos, correcciones y pagos en una sola lista, por fecha (y en el orden en que se asentaron) */
-export function movimientosDe(folio: FolioResponse): Movimiento[] {
+/** @param nombreMedio nombre de cada medio de pago por su código (useNombreMedio) */
+export function movimientosDe(folio: FolioResponse, nombreMedio: (codigo: MedioPago) => string): Movimiento[] {
   const enlaces = enlazarCorrecciones(folio.cargos)
   const corrigeA = new Map([...enlaces].map(([original, correccion]) => [correccion, original]))
 
@@ -99,7 +95,7 @@ export function movimientosDe(folio: FolioResponse): Movimiento[] {
     clase: 'pago',
     fecha: p.fecha,
     tipo: 'Pago',
-    concepto: NOMBRE_MEDIO[p.medio],
+    concepto: nombreMedio(p.medio),
     valor: -p.valor,
   }))
 

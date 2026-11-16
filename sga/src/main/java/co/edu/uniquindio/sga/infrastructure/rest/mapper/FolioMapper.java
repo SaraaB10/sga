@@ -6,6 +6,7 @@ import co.edu.uniquindio.sga.application.dto.response.PagoResponse;
 import co.edu.uniquindio.sga.domain.entity.Folio;
 import co.edu.uniquindio.sga.domain.valueobject.Cargo;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
 import co.edu.uniquindio.sga.domain.valueobject.Pago;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -41,6 +42,11 @@ public interface FolioMapper {
     List<PagoResponse> aPagos(List<Pago> pagos);
 
     // ==================== OBJETOS DE VALOR ====================
+
+    /** El medio de pago viaja como su código (TARJETA_DEBITO_CREDITO...) */
+    default String aCodigo(MedioPago medio) {
+        return medio == null ? null : medio.codigo();
+    }
 
     /** Dinero viaja como pesos enteros, nunca como double. Un ajuste a la baja queda negativo (RN-14). */
     default long aPesos(Dinero dinero) {

@@ -3,7 +3,10 @@ package co.edu.uniquindio.sga.application.usecase;
 import co.edu.uniquindio.sga.application.exception.FolioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.ReservaNoEncontradaException;
 import co.edu.uniquindio.sga.domain.entity.Folio;
+import co.edu.uniquindio.sga.domain.entity.MedioPagoAceptado;
+import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.repository.FolioRepository;
+import co.edu.uniquindio.sga.domain.repository.MedioPagoRepository;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
@@ -30,11 +33,14 @@ public class RegistrarPagoUseCase {
 
     private final ReservaRepository reservaRepository;
     private final FolioRepository folioRepository;
+    private final MedioPagoRepository medioPagoRepository;
     private final Clock reloj;
 
-    public RegistrarPagoUseCase(ReservaRepository reservaRepository, FolioRepository folioRepository, Clock reloj) {
+    public RegistrarPagoUseCase(ReservaRepository reservaRepository, FolioRepository folioRepository,
+                                MedioPagoRepository medioPagoRepository, Clock reloj) {
         this.reservaRepository = Objects.requireNonNull(reservaRepository);
         this.folioRepository = Objects.requireNonNull(folioRepository);
+        this.medioPagoRepository = Objects.requireNonNull(medioPagoRepository);
         this.reloj = Objects.requireNonNull(reloj);
     }
 
@@ -46,6 +52,11 @@ public class RegistrarPagoUseCase {
         }
         Folio folio = folioRepository.buscarPorReserva(codigo)
                 .orElseThrow(() -> new FolioNoEncontradoException(codigo));
+        // L-18: solo se registran pagos con un medio del catálogo que siga activo
+        boolean aceptado = medioPagoRepository.buscar(medio).map(MedioPagoAceptado::isActivo).orElse(false);
+        if (!aceptado) {
+            throw new ReglaDominioException("L-18: el medio de pago " + medio + " no está entre los medios aceptados");
+        }
         folio.registrarPago(new Pago(valor, medio, LocalDate.now(reloj)));
         return folioRepository.guardar(folio);
     }

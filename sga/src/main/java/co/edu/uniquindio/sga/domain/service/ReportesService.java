@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -99,12 +100,17 @@ public class ReportesService {
                 porcentaje(nochesVendidas, nochesDisponibles), detalle);
     }
 
-    /** 7.9: suma de los pagos del periodo por medio de pago. Los cargos no cuentan. */
-    public ReporteIngresos ingresos(LocalDate desde, LocalDate hasta) {
+    /**
+     * 7.9: suma de los pagos del periodo por medio de pago. Los cargos no cuentan.
+     *
+     * @param mediosAceptados medios del catálogo (L-18): cada uno tiene su fila aunque no tenga pagos. Un medio con
+     *                        pagos que ya no está en el catálogo también aparece, después de los aceptados.
+     */
+    public ReporteIngresos ingresos(LocalDate desde, LocalDate hasta, List<MedioPago> mediosAceptados) {
         validarPeriodo(desde, hasta);
-        Map<MedioPago, Dinero> totales = new EnumMap<>(MedioPago.class);
-        Map<MedioPago, Integer> cantidades = new EnumMap<>(MedioPago.class);
-        for (MedioPago medio : MedioPago.values()) {
+        Map<MedioPago, Dinero> totales = new LinkedHashMap<>();
+        Map<MedioPago, Integer> cantidades = new LinkedHashMap<>();
+        for (MedioPago medio : mediosAceptados == null ? List.<MedioPago>of() : mediosAceptados) {
             totales.put(medio, Dinero.cero());
             cantidades.put(medio, 0);
         }
@@ -112,7 +118,7 @@ public class ReportesService {
         for (Folio folio : folios.listarConPagosEntre(desde, hasta)) {
             for (Pago pago : folio.getPagos()) {
                 if (dentroDelPeriodo(pago.fecha(), desde, hasta)) {
-                    totales.merge(pago.medio(), pago.valor(), Dinero::sumar);
+                    totales.merge(pago.medio(), pago.valor(), (a, b) -> a.sumar(b));
                     cantidades.merge(pago.medio(), 1, Integer::sum);
                 }
             }
@@ -121,7 +127,7 @@ public class ReportesService {
         Dinero total = totales.values().stream().reduce(Dinero.cero(), Dinero::sumar);
         int cantidadPagos = cantidades.values().stream().mapToInt(Integer::intValue).sum();
         List<IngresoPorMedio> medios = new ArrayList<>();
-        for (MedioPago medio : MedioPago.values()) {
+        for (MedioPago medio : totales.keySet()) {
             Dinero delMedio = totales.get(medio);
             medios.add(new IngresoPorMedio(medio, cantidades.get(medio), delMedio,
                     porcentaje(delMedio.monto(), total.monto())));

@@ -18,6 +18,7 @@ import {
 } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useNombreMedio } from '@/lib/mediosPago'
 import { cn } from '@/lib/utils'
 import { DialogoAutorizarCierre } from './DialogoAutorizarCierre'
 import { DialogoCorreccion, DialogoPago, DialogoServicio } from './DialogosFolio'
@@ -38,6 +39,7 @@ export default function Folio() {
   const apartamento = useApartamento(reserva.data?.identificacionApartamento)
   const alojamiento = useAlojamiento()
   const { roles, usuario } = useAuth()
+  const nombreMedio = useNombreMedio()
   const esAdministrador = roles.includes('ADMINISTRADOR')
   const cerrar = useCerrarFolio(codigo)
 
@@ -80,7 +82,7 @@ export default function Folio() {
   }
 
   const r = reserva.data
-  const movimientos = movimientosDe(f)
+  const movimientos = movimientosDe(f, nombreMedio)
   const corregibles = cargosCorregibles(movimientos)
   const abierto = !f.cerrado
 

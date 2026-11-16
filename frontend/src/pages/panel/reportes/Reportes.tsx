@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { rangoFiltro, validar } from '@/lib/validacion'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { NOMBRE_MEDIO } from '@/pages/panel/folio/movimientos'
+import { useNombreMedio } from '@/lib/mediosPago'
 import { NOMBRE_CANAL } from '@/pages/huesped/reserva/formato'
 import { BarraPorcentaje } from './BarraPorcentaje'
 import { formatearPorcentaje } from './formato'
@@ -87,6 +87,7 @@ function BotonDescargarPdf({ periodo, habilitado }: { periodo: PeriodoReporte; h
   const ingresos = useReporteIngresos(periodo, habilitado)
   const canales = useReporteReservasPorCanal(periodo, habilitado)
   const alojamiento = useAlojamiento()
+  const nombreMedio = useNombreMedio()
   const [generando, setGenerando] = useState(false)
   // Con placeholderData los datos del periodo anterior siguen visibles mientras llegan los nuevos: no se exportan
   const listos =
@@ -109,6 +110,7 @@ function BotonDescargarPdf({ periodo, habilitado }: { periodo: PeriodoReporte; h
         ocupacion: ocupacion.data,
         ingresos: ingresos.data,
         canales: canales.data,
+        nombreMedio,
       })
     } catch {
       toast.error('No se pudo generar el PDF', { description: 'Inténtalo de nuevo.' })
@@ -217,6 +219,7 @@ function TablaOcupacion({ periodo, habilitada }: PropsTabla) {
 
 function TablaIngresos({ periodo, habilitada }: PropsTabla) {
   const reporte = useReporteIngresos(periodo, habilitada)
+  const nombreMedio = useNombreMedio()
   const datos = reporte.data
 
   return (
@@ -242,13 +245,13 @@ function TablaIngresos({ periodo, habilitada }: PropsTabla) {
               <TableBody>
                 {datos.medios.map((m) => (
                   <TableRow key={m.medio}>
-                    <TableCell className="font-medium">{NOMBRE_MEDIO[m.medio]}</TableCell>
+                    <TableCell className="font-medium">{nombreMedio(m.medio)}</TableCell>
                     <TableCell className="text-right tabular-nums">{m.cantidadPagos}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       <Dinero valor={m.total} />
                     </TableCell>
                     <TableCell>
-                      <BarraPorcentaje valor={m.porcentaje} etiqueta={`Participación de ${NOMBRE_MEDIO[m.medio]}`} />
+                      <BarraPorcentaje valor={m.porcentaje} etiqueta={`Participación de ${nombreMedio(m.medio)}`} />
                     </TableCell>
                   </TableRow>
                 ))}

@@ -45,6 +45,9 @@ class ReportesServiceTest {
 
     private static final LocalDate DESDE = LocalDate.of(2026, 11, 1);
     private static final LocalDate HASTA = LocalDate.of(2026, 11, 10);
+    /** Catálogo de medios aceptados del escenario (L-18) */
+    private static final List<MedioPago> ACEPTADOS =
+            List.of(MedioPago.TARJETA_DEBITO_CREDITO, MedioPago.TRANSFERENCIA_BANCARIA);
     private static final IdentificacionApartamento APT_102 = new IdentificacionApartamento("APT-102");
 
     private final EscenarioCoral escenario = new EscenarioCoral();
@@ -156,7 +159,7 @@ class ReportesServiceTest {
         folio(List.of(new Pago(Dinero.de(80_000), MedioPago.TRANSFERENCIA_BANCARIA,
                 LocalDate.of(2026, 10, 31))));                                                     // fuera
 
-        ReporteIngresos reporte = reportes.ingresos(DESDE, HASTA);
+        ReporteIngresos reporte = reportes.ingresos(DESDE, HASTA, ACEPTADOS);
 
         assertEquals(Dinero.de(1_000_000), reporte.total());
         assertEquals(3, reporte.cantidadPagos());
@@ -175,13 +178,26 @@ class ReportesServiceTest {
     void ingresosSinPagos() {
         folio(List.of());                                                                   // solo cargos
 
-        ReporteIngresos reporte = reportes.ingresos(DESDE, HASTA);
+        ReporteIngresos reporte = reportes.ingresos(DESDE, HASTA, ACEPTADOS);
 
         assertTrue(reporte.total().esCero());
         assertEquals(0, reporte.cantidadPagos());
-        assertEquals(MedioPago.values().length, reporte.medios().size());
+        assertEquals(ACEPTADOS.size(), reporte.medios().size());
         assertTrue(reporte.medios().stream().allMatch(m -> m.total().esCero()
                 && m.porcentaje().compareTo(BigDecimal.ZERO) == 0));
+    }
+
+    @Test
+    @DisplayName("7.9: un medio con pagos que ya no está en el catálogo también aparece, después de los aceptados")
+    void ingresosConMedioFueraDelCatalogo() {
+        MedioPago efectivo = new MedioPago("EFECTIVO");
+        folio(List.of(new Pago(Dinero.de(100_000), efectivo, dia(3))));
+
+        ReporteIngresos reporte = reportes.ingresos(DESDE, HASTA, ACEPTADOS);
+
+        assertEquals(ACEPTADOS.size() + 1, reporte.medios().size());
+        assertEquals(efectivo, reporte.medios().get(reporte.medios().size() - 1).medio());
+        assertEquals(Dinero.de(100_000), medio(reporte, efectivo).total());
     }
 
     // ==================== Reservas por canal ====================
@@ -225,7 +241,7 @@ class ReportesServiceTest {
         ReglaDominioException invertido = assertThrows(ReglaDominioException.class,
                 () -> reportes.ocupacion(HASTA, DESDE));
         assertTrue(invertido.getMessage().startsWith("7.9"));
-        assertThrows(ReglaDominioException.class, () -> reportes.ingresos(HASTA, DESDE));
+        assertThrows(ReglaDominioException.class, () -> reportes.ingresos(HASTA, DESDE, ACEPTADOS));
         assertThrows(ReglaDominioException.class, () -> reportes.reservasPorCanal(null, HASTA));
         assertThrows(ReglaDominioException.class, () -> reportes.ocupacion(DESDE, null));
     }

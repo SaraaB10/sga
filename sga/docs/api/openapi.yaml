@@ -2053,6 +2053,123 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/medios-pago:
+    get:
+      tags: [Configuración del alojamiento]
+      summary: Medios de pago aceptados y activos (L-18)
+      description: Público. Los muestra el detalle del apartamento y los ofrece el registro de pagos.
+      operationId: listarMediosPagoActivos
+      security: []
+      responses:
+        '200':
+          description: Medios activos, en el orden del catálogo
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MedioPagoResponse' }
+    post:
+      tags: [Configuración del alojamiento]
+      summary: Agregar un medio de pago
+      description: Solo ADMINISTRADOR. Nace activo; el código se toma del nombre. Mapea a `MediosPagoUseCase.crear`.
+      operationId: crearMedioPago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearMedioPagoRequest'
+      responses:
+        '201':
+          description: Medio creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedioPagoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Ya existe un medio con ese código
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/medios-pago/todos:
+    get:
+      tags: [Configuración del alojamiento]
+      summary: Catálogo completo de medios de pago (activos e inactivos)
+      description: Solo ADMINISTRADOR.
+      operationId: listarTodosLosMediosPago
+      responses:
+        '200':
+          description: Todos los medios
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MedioPagoResponse' }
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/medios-pago/{codigo}/activar:
+    put:
+      tags: [Configuración del alojamiento]
+      summary: Activar un medio de pago
+      description: Solo ADMINISTRADOR. 409 si ya estaba activo.
+      operationId: activarMedioPago
+      parameters:
+        - { name: codigo, in: path, required: true, schema: { $ref: '#/components/schemas/MedioPago' } }
+      responses:
+        '200':
+          description: Medio activado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedioPagoResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+
+  /api/medios-pago/{codigo}/desactivar:
+    put:
+      tags: [Configuración del alojamiento]
+      summary: Desactivar un medio de pago
+      description: |
+        Solo ADMINISTRADOR. Eliminación lógica: deja de ofrecerse, pero los pagos ya registrados conservan su medio.
+        409 si ya estaba desactivado o es el último activo.
+      operationId: desactivarMedioPago
+      parameters:
+        - { name: codigo, in: path, required: true, schema: { $ref: '#/components/schemas/MedioPago' } }
+      responses:
+        '200':
+          description: Medio desactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedioPagoResponse'
+        '404':
+          $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: Ya estaba desactivado o es el último medio activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/alojamiento/servicios:
     post:
       tags: [Configuración del alojamiento]
@@ -3560,7 +3677,24 @@ components:
 
     MedioPago:
       type: string
-      enum: [ TARJETA_DEBITO_CREDITO, TRANSFERENCIA_BANCARIA ]
+      pattern: '^[A-Z0-9_]{2,40}$'
+      example: TRANSFERENCIA_BANCARIA
+      description: |
+        Código de un medio del catálogo (GET /api/medios-pago). Al registrar un pago debe estar activo (409 si no).
+        Los iniciales son TARJETA_DEBITO_CREDITO y TRANSFERENCIA_BANCARIA; el administrador agrega otros.
+
+    MedioPagoResponse:
+      type: object
+      properties:
+        codigo: { $ref: '#/components/schemas/MedioPago' }
+        nombre: { type: string, example: Transferencia bancaria }
+        activo: { type: boolean }
+
+    CrearMedioPagoRequest:
+      type: object
+      required: [ nombre ]
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 80, example: Efectivo, description: 'El código se toma del nombre (EFECTIVO)' }
 
     TipoCargo:
       type: string

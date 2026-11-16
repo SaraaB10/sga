@@ -7,6 +7,7 @@ import co.edu.uniquindio.sga.application.exception.CodigoRecuperacionInvalidoExc
 import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaNuevaIgualALaActualException;
+import co.edu.uniquindio.sga.application.exception.MedioPagoNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.RolPropioNoModificableException;
 import co.edu.uniquindio.sga.application.exception.BloqueoNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.FolioNoEncontradoException;
@@ -138,7 +139,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({ReservaNoEncontradaException.class, ApartamentoNoEncontradoException.class,
             FolioNoEncontradoException.class, TemporadaNoEncontradaException.class, BloqueoNoEncontradoException.class,
             NovedadNoEncontradaException.class, CanalVentaNoEncontradoException.class,
-            ConflictoCanalNoEncontradoException.class, ServicioAdicionalNoEncontradoException.class})
+            ConflictoCanalNoEncontradoException.class, ServicioAdicionalNoEncontradoException.class,
+            MedioPagoNoEncontradoException.class})
     public ResponseEntity<ErrorResponse> noEncontrado(RuntimeException ex, HttpServletRequest req) {
         return construir(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
     }

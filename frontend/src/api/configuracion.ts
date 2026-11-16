@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cliente } from './cliente'
 import { llavesPublicas } from './publico'
+import type { MedioPagoResponse } from './reservas'
 import type {
   AlojamientoResponse,
   FechaISO,
@@ -207,6 +208,44 @@ export function useActualizarParametros() {
       return queryClient.invalidateQueries({ queryKey: llavesPublicas.alojamiento })
     },
   })
+}
+
+// ---------- Medios de pago (L-18) ----------
+
+const llaveMediosTodos = ['medios-pago', 'todos'] as const
+
+/** Activos e inactivos; solo el administrador (GET /api/medios-pago/todos) */
+export function useTodosLosMediosPago(habilitado = true) {
+  return useQuery({
+    queryKey: llaveMediosTodos,
+    queryFn: async () => (await cliente.get<MedioPagoResponse[]>('/api/medios-pago/todos')).data,
+    enabled: habilitado,
+  })
+}
+
+/** Agregar, activar o desactivar cambia las dos listas: la pública (activos) y la del administrador */
+function useCambioMedioPago<T>(funcion: (dato: T) => Promise<MedioPagoResponse>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: funcion,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['medios-pago'] }),
+  })
+}
+
+export function useCrearMedioPago() {
+  return useCambioMedioPago(async (nombre: string) => (await cliente.post<MedioPagoResponse>('/api/medios-pago', { nombre })).data)
+}
+
+export function useActivarMedioPago() {
+  return useCambioMedioPago(
+    async (codigo: string) => (await cliente.put<MedioPagoResponse>(`/api/medios-pago/${codigo}/activar`)).data,
+  )
+}
+
+export function useDesactivarMedioPago() {
+  return useCambioMedioPago(
+    async (codigo: string) => (await cliente.put<MedioPagoResponse>(`/api/medios-pago/${codigo}/desactivar`)).data,
+  )
 }
 
 /** Los servicios viajan dentro del alojamiento: al cambiar uno se vuelve a consultar */

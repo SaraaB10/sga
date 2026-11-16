@@ -7,6 +7,7 @@ import co.edu.uniquindio.sga.domain.repository.CanalVentaRepository;
 import co.edu.uniquindio.sga.domain.repository.ConflictoCanalRepository;
 import co.edu.uniquindio.sga.domain.repository.EventoCanalRepository;
 import co.edu.uniquindio.sga.domain.repository.FolioRepository;
+import co.edu.uniquindio.sga.domain.repository.MedioPagoRepository;
 import co.edu.uniquindio.sga.domain.repository.NovedadRepository;
 import co.edu.uniquindio.sga.domain.repository.PoliticaCancelacionRepository;
 import co.edu.uniquindio.sga.domain.repository.RecordatorioRepository;
@@ -27,6 +28,8 @@ import co.edu.uniquindio.sga.infrastructure.persistence.jpa.EventoCanalJpaDataRe
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.EventoCanalJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.FolioJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.FolioJpaRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.MedioPagoJpaDataRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.MedioPagoJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.NovedadJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.NovedadJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.PoliticaCancelacionJpaDataRepository;
@@ -120,6 +123,12 @@ public class RepositoryConfig {
     @Bean
     public RecordatorioRepository recordatorioRepository(RecordatorioEnviadoJpaDataRepository dataRepository) {
         return new RecordatorioJpaRepository(dataRepository);
+    }
+
+    /** L-18: catálogo de medios de pago aceptados. */
+    @Bean
+    public MedioPagoRepository medioPagoRepository(MedioPagoJpaDataRepository dataRepository) {
+        return new MedioPagoJpaRepository(dataRepository);
     }
 
     @Bean

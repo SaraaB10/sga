@@ -20,6 +20,7 @@ import {
   useValidacion,
 } from '@/lib/validacion'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
+import { MediosPago } from './MediosPago'
 import { ParametrosAlojamiento } from './ParametrosAlojamiento'
 import { ServiciosAdicionales } from './ServiciosAdicionales'
 
@@ -95,6 +96,7 @@ export default function Alojamiento() {
           <FormularioAlojamiento alojamiento={alojamiento.data} />
           <ServiciosAdicionales servicios={alojamiento.data.serviciosAdicionales} />
           <ParametrosAlojamiento parametros={alojamiento.data.parametros} />
+          <MediosPago />
         </>
       )}
     </section>

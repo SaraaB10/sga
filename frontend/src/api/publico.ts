@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { cliente } from './cliente'
+import type { MedioPagoResponse } from './reservas'
 import type {
   AlojamientoResponse,
   ApartamentoDetalleResponse,
@@ -101,6 +102,17 @@ export const llavesPublicas = {
   temporadas: (pagina: number) => ['temporadas', 'lista', pagina] as const,
   temporada: (id: string) => ['temporadas', 'detalle', id] as const,
   politicaVigente: ['politica-cancelacion', 'vigente'] as const,
+  mediosPago: ['medios-pago', 'activos'] as const,
+}
+
+/** GET /api/medios-pago: medios aceptados y activos (L-18), públicos */
+export async function listarMediosPago(): Promise<MedioPagoResponse[]> {
+  const { data } = await cliente.get<MedioPagoResponse[]>('/api/medios-pago')
+  return data
+}
+
+export function useMediosPago() {
+  return useQuery({ queryKey: llavesPublicas.mediosPago, queryFn: listarMediosPago, staleTime: 5 * 60 * 1000 })
 }
 
 // ---------- Hooks ----------

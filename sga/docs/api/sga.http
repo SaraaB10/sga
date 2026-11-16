@@ -5486,3 +5486,125 @@ Content-Type: application/json
         client.assert(response.body.parametros.umbralEdadFacturable === 6, "umbral: " + response.body.parametros.umbralEdadFacturable);
     });
 %}
+
+### Sección 20: MEDIOS DE PAGO ACEPTADOS (L-18)
+
+# ====================================================================================================
+# 20. El administrador gestiona el catálogo de medios de pago: los activos son públicos y son los únicos con los
+#     que se registra un pago. Se usa el folio de la reserva PENDIENTE del huésped 1 (14.15).
+# ====================================================================================================
+
+### 20.1 Medios de pago activos (sin token): los dos iniciales
+GET {{host}}/api/medios-pago
+
+> {%
+    client.test("20.1 200 medios iniciales", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var codigos = response.body.map(function (m) { return m.codigo; });
+        client.assert(codigos.join(",") === "TARJETA_DEBITO_CREDITO,TRANSFERENCIA_BANCARIA", "Medios: " + codigos);
+    });
+%}
+
+### 20.2 403 La recepción no agrega medios de pago
+POST {{host}}/api/medios-pago
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "nombre": "Efectivo" }
+
+> {%
+    client.test("20.2 403 recepción", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 20.3 El administrador agrega "Efectivo": 201, código EFECTIVO y activo
+POST {{host}}/api/medios-pago
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "Efectivo" }
+
+> {%
+    client.test("20.3 201 medio creado", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(response.body.codigo === "EFECTIVO" && response.body.activo === true, JSON.stringify(response.body));
+    });
+%}
+
+### 20.4 409 El mismo medio otra vez
+POST {{host}}/api/medios-pago
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "nombre": "efectivo" }
+
+> {%
+    client.test("20.4 409 repetido", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje === "L-18: ya existe el medio de pago EFECTIVO", "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### 20.5 La recepción registra un pago en efectivo: 201
+POST {{host}}/api/reservas/{{reservaHuesped1}}/folio/pagos
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "valor": 1000, "medio": "EFECTIVO" }
+
+> {%
+    client.test("20.5 201 pago en efectivo", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        var ultimo = response.body.pagos[response.body.pagos.length - 1];
+        client.assert(ultimo.medio === "EFECTIVO" && ultimo.valor === 1000, JSON.stringify(ultimo));
+    });
+%}
+
+### 20.6 El administrador desactiva el efectivo: deja de ser público
+PUT {{host}}/api/medios-pago/EFECTIVO/desactivar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("20.6 200 desactivado", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.activo === false, "Debía quedar inactivo");
+    });
+%}
+
+### 20.7 409 Ya no se registran pagos en efectivo
+POST {{host}}/api/reservas/{{reservaHuesped1}}/folio/pagos
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "valor": 1000, "medio": "EFECTIVO" }
+
+> {%
+    client.test("20.7 409 medio inactivo", function () {
+        client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
+        client.assert(response.body.mensaje === "L-18: el medio de pago EFECTIVO no está entre los medios aceptados", "mensaje: " + response.body.mensaje);
+    });
+%}
+
+### 20.8 El catálogo completo (administrador) conserva el efectivo, inactivo
+GET {{host}}/api/medios-pago/todos
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("20.8 200 catálogo completo", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        var efectivo = response.body.filter(function (m) { return m.codigo === "EFECTIVO"; })[0];
+        client.assert(efectivo && efectivo.activo === false, "Efectivo: " + JSON.stringify(efectivo));
+    });
+%}
+
+### 20.9 404 Medio inexistente
+PUT {{host}}/api/medios-pago/CHEQUE/activar
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("20.9 404 medio inexistente", function () {
+        client.assert(response.status === 404, "Se esperaba 404 y llegó " + response.status);
+        client.assert(response.body.mensaje === "No se encontró el medio de pago con código: CHEQUE", "mensaje: " + response.body.mensaje);
+    });
+%}
