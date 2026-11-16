@@ -2852,6 +2852,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           $ref: '#/components/responses/NoEncontrado'
+        '409':
+          description: El administrador intenta cambiar su propio rol
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/usuarios/{id}/desactivar:
     parameters:
@@ -2881,7 +2887,7 @@ paths:
         '404':
           $ref: '#/components/responses/NoEncontrado'
         '409':
-          description: Es titular de reservas PENDIENTE, CONFIRMADA o EN_CURSO, o el administrador intenta desactivarse a sí mismo
+          description: Es titular de reservas PENDIENTE, CONFIRMADA o EN_CURSO, o el administrador intenta desactivar su propia cuenta
           content:
             application/json:
               schema:

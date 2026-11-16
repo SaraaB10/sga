@@ -132,9 +132,11 @@ public class UsuarioController {
     @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
     @ApiResponse(responseCode = "403", description = "El rol no lo permite")
     @ApiResponse(responseCode = "404", description = "El usuario no existe")
+    @ApiResponse(responseCode = "409", description = "El administrador intenta cambiar su propio rol")
     public ResponseEntity<UsuarioResponse> cambiarRol(@PathVariable Long id,
-                                                      @Valid @RequestBody CambioRolRequest request) {
-        return ResponseEntity.ok(usuarioService.cambiarRol(id, request));
+                                                      @Valid @RequestBody CambioRolRequest request,
+                                                      @AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(usuarioService.cambiarRol(id, request, jwt.getSubject()));
     }
 
     /** PUT /api/usuarios/{id}/desactivar */

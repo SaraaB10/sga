@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.infraestructure.rest;
 
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.UsuarioJpaDataRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.UsuarioEntity;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import java.time.ZoneId;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -225,6 +227,31 @@ class UsuarioControllerIntegracionTest {
                 .andExpect(jsonPath("$.errores.contrasenaNueva")
                         .value("La contraseña nueva debe ser distinta de la actual"));
         cambiarContrasena(correo(n), "Nueva2027", CONTRASENA).andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("El administrador no puede desactivarse ni cambiar su propio rol: 409 y su cuenta no cambia")
+    void administradorNoModificaSuPropiaCuenta() throws Exception {
+        int n = SECUENCIA.incrementAndGet();
+        long id = crear(correo(n), documento(n), "ADMINISTRADOR");
+
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/{id}/desactivar", id), "ADMINISTRADOR", correo(n)))
+                .andExpect(CuerpoError.error(HttpStatus.CONFLICT, "El administrador no puede desactivar su propia cuenta",
+                        "/api/usuarios/" + id + "/desactivar"));
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/{id}/rol", id), "ADMINISTRADOR", correo(n))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"rol\":\"HUESPED\"}"))
+                .andExpect(CuerpoError.error(HttpStatus.CONFLICT, "El administrador no puede cambiar su propio rol",
+                        "/api/usuarios/" + id + "/rol"));
+
+        UsuarioEntity cuenta = usuarios.findById(id).orElseThrow();
+        assertTrue(cuenta.isActivo());
+        assertEquals("ADMINISTRADOR", cuenta.getRol().name());
+
+        // Otro administrador sí puede cambiarle el rol
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/{id}/rol", id), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"rol\":\"RECEPCIONISTA\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rol").value("RECEPCIONISTA"));
     }
 
     @Test

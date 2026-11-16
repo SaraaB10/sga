@@ -4189,13 +4189,41 @@ Authorization: Bearer {{tokenAdmin}}
     client.test("14.21 cuerpo del error", function () {
         var e = response.body;
         client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
-        client.assert(e.mensaje === "No se puede desactivar a sí mismo", "mensaje: " + e.mensaje);
+        client.assert(e.mensaje === "El administrador no puede desactivar su propia cuenta", "mensaje: " + e.mensaje);
         client.assert(e.path === "/api/usuarios/" + client.global.get("adminId") + "/desactivar", "path: " + e.path);
         client.assert(e.timestamp != null && e.errores == null, "timestamp o errores: " + JSON.stringify(e));
     });
     client.test("14.21 409 desactivarse a sí mismo", function () {
         client.assert(response.status === 409, "Se esperaba 409 y llegó " + response.status);
-        client.assert(response.body.mensaje === "No se puede desactivar a sí mismo", response.body.mensaje);
+        client.assert(response.body.mensaje === "El administrador no puede desactivar su propia cuenta", response.body.mensaje);
+    });
+%}
+
+### 14.21b 409 El administrador no puede cambiar su propio rol
+PUT {{host}}/api/usuarios/{{adminId}}/rol
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "rol": "RECEPCIONISTA" }
+
+> {%
+    client.test("14.21b cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 409 && e.error === "Conflict", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "El administrador no puede cambiar su propio rol", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/usuarios/" + client.global.get("adminId") + "/rol", "path: " + e.path);
+        client.assert(e.timestamp != null && e.errores == null, "timestamp o errores: " + JSON.stringify(e));
+    });
+%}
+
+### 14.21c El administrador sigue siendo ADMINISTRADOR y activo
+GET {{host}}/api/usuarios/me
+Authorization: Bearer {{tokenAdmin}}
+
+> {%
+    client.test("14.21c 200 cuenta sin cambios", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.rol === "ADMINISTRADOR" && response.body.activo === true, JSON.stringify(response.body));
     });
 %}
 

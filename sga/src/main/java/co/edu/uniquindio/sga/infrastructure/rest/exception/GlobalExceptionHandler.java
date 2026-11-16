@@ -7,6 +7,7 @@ import co.edu.uniquindio.sga.application.exception.CodigoRecuperacionInvalidoExc
 import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
 import co.edu.uniquindio.sga.application.exception.ContrasenaNuevaIgualALaActualException;
+import co.edu.uniquindio.sga.application.exception.RolPropioNoModificableException;
 import co.edu.uniquindio.sga.application.exception.BloqueoNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.FolioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.NovedadNoEncontradaException;
@@ -160,10 +161,12 @@ public class GlobalExceptionHandler {
         return construir(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
     }
 
-    /** 409: el usuario es titular de reservas vigentes o el administrador intenta desactivarse (Guía 12, 7.2). */
-    @ExceptionHandler(UsuarioNoDesactivableException.class)
-    public ResponseEntity<ErrorResponse> usuarioNoDesactivable(UsuarioNoDesactivableException ex,
-                                                               HttpServletRequest req) {
+    /**
+     * 409: el usuario es titular de reservas vigentes, o el administrador intenta desactivarse o cambiar su propio
+     * rol (Guía 12, 7.2).
+     */
+    @ExceptionHandler({UsuarioNoDesactivableException.class, RolPropioNoModificableException.class})
+    public ResponseEntity<ErrorResponse> cuentaNoModificable(RuntimeException ex, HttpServletRequest req) {
         return construir(HttpStatus.CONFLICT, ex.getMessage(), req, null);
     }
 
