@@ -48,7 +48,7 @@ class OrdenCondicionesReservaTest {
             escenario.reservas, escenario.apartamentos, escenario.bloqueos, escenario.alojamientos, cotizador);
     private final CreacionReservaService creacion = new CreacionReservaService(escenario.reservas, escenario.folios,
             escenario.apartamentos, escenario.alojamientos, new ServicioAdicionalRepositoryInMemory(), disponibilidad,
-            cotizador, DepositoGarantia.de("Depósito de garantía", Dinero.de(250_000)), "SRV-RECEPCION-NOCTURNA");
+            cotizador, "SRV-RECEPCION-NOCTURNA");
     private final ModificacionReservaService modificacion = new ModificacionReservaService(escenario.reservas,
             escenario.folios, escenario.apartamentos, escenario.alojamientos, disponibilidad, cotizador);
 

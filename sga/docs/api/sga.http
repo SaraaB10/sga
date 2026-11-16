@@ -2625,7 +2625,7 @@ Authorization: Bearer {{tokenAdmin}}
 
 # ====================================================================================================
 # 11. CU-28 a CU-30 (administrador)
-#     CU-28: consultar y actualizar el alojamiento (los parámetros de la sección 6 son de solo lectura).
+#     CU-28: consultar y actualizar el alojamiento (los parámetros de la sección 6 se editan aparte, en la 19).
 #     CU-29: listar temporadas, crear la temporada Festival (1 al 10 de marzo de 2027, fecha final excluida)
 #            con la tarifa de cada apartamento activo (7.4) y agregarle un rango.
 #     CU-30: reservar con la versión 1 de la política, publicar la versión 2 y reservar con ella; la primera
@@ -5359,5 +5359,130 @@ Content-Type: application/json
     client.test("18.13 400 posición negativa", function () {
         client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
         client.assert(response.body.errores.indiceCargo === "La posición del cargo no puede ser negativa", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### Sección 19: PARÁMETROS DEL ALOJAMIENTO EDITABLES DESDE LA APLICACIÓN
+
+# ====================================================================================================
+# 19. Los parámetros se guardan en la base y los edita el administrador (PUT /api/alojamiento/parametros).
+#     Rigen de inmediato: al subir el umbral de edad facturable, la misma cotización cobra a menos personas.
+#     Al final se restauran los valores iniciales.
+# ====================================================================================================
+
+### 19.0 Parámetros vigentes y fecha de nacimiento de un niño que tiene 9 años a la entrada de 17.18
+GET {{host}}/api/alojamiento
+
+> {%
+    client.test("19.0 parámetros iniciales", function () {
+        var p = response.body.parametros;
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(p.umbralEdadFacturable === 6, "umbral: " + p.umbralEdadFacturable);
+        client.assert(p.depositoGarantia === 250000, "depósito: " + p.depositoGarantia);
+        client.assert(p.recargoRecepcionNocturna === 70000, "recargo: " + p.recargoRecepcionNocturna);
+        client.assert(p.edadMinimaCuenta === 18, "edad mínima: " + p.edadMinimaCuenta);
+    });
+    // Cumple 9 años el día de la entrada: paga noche con el umbral de 6 y no con el de 10
+    var entrada = client.global.get("s17HoyMas200");
+    var nacio = (Number(entrada.substring(0, 4)) - 9) + entrada.substring(4);
+    client.global.set("nino9", nacio.endsWith("-02-29") ? nacio.replace("-02-29", "-02-28") : nacio);
+%}
+
+### 19.1 Cotización de un adulto y un niño de 9 años con el umbral de 6: pagan los dos
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Tomás Gómez", "fechaNacimiento": "{{nino9}}" }
+  ]
+}
+
+> {%
+    client.test("19.1 200 dos facturables", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 2; }), "Debían pagar 2 personas");
+    });
+    client.global.set("cotizacionUmbral6", response.body.valorTotal);
+%}
+
+### 19.2 403 La recepción no cambia los parámetros: solo el administrador
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 10, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.2 403 recepción", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 19.3 400 Umbral fuera de rango
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 30, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.3 400 umbral", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+        client.assert(response.body.errores.umbralEdadFacturable === "El umbral de edad facturable debe estar entre 0 y 17 años", "errores: " + JSON.stringify(response.body.errores));
+    });
+%}
+
+### 19.4 El administrador sube el umbral de edad facturable a 10 años: 200
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 10, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.4 200 umbral cambiado", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.parametros.umbralEdadFacturable === 10, "umbral: " + response.body.parametros.umbralEdadFacturable);
+    });
+%}
+
+### 19.5 La misma cotización, sin reiniciar: el niño de 9 años ya no paga noche
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Tomás Gómez", "fechaNacimiento": "{{nino9}}" }
+  ]
+}
+
+> {%
+    client.test("19.5 200 un facturable", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 1; }), "Debía pagar 1 persona");
+        client.assert(response.body.valorTotal * 2 === client.global.get("cotizacionUmbral6"), "Total: " + response.body.valorTotal);
+    });
+%}
+
+### 19.6 Se restauran los valores iniciales
+PUT {{host}}/api/alojamiento/parametros
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{ "umbralEdadFacturable": 6, "tiempoPreparacionHoras": 3, "plazoConfirmacionHoras": 12, "horaLimiteNoShow": "22:00", "horaInicioLlegadaNocturna": "20:00", "recargoRecepcionNocturna": 70000, "estanciaMinimaNoches": 2, "estanciaMinimaActiva": true, "exigeAnticipo": true, "porcentajeAnticipo": 50, "conceptoDepositoGarantia": "Depósito de garantía por inventario y cristalería fina", "depositoGarantia": 250000, "aceptaMascotas": true, "cargoAseoMascota": 110000, "maximoMascotas": 2, "pesoMaximoMascotaKg": 10, "edadMinimaCuenta": 18 }
+
+> {%
+    client.test("19.6 200 restaurados", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.parametros.umbralEdadFacturable === 6, "umbral: " + response.body.parametros.umbralEdadFacturable);
     });
 %}

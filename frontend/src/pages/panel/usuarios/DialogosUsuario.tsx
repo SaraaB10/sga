@@ -5,7 +5,8 @@ import type { Rol, UsuarioResponse } from '@/api/tipos'
 import { NOMBRE_ROL } from '@/auth/roles'
 import { Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Input } from '@/components/ui/input'
-import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
+import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, mensajeEdadMinima } from '@/lib/edadMinima'
+import { useReglasAlojamiento } from '@/pages/publico/comun/consultas'
 import {
   AYUDA_CONTRASENA,
   DIGITOS_TELEFONO,
@@ -45,7 +46,8 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
   const [datos, setDatos] = useState<Datos>(VACIO)
   // La edad mínima se avisa en cuanto la fecha está completa, sin esperar al envío
   const [avisoEdad, setAvisoEdad] = useState<string>()
-  const validacion = useValidacion(esquemaCrearUsuario, datos)
+  const edadMinima = useReglasAlojamiento().reglas.edadMinimaCuenta
+  const validacion = useValidacion(esquemaCrearUsuario(edadMinima), datos)
 
   useAlAbrir(abierto, () => {
     setDatos(VACIO)
@@ -110,12 +112,14 @@ export function DialogoCrearUsuario({ abierto, alCambiar }: Base) {
           <Input
             type="date"
             min={fechaMinimaNacimiento()}
-            max={fechaMaximaNacimientoCuenta()}
+            max={fechaMaximaNacimientoCuenta(edadMinima)}
             value={datos.fechaNacimiento}
             onChange={(e) => {
               const valor = e.target.value
               setDatos((d) => ({ ...d, fechaNacimiento: valor }))
-              setAvisoEdad(esFechaCompleta(valor) && !cumpleEdadMinima(valor) ? MENSAJE_EDAD_MINIMA : undefined)
+              setAvisoEdad(
+                esFechaCompleta(valor) && !cumpleEdadMinima(valor, edadMinima) ? mensajeEdadMinima(edadMinima) : undefined,
+              )
             }}
           />
         </Campo>

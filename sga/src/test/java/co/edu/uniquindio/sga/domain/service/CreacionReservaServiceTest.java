@@ -40,7 +40,7 @@ class CreacionReservaServiceTest {
             escenario.reservas, escenario.apartamentos, escenario.bloqueos, escenario.alojamientos, cotizador);
     private final CreacionReservaService creacion = new CreacionReservaService(escenario.reservas, escenario.folios,
             escenario.apartamentos, escenario.alojamientos, new ServicioAdicionalRepositoryInMemory(), disponibilidad,
-            cotizador, DepositoGarantia.de("Depósito de garantía", Dinero.de(250_000)), ID_RECEPCION_NOCTURNA);
+            cotizador, ID_RECEPCION_NOCTURNA);
 
     // Martes 20 a jueves 22 de octubre de 2026, en temporada base.
     private final Estancia estancia = new Estancia(LocalDate.of(2026, 10, 20), LocalDate.of(2026, 10, 22));

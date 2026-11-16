@@ -43,8 +43,7 @@ class CancelarReservaServiceTest {
             escenario.reservas, escenario.apartamentos, escenario.bloqueos, escenario.alojamientos);
     private final CreacionReservaService creacion = new CreacionReservaService(escenario.reservas, escenario.folios,
             escenario.apartamentos, escenario.alojamientos, new ServicioAdicionalRepositoryInMemory(), disponibilidad,
-            new CotizadorEstanciaService(escenario.apartamentos, escenario.alojamientos),
-            DepositoGarantia.de("Depósito de garantía", Dinero.de(250_000)), "SRV-RECEPCION-NOCTURNA");
+            new CotizadorEstanciaService(escenario.apartamentos, escenario.alojamientos), "SRV-RECEPCION-NOCTURNA");
     private final CancelarReservaService cancelacion = new CancelarReservaService(escenario.reservas,
             escenario.folios);
 

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
@@ -12,7 +13,7 @@ import { rutaDespuesDeLogin } from '@/auth/destino'
 import { AvisoError, Campo, InputContrasena, InputDigitos } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, MENSAJE_EDAD_MINIMA } from '@/lib/edadMinima'
+import { cumpleEdadMinima, esFechaCompleta, fechaMaximaNacimientoCuenta, mensajeEdadMinima } from '@/lib/edadMinima'
 import {
   AYUDA_CONTRASENA,
   contrasenaNueva,
@@ -27,19 +28,25 @@ import {
   nombrePersona,
   telefono,
 } from '@/lib/validacion'
+import { useReglasAlojamiento } from '@/pages/publico/comun/consultas'
 import { PanelBienvenida } from './PanelBienvenida'
 
-// Las mismas reglas que valida el backend al registrar
-const esquema = z.object({
-  nombre: nombrePersona('Escribe tu nombre'),
-  correo: correo(),
-  contrasena: contrasenaNueva('Escribe una contraseña'),
-  telefono: telefono('Escribe tu teléfono'),
-  documento: documento('Escribe tu documento'),
-  fechaNacimiento: fechaPasada('Elige tu fecha de nacimiento').refine(cumpleEdadMinima, MENSAJE_EDAD_MINIMA),
-})
+// Las mismas reglas que valida el backend al registrar; la edad mínima es un parámetro del alojamiento
+function esquemaRegistro(edadMinima: number | null) {
+  return z.object({
+    nombre: nombrePersona('Escribe tu nombre'),
+    correo: correo(),
+    contrasena: contrasenaNueva('Escribe una contraseña'),
+    telefono: telefono('Escribe tu teléfono'),
+    documento: documento('Escribe tu documento'),
+    fechaNacimiento: fechaPasada('Elige tu fecha de nacimiento').refine(
+      (fecha) => cumpleEdadMinima(fecha, edadMinima),
+      mensajeEdadMinima(edadMinima),
+    ),
+  })
+}
 
-type Datos = z.infer<typeof esquema>
+type Datos = z.infer<ReturnType<typeof esquemaRegistro>>
 type NombreCampo = keyof Datos
 
 const CAMPOS: NombreCampo[] = ['nombre', 'correo', 'contrasena', 'telefono', 'documento', 'fechaNacimiento']
@@ -47,6 +54,10 @@ const CAMPOS: NombreCampo[] = ['nombre', 'correo', 'contrasena', 'telefono', 'do
 export default function Registro() {
   const { autenticado, roles, login } = useAuth()
   const location = useLocation()
+  const { reglas } = useReglasAlojamiento()
+  const edadMinima = reglas.edadMinimaCuenta
+  const mensajeEdad = mensajeEdadMinima(edadMinima)
+  const esquema = useMemo(() => esquemaRegistro(edadMinima), [edadMinima])
 
   const {
     register,
@@ -127,15 +138,15 @@ export default function Registro() {
             <Input
               type="date"
               min={fechaMinimaNacimiento()}
-              max={fechaMaximaNacimientoCuenta()}
+              max={fechaMaximaNacimientoCuenta(edadMinima)}
               autoComplete="bday"
               {...register('fechaNacimiento', {
                 // La edad mínima se avisa en cuanto la fecha está completa, sin esperar al envío
                 onChange: (e: { target: { value: string } }) => {
                   const valor = e.target.value
-                  if (esFechaCompleta(valor) && !cumpleEdadMinima(valor))
-                    setError('fechaNacimiento', { message: MENSAJE_EDAD_MINIMA })
-                  else if (errors.fechaNacimiento?.message === MENSAJE_EDAD_MINIMA) clearErrors('fechaNacimiento')
+                  if (esFechaCompleta(valor) && !cumpleEdadMinima(valor, edadMinima))
+                    setError('fechaNacimiento', { message: mensajeEdad })
+                  else if (errors.fechaNacimiento?.message === mensajeEdad) clearErrors('fechaNacimiento')
                 },
               })}
             />

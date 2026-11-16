@@ -1961,8 +1961,9 @@ paths:
       summary: Consultar el alojamiento (CU-28)
       description: |
         Datos, ubicación, horario, normas de convivencia, servicios adicionales (L-17) y parámetros vigentes
-        de la sección 6. Los parámetros son de solo lectura: se configuran en application.properties
-        (`sga.alojamiento.*`) y no se cambian por API. Mapea a `ConfiguracionAlojamientoUseCase.consultar`.
+        de la sección 6. Los parámetros se guardan en la base (nacen con los valores de application.properties)
+        y los edita el administrador con PUT /api/alojamiento/parametros. Mapea a
+        `ConfiguracionAlojamientoUseCase.consultar`.
       operationId: consultarAlojamiento
       security: []
       responses:
@@ -1979,7 +1980,8 @@ paths:
         Reemplaza nombre, descripción, ciudad, dirección, ubicación y normas de convivencia con
         `Alojamiento.actualizarDatos`. El horario es opcional: si llegan las horas se aplica con
         `Alojamiento.definirHorario` (L-12); si no llega ninguna se conserva el vigente. Los parámetros de
-        la sección 6 no cambian. Mapea a `ConfiguracionAlojamientoUseCase.actualizar`.
+        la sección 6 se cambian aparte (PUT /api/alojamiento/parametros). Mapea a
+        `ConfiguracionAlojamientoUseCase.actualizar`.
       operationId: actualizarAlojamiento
       requestBody:
         required: true
@@ -2006,6 +2008,46 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Coordenada fuera de rango (7.3) o llega solo una de las dos horas del horario (L-12)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/alojamiento/parametros:
+    put:
+      tags: [Configuración del alojamiento]
+      summary: Actualizar los parámetros del alojamiento
+      description: |
+        Umbral de edad facturable, tiempo de preparación, plazo de confirmación (también para pagar el anticipo),
+        hora límite de no-show, recepción nocturna (hora y recargo), estancia mínima, anticipo, depósito de
+        garantía, mascotas y edad mínima de la cuenta. Se guardan en la base y rigen desde la siguiente operación,
+        sin reiniciar. Mapea a `ParametrosAlojamientoUseCase.actualizar`.
+      operationId: actualizarParametrosAlojamiento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActualizarParametrosRequest'
+      responses:
+        '200':
+          description: Parámetros actualizados; devuelve el alojamiento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlojamientoResponse'
+        '400':
+          $ref: '#/components/responses/DatosInvalidos'
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Solo ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Una regla del negocio rechaza el valor (anticipo exigido con 0 %, mascotas aceptadas sin cargo)
           content:
             application/json:
               schema:
@@ -3907,9 +3949,34 @@ components:
         generaCargo: { type: boolean }
         valor: { type: integer, format: int64, minimum: 0, nullable: true, example: 200000, description: Pesos enteros; obligatorio y mayor que cero si genera cargo }
 
+    ActualizarParametrosRequest:
+      type: object
+      required: [umbralEdadFacturable, tiempoPreparacionHoras, plazoConfirmacionHoras, horaLimiteNoShow,
+                 horaInicioLlegadaNocturna, recargoRecepcionNocturna, estanciaMinimaNoches, estanciaMinimaActiva,
+                 exigeAnticipo, porcentajeAnticipo, conceptoDepositoGarantia, depositoGarantia, aceptaMascotas,
+                 cargoAseoMascota, maximoMascotas, pesoMaximoMascotaKg, edadMinimaCuenta]
+      properties:
+        umbralEdadFacturable: { type: integer, minimum: 0, maximum: 17, example: 6 }
+        tiempoPreparacionHoras: { type: integer, minimum: 0, maximum: 24, example: 3 }
+        plazoConfirmacionHoras: { type: integer, minimum: 1, maximum: 168, example: 12 }
+        horaLimiteNoShow: { type: string, format: time, example: '22:00' }
+        horaInicioLlegadaNocturna: { type: string, format: time, example: '20:00' }
+        recargoRecepcionNocturna: { type: integer, format: int64, minimum: 1, example: 70000 }
+        estanciaMinimaNoches: { type: integer, minimum: 1, maximum: 30, example: 2 }
+        estanciaMinimaActiva: { type: boolean }
+        exigeAnticipo: { type: boolean }
+        porcentajeAnticipo: { type: integer, minimum: 0, maximum: 100, example: 50 }
+        conceptoDepositoGarantia: { type: string, maxLength: 250 }
+        depositoGarantia: { type: integer, format: int64, minimum: 1, example: 250000 }
+        aceptaMascotas: { type: boolean }
+        cargoAseoMascota: { type: integer, format: int64, minimum: 0, example: 110000 }
+        maximoMascotas: { type: integer, minimum: 0, maximum: 10, example: 2 }
+        pesoMaximoMascotaKg: { type: integer, minimum: 0, maximum: 100, example: 10 }
+        edadMinimaCuenta: { type: integer, minimum: 14, maximum: 21, example: 18 }
+
     ParametrosAlojamientoResponse:
       type: object
-      description: Parámetros de la sección 6 vigentes (solo lectura, se configuran en application.properties)
+      description: Parámetros de la sección 6 vigentes (guardados en la base; los edita el administrador)
       properties:
         umbralEdadFacturable: { type: integer, nullable: true, example: 6, description: L-09 }
         tiempoPreparacionHoras: { type: integer, nullable: true, example: 3, description: L-13 }
@@ -3925,6 +3992,9 @@ components:
         maximoMascotas: { type: integer, example: 2 }
         pesoMaximoMascotaKg: { type: integer, example: 10 }
         depositoGarantia: { type: integer, format: int64, example: 250000, description: 'RP-02: depósito de garantía reembolsable, el mismo que se asienta en el folio de toda reserva nueva' }
+        conceptoDepositoGarantia: { type: string, nullable: true }
+        recargoRecepcionNocturna: { type: integer, format: int64, nullable: true, example: 70000, description: 'RP-03: valor del servicio de recepción nocturna' }
+        edadMinimaCuenta: { type: integer, nullable: true, example: 18 }
 
     AlojamientoResponse:
       type: object

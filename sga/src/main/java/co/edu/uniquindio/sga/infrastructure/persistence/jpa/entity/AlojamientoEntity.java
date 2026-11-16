@@ -76,6 +76,11 @@ public class AlojamientoEntity {
     private int mascotasMaximo;
     private int mascotasPesoMaximoKg;
 
+    // Depósito de garantía (RP-02) y edad mínima de la cuenta; quedan en null hasta que se configuran
+    private String depositoGarantiaConcepto;
+    private BigDecimal depositoGarantiaValor;
+    private Integer edadMinimaCuenta;
+
     @ElementCollection
     @CollectionTable(name = "alojamiento_apartamento", joinColumns = @JoinColumn(name = "alojamiento_id"))
     @Column(name = "apartamento_id", nullable = false)

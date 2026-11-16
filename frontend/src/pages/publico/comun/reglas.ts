@@ -36,6 +36,8 @@ export interface ReglasAlojamiento {
   depositoGarantia: number | null
   horaEntrada: string | null
   horaSalida: string | null
+  /** Edad mínima para crear una cuenta y para ser titular de una reserva de recepción */
+  edadMinimaCuenta: number | null
 }
 
 const hhmm = (hora: string | null | undefined) => (hora ? hora.slice(0, 5) : null)
@@ -43,14 +45,13 @@ const hhmm = (hora: string | null | undefined) => (hora ? hora.slice(0, 5) : nul
 /** Lee los parámetros del alojamiento tal como llegan */
 export function reglasDe(alojamiento: AlojamientoResponse | undefined): ReglasAlojamiento {
   const p = alojamiento?.parametros
-  const nocturna = alojamiento?.serviciosAdicionales.find((s) => /nocturn/i.test(s.nombre))
   return {
     umbralEdad: p?.umbralEdadFacturable ?? null,
     porcentajeAnticipo: p?.porcentajeAnticipo ?? null,
     plazoConfirmacionHoras: p?.plazoConfirmacionHoras ?? null,
     horaNocturna: hhmm(p?.horaInicioLlegadaNocturna),
     horaLimiteNoShow: hhmm(p?.horaLimiteNoShow),
-    recargoNocturno: nocturna?.valor ?? null,
+    recargoNocturno: p?.recargoRecepcionNocturna ?? null,
     estanciaMinima: p?.estanciaMinimaNoches ?? null,
     estanciaMinimaActiva: p?.estanciaMinimaActiva ?? false,
     aceptaMascotas: p?.aceptaMascotas ?? null,
@@ -60,6 +61,7 @@ export function reglasDe(alojamiento: AlojamientoResponse | undefined): ReglasAl
     depositoGarantia: p?.depositoGarantia ?? null,
     horaEntrada: hhmm(alojamiento?.horaEntrada),
     horaSalida: hhmm(alojamiento?.horaSalida),
+    edadMinimaCuenta: p?.edadMinimaCuenta ?? null,
   }
 }
 

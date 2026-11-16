@@ -8,19 +8,14 @@ import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
 import co.edu.uniquindio.sga.domain.service.RegistrarBloqueoService;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
-import co.edu.uniquindio.sga.domain.valueobject.CargoAseoMascota;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
-import co.edu.uniquindio.sga.domain.valueobject.EstanciaMinima;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.Imagen;
-import co.edu.uniquindio.sga.domain.valueobject.PlazoConfirmacion;
 import co.edu.uniquindio.sga.domain.valueobject.RangoFechas;
 import co.edu.uniquindio.sga.domain.valueobject.Tarifa;
-import co.edu.uniquindio.sga.domain.valueobject.TiempoPreparacion;
 import co.edu.uniquindio.sga.domain.valueobject.TipoTemporada;
-import co.edu.uniquindio.sga.domain.valueobject.UmbralEdadFacturable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,8 +35,9 @@ import java.util.stream.IntStream;
  * Datos iniciales del alojamiento Coral (Anexo A). H2 en memoria arranca vacía en cada ejecución y
  * sin alojamiento, temporadas, tarifas y servicios ningún caso de uso funciona (F-13).
  * La carga usa las fábricas del dominio, así que pasa por las mismas reglas (F-05, 7.4, L-03, L-04).
- * Los parámetros de A.4 y los valores de RP-02/RP-03 se leen de application.properties (L-13: configuración,
- * nunca constante). El catálogo (identidad, temporadas, tarifas, inventario y demás servicios) es dato inicial.
+ * Los parámetros de A.4 (con RP-02 y la edad mínima de la cuenta) los carga aparte DatosInicialesParametrosConfig,
+ * que revisa los suyos aunque el alojamiento ya exista. El valor inicial del recargo de RP-03 sale de
+ * application.properties. El catálogo (identidad, temporadas, tarifas, inventario y demás servicios) es dato inicial.
  * Las temporadas se registran con la fecha final excluida (nota de A.3).
  *
  * Datos de prueba (12.3): APT-202 queda FUERA_DE_SERVICIO con un bloqueo de hoy+3 a hoy+15 (3.3: el estado no
@@ -61,6 +57,10 @@ public class DatosInicialesCoralConfig {
     /** Prefijo común de las imágenes: formato y calidad automáticos y 1600 px de ancho. */
     private static final String CLOUDINARY = "https://res.cloudinary.com/xwkp6b4t/image/upload/f_auto,q_auto,w_1600/";
 
+    /** RP-03: la hora desde la que una llegada es nocturna es un parámetro editable; la descripción no la repite */
+    static final String DESCRIPCION_RECEPCION_NOCTURNA =
+            "Recepción para las llegadas nocturnas, desde la hora configurada en el alojamiento (RP-03)";
+
     @Bean
     @Order(1)
     public CommandLineRunner cargarDatosCoral(
@@ -68,21 +68,8 @@ public class DatosInicialesCoralConfig {
             ApartamentoRepository apartamentoRepository,
             RegistrarBloqueoService registrarBloqueoService,
             Clock reloj,
-            @Value("${sga.alojamiento.umbral-edad-facturable}") int umbralEdad,
             @Value("${sga.alojamiento.hora-entrada}") LocalTime horaEntrada,
             @Value("${sga.alojamiento.hora-salida}") LocalTime horaSalida,
-            @Value("${sga.alojamiento.tiempo-preparacion-horas}") int horasPreparacion,
-            @Value("${sga.alojamiento.plazo-confirmacion-horas}") int horasConfirmacion,
-            @Value("${sga.alojamiento.hora-limite-no-show}") LocalTime horaLimiteNoShow,
-            @Value("${sga.alojamiento.hora-inicio-llegada-nocturna}") LocalTime horaLlegadaNocturna,
-            @Value("${sga.alojamiento.estancia-minima-noches}") int nochesEstanciaMinima,
-            @Value("${sga.alojamiento.estancia-minima-activa}") boolean estanciaMinimaActiva,
-            @Value("${sga.alojamiento.exige-anticipo}") boolean exigeAnticipo,
-            @Value("${sga.alojamiento.porcentaje-anticipo}") int porcentajeAnticipo,
-            @Value("${sga.alojamiento.mascotas.aceptadas}") boolean aceptaMascotas,
-            @Value("${sga.alojamiento.mascotas.cargo-aseo}") long cargoAseoMascota,
-            @Value("${sga.alojamiento.mascotas.maximo}") int maximoMascotas,
-            @Value("${sga.alojamiento.mascotas.peso-maximo-kg}") int pesoMaximoMascotaKg,
             @Value("${sga.alojamiento.id-servicio-recepcion-nocturna}") String idRecepcionNocturna,
             @Value("${sga.alojamiento.valor-recepcion-nocturna}") long valorRecepcionNocturna) {
         return args -> {
@@ -100,14 +87,7 @@ public class DatosInicialesCoralConfig {
                     "Silencio estricto en balcones entre las 23:00 y las 07:00; prohibido fumar dentro de los "
                             + "apartamentos; uso respetuoso de las áreas comunes no vendibles.");
 
-            // A.4 Parámetros y políticas. RP-01: noches mínimas si incluye viernes o sábado en Media o Alta.
-            coral.configurarParametros(new UmbralEdadFacturable(umbralEdad), new TiempoPreparacion(horasPreparacion),
-                    new PlazoConfirmacion(horasConfirmacion), horaLimiteNoShow, horaLlegadaNocturna,
-                    new EstanciaMinima(nochesEstanciaMinima, estanciaMinimaActiva), exigeAnticipo, porcentajeAnticipo);
-            // L-16: política de mascotas y cargo único de aseo por estancia
-            coral.definirPoliticaMascotas(aceptaMascotas
-                    ? new CargoAseoMascota(true, Dinero.de(cargoAseoMascota), maximoMascotas, pesoMaximoMascotaKg)
-                    : CargoAseoMascota.noSeAceptanMascotas());
+            // A.4 Los parámetros y políticas los carga DatosInicialesParametrosConfig, que revisa los suyos aparte
 
             // A.3 Temporadas
             coral.agregarTemporada(Temporada.crearBase(BASE, "Base"));
@@ -128,8 +108,7 @@ public class DatosInicialesCoralConfig {
 
             // A.5 Servicios adicionales (L-17). RP-03: la recepción nocturna genera el cargo configurado.
             coral.agregarServicioAdicional(ServicioAdicional.crearConCargo(idRecepcionNocturna, "Recepción nocturna",
-                    "Recepción para llegadas desde las " + horaLlegadaNocturna + " (RP-03)",
-                    Dinero.de(valorRecepcionNocturna)));
+                    DESCRIPCION_RECEPCION_NOCTURNA, Dinero.de(valorRecepcionNocturna)));
             coral.agregarServicioAdicional(ServicioAdicional.crearConCargo("SRV-PASEO-BAHIA",
                     "Paseo privado por la bahía", "Recorrido privado por la bahía de Cartagena", Dinero.de(420_000)));
             coral.agregarServicioAdicional(ServicioAdicional.crearConCargo("SRV-CENA-BALCON",

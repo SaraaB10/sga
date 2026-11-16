@@ -1,11 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Loader2, Lock, Save } from 'lucide-react'
+import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import { useActualizarAlojamiento, type ActualizarAlojamientoRequest } from '@/api/configuracion'
 import { useAlojamiento } from '@/api/publico'
-import type { AlojamientoResponse, ParametrosAlojamientoResponse } from '@/api/tipos'
-import { AvisoError, Campo, Dinero } from '@/components/coral'
+import type { AlojamientoResponse } from '@/api/tipos'
+import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,8 +19,8 @@ import {
   unirErrores,
   useValidacion,
 } from '@/lib/validacion'
-import { formatearHora } from '@/pages/publico/comun/reglas'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
+import { ParametrosAlojamiento } from './ParametrosAlojamiento'
 import { ServiciosAdicionales } from './ServiciosAdicionales'
 
 interface Formulario {
@@ -81,7 +81,7 @@ export default function Alojamiento() {
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <header>
         <h1 className="font-titulo text-3xl font-semibold">Alojamiento</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Datos, horario, normas y servicios que ven los huéspedes.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Datos, horario, normas y servicios que ven los huéspedes, y los parámetros de la operación.</p>
       </header>
       {alojamiento.error ? (
         <AvisoError titulo="No se pudo consultar el alojamiento" error={alojamiento.error} />
@@ -94,7 +94,7 @@ export default function Alojamiento() {
         <>
           <FormularioAlojamiento alojamiento={alojamiento.data} />
           <ServiciosAdicionales servicios={alojamiento.data.serviciosAdicionales} />
-          <Parametros parametros={alojamiento.data.parametros} />
+          <ParametrosAlojamiento parametros={alojamiento.data.parametros} />
         </>
       )}
     </section>
@@ -209,41 +209,3 @@ function Seccion({ titulo, children }: { titulo: string; children: ReactNode }) 
   )
 }
 
-function NotaSoloLectura({ children }: { children: ReactNode }) {
-  return (
-    <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <Lock aria-hidden="true" className="size-3.5 shrink-0" />
-      {children}
-    </p>
-  )
-}
-
-function Parametros({ parametros: p }: { parametros: ParametrosAlojamientoResponse }) {
-  const horas = (n: number | null) => (n === null ? 'Sin definir' : `${n} ${n === 1 ? 'hora' : 'horas'}`)
-  const filas: [string, ReactNode][] = [
-    ['Umbral de edad facturable', p.umbralEdadFacturable === null ? 'Sin definir' : `Desde ${p.umbralEdadFacturable} años`],
-    ['Tiempo de preparación', horas(p.tiempoPreparacionHoras)],
-    ['Plazo de confirmación', horas(p.plazoConfirmacionHoras)],
-    ['Hora límite de no-show', p.horaLimiteNoShow ? formatearHora(p.horaLimiteNoShow) : 'Sin definir'],
-    ['Anticipo', p.exigeAnticipo ? `${p.porcentajeAnticipo} % del valor de la estancia` : 'No se exige'],
-  ]
-  if (p.depositoGarantia !== null && p.depositoGarantia !== undefined) {
-    filas.push(['Depósito de garantía', <Dinero key="deposito" valor={p.depositoGarantia} />])
-  }
-  return (
-    <div className="flex flex-col gap-3 rounded-tarjeta border border-border bg-card p-5 shadow-tarjeta md:p-6">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-titulo text-xl font-semibold">Parámetros</h2>
-        <NotaSoloLectura>Se cambian en la configuración del servidor.</NotaSoloLectura>
-      </div>
-      <dl className="grid gap-x-6 sm:grid-cols-2">
-        {filas.map(([titulo, valor]) => (
-          <div key={titulo} className="flex items-baseline justify-between gap-3 border-b border-border py-2.5 text-sm">
-            <dt className="text-muted-foreground">{titulo}</dt>
-            <dd className="text-right font-medium">{valor}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  )
-}

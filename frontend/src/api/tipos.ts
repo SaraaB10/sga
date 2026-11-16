@@ -209,6 +209,11 @@ export interface ParametrosAlojamientoResponse {
   pesoMaximoMascotaKg: number
   /** RP-02: depósito de garantía reembolsable, el mismo que se asienta en el folio */
   depositoGarantia: number | null
+  conceptoDepositoGarantia: string | null
+  /** RP-03: valor del recargo por llegada nocturna */
+  recargoRecepcionNocturna: number | null
+  /** Edad mínima para crear una cuenta y para ser titular de una reserva de recepción */
+  edadMinimaCuenta: number | null
 }
 
 export interface AlojamientoResponse {

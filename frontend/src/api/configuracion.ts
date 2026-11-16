@@ -165,6 +165,50 @@ export function useActualizarAlojamiento() {
   })
 }
 
+// ---------- Parámetros del alojamiento ----------
+
+/** PUT /api/alojamiento/parametros: la configuración completa; el dinero en pesos enteros, las horas "HH:mm" */
+export interface ActualizarParametrosRequest {
+  umbralEdadFacturable: number
+  tiempoPreparacionHoras: number
+  plazoConfirmacionHoras: number
+  horaLimiteNoShow: string
+  horaInicioLlegadaNocturna: string
+  recargoRecepcionNocturna: number
+  estanciaMinimaNoches: number
+  estanciaMinimaActiva: boolean
+  exigeAnticipo: boolean
+  porcentajeAnticipo: number
+  conceptoDepositoGarantia: string
+  depositoGarantia: number
+  aceptaMascotas: boolean
+  cargoAseoMascota: number
+  maximoMascotas: number
+  pesoMaximoMascotaKg: number
+  edadMinimaCuenta: number
+}
+
+export async function actualizarParametros(datos: ActualizarParametrosRequest): Promise<AlojamientoResponse> {
+  const { data } = await cliente.put<AlojamientoResponse>('/api/alojamiento/parametros', datos)
+  return data
+}
+
+/**
+ * Rigen de inmediato: se reemplaza el alojamiento en caché y se descartan las cotizaciones guardadas, que se
+ * calcularon con los parámetros anteriores.
+ */
+export function useActualizarParametros() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: actualizarParametros,
+    onSuccess: (alojamiento) => {
+      queryClient.setQueryData(llavesPublicas.alojamiento, alojamiento)
+      queryClient.removeQueries({ queryKey: ['cotizacion'] })
+      return queryClient.invalidateQueries({ queryKey: llavesPublicas.alojamiento })
+    },
+  })
+}
+
 /** Los servicios viajan dentro del alojamiento: al cambiar uno se vuelve a consultar */
 function useRefrescarAlojamiento() {
   const queryClient = useQueryClient()
