@@ -1144,6 +1144,11 @@ paths:
       description: |
         Calcula noche a noche con la tarifa de cada temporada (RN-05, RP-01) y solo cobra a los ocupantes
         desde 6 años (RN-06). No crea la reserva. Mapea a `CotizarEstanciaUseCase`.
+
+        El grupo debe incluir al menos un ocupante facturable (el titular siempre lo es): un grupo solo de
+        menores responde **400** con el mensaje "El grupo debe incluir al menos un adulto que pague noche; el
+        titular siempre es facturable". La misma regla aplica a la búsqueda de disponibles con
+        `fechasNacimiento` y a la creación y modificación de reservas.
       operationId: cotizarEstancia
       security: []
       requestBody:

@@ -4,7 +4,7 @@ import { Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import type { Estancia } from './estancia'
+import { grupoSinAdultos, MENSAJE_SIN_ADULTOS, type Estancia } from './estancia'
 import { hoyISO, nochesEntre, sumarDias } from './reglas'
 import { SelectorHuespedes } from './SelectorHuespedes'
 
@@ -21,11 +21,12 @@ export function BuscadorEstancia({ inicial, umbralEdad, alBuscar, textoBoton = '
   const [entrada, setEntrada] = useState(inicial.entrada)
   const [salida, setSalida] = useState(inicial.salida)
   const [huespedes, setHuespedes] = useState(inicial.huespedes)
-  const [errores, setErrores] = useState<{ entrada?: string; salida?: string }>({})
+  const [errores, setErrores] = useState<{ entrada?: string; salida?: string; huespedes?: string }>({})
 
   const enviar = (e: FormEvent) => {
     e.preventDefault()
     const nuevos: typeof errores = {}
+    if (grupoSinAdultos(huespedes, umbralEdad, entrada)) nuevos.huespedes = `${MENSAJE_SIN_ADULTOS}.`
     if (!entrada) nuevos.entrada = 'Elige la fecha de llegada.'
     else if (entrada < hoyISO()) nuevos.entrada = 'La llegada no puede ser en el pasado.'
     if (!salida) nuevos.salida = 'Elige la fecha de salida.'
@@ -78,6 +79,7 @@ export function BuscadorEstancia({ inicial, umbralEdad, alBuscar, textoBoton = '
             referencia={entrada}
           />
         </div>
+        {errores.huespedes && <p className="text-xs font-medium text-error">{errores.huespedes}</p>}
       </div>
       <Button type="submit" className="h-11 sm:col-span-2 lg:col-span-1 lg:mt-[1.625rem]">
         <Search aria-hidden="true" /> {textoBoton}

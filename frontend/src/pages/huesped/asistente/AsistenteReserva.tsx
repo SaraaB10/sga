@@ -442,10 +442,21 @@ export function AsistenteReserva({ modo }: Props) {
               </Tarjeta>
 
               <Tarjeta
-                titulo="Acompañantes"
-                descripcion={`${capacidad !== null ? `${ocupantes.length} de ${capacidad}` : ocupantes.length} personas · ${textoMenores(reglas.umbralEdad).toLowerCase()}`}
+                titulo={
+                  capacidad !== null
+                    ? `Ocupantes: ${ocupantes.length} de ${capacidad} (capacidad del apartamento)`
+                    : `Ocupantes: ${ocupantes.length}`
+                }
+                descripcion={`El titular cuenta como ocupante. ${textoMenores(reglas.umbralEdad)}.`}
               >
-                {acompanantes.length === 0 && <p className="text-sm text-muted-foreground">El titular viaja solo.</p>}
+                {acompanantes.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Aún no agregas acompañantes.
+                    {capacidad !== null &&
+                      capacidad > ocupantes.length &&
+                      ` Puedes agregar hasta ${capacidad - ocupantes.length} más.`}
+                  </p>
+                )}
                 <ul className="flex flex-col gap-4">
                   {acompanantes.map((a, i) => (
                     <li key={i} className="grid gap-3 rounded-campo border border-border p-3 sm:grid-cols-[1fr_11rem_auto] sm:items-start">

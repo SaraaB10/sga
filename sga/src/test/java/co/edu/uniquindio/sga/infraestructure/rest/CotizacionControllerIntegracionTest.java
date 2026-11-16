@@ -101,6 +101,31 @@ class CotizacionControllerIntegracionTest {
                         "RN-03: la fecha de salida debe ser posterior a la de entrada", "/api/cotizaciones"));
     }
 
+    @Test
+    @DisplayName("400: un grupo solo de menores no se cotiza; un adulto y un menor pagan una persona")
+    void cotizarGrupoSinFacturables() throws Exception {
+        LocalDate entrada = LocalDate.now(BOGOTA).plusDays(45);
+        String nina = "{\"nombre\":\"Sofia Gomez\",\"fechaNacimiento\":\"" + entrada.minusYears(3) + "\"}";
+        String bebe = "{\"nombre\":\"Tomas Gomez\",\"fechaNacimiento\":\"" + entrada.minusYears(1) + "\"}";
+
+        cotizar(cuerpo("APT-201", entrada, entrada.plusDays(2), nina + "," + bebe))
+                .andExpect(CuerpoError.error(HttpStatus.BAD_REQUEST,
+                        "El grupo debe incluir al menos un adulto que pague noche; el titular siempre es facturable",
+                        "/api/cotizaciones"));
+
+        cotizar(cuerpo("APT-201", entrada, entrada.plusDays(2), ADULTO + "," + nina))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.detalles[0].ocupantesFacturables").value(1));
+
+        // La búsqueda con fechas de nacimiento solo de menores también responde 400
+        mvc.perform(MockMvcRequestBuilders.get("/api/apartamentos/disponibles?entrada=" + entrada + "&salida="
+                        + entrada.plusDays(2) + "&ocupantes=2&fechasNacimiento=" + entrada.minusYears(3)
+                        + "&fechasNacimiento=" + entrada.minusYears(1)))
+                .andExpect(CuerpoError.error(HttpStatus.BAD_REQUEST,
+                        "El grupo debe incluir al menos un adulto que pague noche; el titular siempre es facturable",
+                        "/api/apartamentos/disponibles"));
+    }
+
     private static String cuerpo(String apartamento, LocalDate entrada, LocalDate salida, String ocupantes) {
         return "{\"identificacionApartamento\":\"" + apartamento + "\",\"fechaEntrada\":\"" + entrada
                 + "\",\"fechaSalida\":\"" + salida + "\",\"ocupantes\":[" + ocupantes + "]}";

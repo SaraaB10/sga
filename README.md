@@ -178,7 +178,7 @@ Los errores siempre vuelven con el mismo formato (`ErrorResponse`): **400** cuan
 
 ## Probar la API
 
-En `sga/docs/api/sga.http` dejamos una colección de 251 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 257 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
+En `sga/docs/api/sga.http` dejamos una colección de 253 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 259 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
 
 1. Arranca la app desde cero.
 2. Abre `sga.http` en IntelliJ y dale a **Run All Requests in File**. En VS Code se puede usar la extensión REST Client.
@@ -198,7 +198,7 @@ En `sga/docs/api/sga.http` dejamos una colección de 251 peticiones que recorre 
     - Apartamentos y operación: operaciones del estado operativo en lugar del cambio genérico, cada una con su estado de origen, `Location` en bloqueos y novedades con su consulta por id, historial de novedades y apartamentos pendientes de preparación.
     - Folio y transversal: depósito como `AJUSTE_MODIFICACION`, consulta del folio, cargos de servicios adicionales y correcciones (RN-16), `Location` en pagos y temporadas, consulta de una temporada y disponibilidad del canal paginada.
     - Pruebas unitarias de las reglas de configuración (L-03, L-06, L-09, L-12, L-13, L-14 y L-17), del titular facturable (3.2), del apartamento activo (3.3) y del formato del código de reserva.
-- **Verificación:** las 436 pruebas pasan (`./gradlew clean test`), las 251 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
+- **Verificación:** las 444 pruebas pasan (`./gradlew clean test`), las 253 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
 
 ## Seguridad
 

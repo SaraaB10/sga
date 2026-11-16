@@ -82,7 +82,7 @@ export default function ListadoReservas() {
     { clave: 'apartamento', titulo: 'Apartamento', celda: (r) => r.apartamento },
     {
       clave: 'estancia',
-      titulo: 'Estancia',
+      titulo: 'Fechas',
       className: 'whitespace-normal',
       celda: (r) => {
         const noches = nochesEntre(r.fechaEntrada, r.fechaSalida)
@@ -106,7 +106,7 @@ export default function ListadoReservas() {
     { clave: 'estado', titulo: 'Estado', celda: (r) => <EstadoReserva estado={r.estado} /> },
     {
       clave: 'valor',
-      titulo: 'Valor',
+      titulo: 'Estancia',
       className: 'md:text-right',
       celda: (r) => <Dinero valor={r.valorTotal} className="font-semibold" />,
     },

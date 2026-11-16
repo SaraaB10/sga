@@ -152,7 +152,7 @@ export function ResumenReserva({
               <Fila etiqueta="Depósito de garantía reembolsable">{null}</Fila>
             )}
             <div className="flex items-baseline justify-between gap-3 border-t border-border pt-3">
-              <dt className="font-semibold">Total del folio</dt>
+              <dt className="font-semibold">Total (estancia + depósito)</dt>
               <dd>
                 <Dinero valor={valores.total} grande className="text-2xl" />
               </dd>
