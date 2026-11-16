@@ -7,6 +7,7 @@ import { AvisoError, Campo, Dinero, Fecha, Paginador, Vacio } from '@/components
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { BuscadorEstancia } from './comun/BuscadorEstancia'
 import { useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { EncabezadoFiltros } from './comun/EncabezadoFiltros'
@@ -16,8 +17,18 @@ import { avisoEstanciaMinima, nochesEntre } from './comun/reglas'
 import { TarjetaApartamento } from './comun/TarjetaApartamento'
 import { MapaAlojamiento } from './MapaAlojamiento'
 
-const FILTROS = ['capacidadMinima', 'caracteristica', 'precioMinimo', 'precioMaximo'] as const
+const FILTROS = ['capacidadMinima', 'caracteristica', 'servicios', 'precioMinimo', 'precioMaximo'] as const
 type Filtro = (typeof FILTROS)[number]
+
+/** Servicios que se pueden pedir; se buscan en la dotación y las características de cada apartamento */
+const SERVICIOS = ['Hidromasaje', 'Piscina', 'Terraza', 'Balcón', 'Vista al mar', 'Cocina', 'Cava de vinos'] as const
+
+/** En la URL los servicios van separados por coma: servicios=Hidromasaje,Cocina */
+const aServicios = (texto: string | null) =>
+  (texto ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
 
 const aNumero = (texto: string | null) => {
   const limpio = (texto ?? '').replace(/[$.\s]/g, '')
@@ -45,6 +56,7 @@ export default function Buscar() {
           fechasNacimiento: fechasCompletas(estancia.huespedes),
           capacidadMinima: aNumero(params.get('capacidadMinima')),
           caracteristica: params.get('caracteristica')?.trim() || undefined,
+          servicios: aServicios(params.get('servicios')),
           precioMinimo: aNumero(params.get('precioMinimo')),
           precioMaximo: aNumero(params.get('precioMaximo')),
         }
@@ -165,7 +177,7 @@ interface PropsFiltros {
   alAplicar: (valores: Record<Filtro, string>) => void
 }
 
-/** Capacidad mínima, característica de la dotación y rango del valor estimado */
+/** Capacidad mínima, característica de la dotación, servicios y rango del valor estimado */
 function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
   const [borrador, setBorrador] = useState(valores)
   const [error, setError] = useState<string>()
@@ -173,6 +185,12 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
   const [abierto, setAbierto] = useState(false)
 
   const cambiar = (campo: Filtro, valor: string) => setBorrador((b) => ({ ...b, [campo]: valor }))
+  const serviciosElegidos = aServicios(borrador.servicios)
+  const alternarServicio = (servicio: string, elegido: boolean) =>
+    cambiar(
+      'servicios',
+      (elegido ? [...serviciosElegidos, servicio] : serviciosElegidos.filter((s) => s !== servicio)).join(','),
+    )
 
   const aplicar = (e: FormEvent) => {
     e.preventDefault()
@@ -187,7 +205,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
   }
 
   const limpiar = () => {
-    const vacios = { capacidadMinima: '', caracteristica: '', precioMinimo: '', precioMaximo: '' }
+    const vacios = { capacidadMinima: '', caracteristica: '', servicios: '', precioMinimo: '', precioMaximo: '' }
     setBorrador(vacios)
     setError(undefined)
     alAplicar(vacios)
@@ -226,6 +244,32 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
           onChange={(e) => cambiar('caracteristica', e.target.value)}
         />
       </Campo>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1.5 text-sm font-medium">Servicios</legend>
+        <p className="-mt-1 text-xs text-muted-foreground">Muestra los apartamentos que los tienen todos.</p>
+        <div className="flex flex-wrap gap-2">
+          {SERVICIOS.map((servicio) => {
+            const elegido = serviciosElegidos.includes(servicio)
+            return (
+              <label
+                key={servicio}
+                className={cn(
+                  'flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50',
+                  elegido ? 'border-coral bg-crema font-semibold' : 'border-border bg-card hover:bg-muted',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={elegido}
+                  onChange={(e) => alternarServicio(servicio, e.target.checked)}
+                />
+                {servicio}
+              </label>
+            )
+          })}
+        </div>
+      </fieldset>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-medium">Valor de la estancia</legend>
         <div className="grid grid-cols-2 gap-2">

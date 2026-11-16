@@ -13,8 +13,10 @@ import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
 import co.edu.uniquindio.sga.domain.valueobject.CriterioBusqueda;
 import co.edu.uniquindio.sga.domain.valueobject.Estancia;
+import co.edu.uniquindio.sga.domain.valueobject.NocheDisponibilidad;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -84,10 +86,41 @@ public class DisponibilidadApartamentoService {
         return buscarDisponibles(estancia, totalOcupantes).stream()
                 .filter(apartamento -> filtros.cumpleCapacidad(apartamento.getCapacidad()))
                 .filter(apartamento -> filtros.cumpleCaracteristica(apartamento.getDotacion()))
+                .filter(apartamento -> filtros.cumpleServicios(apartamento.getDotacion(), apartamento.getDescripcion()))
                 .map(apartamento -> new ApartamentoDisponible(apartamento,
                         cotizador.estimar(apartamento, estancia, totalOcupantes, fechasNacimiento).valorTotal(),
                         ubicacion))
                 .filter(disponible -> filtros.cumplePrecio(disponible.valorEstimado()))
+                .toList();
+    }
+
+    /**
+     * Calendario público de disponibilidad: para cada noche de [desde, hasta) dice si se puede vender una estancia
+     * de esa sola noche, con las mismas reglas de {@link #estaDisponible} (apartamento activo, sin bloqueos ni
+     * reservas activas, RN-20). Las noches anteriores a hoy nunca están libres (RN-04). Abarca como máximo
+     * {@link CalendarioOcupacionService#MAXIMO_NOCHES} noches.
+     *
+     * @param hasta primera noche que ya no se muestra (excluida).
+     * @param hoy   fecha actual en la zona horaria del alojamiento.
+     */
+    public List<NocheDisponibilidad> disponibilidadPorNoche(Apartamento apartamento, LocalDate desde, LocalDate hasta,
+                                                            LocalDate hoy) {
+        requerido(apartamento, "El apartamento es obligatorio");
+        requerido(hoy, "La fecha actual es obligatoria");
+        if (desde == null || hasta == null) {
+            throw new ReglaDominioException("La disponibilidad debe tener fecha desde y fecha hasta");
+        }
+        if (!desde.isBefore(hasta)) {
+            throw new ReglaDominioException("La fecha desde debe ser anterior a la fecha hasta");
+        }
+        long noches = ChronoUnit.DAYS.between(desde, hasta);
+        if (noches > CalendarioOcupacionService.MAXIMO_NOCHES) {
+            throw new ReglaDominioException("La disponibilidad abarca máximo " + CalendarioOcupacionService.MAXIMO_NOCHES
+                    + " noches y se pidieron " + noches);
+        }
+        return new Estancia(desde, hasta).fechasDeNoches().stream()
+                .map(noche -> new NocheDisponibilidad(noche, !noche.isBefore(hoy)
+                        && estaDisponible(apartamento, new Estancia(noche, noche.plusDays(1)), 1, null)))
                 .toList();
     }
 
@@ -104,22 +137,65 @@ public class DisponibilidadApartamentoService {
     }
 
     /**
-     * Igual que {@link #estaDisponible} pero lanza la excepción con la regla que falla.
-     * Lo usan CreacionReservaService y ModificacionReservaService antes de tocar la reserva.
+     * Las seis condiciones para crear o modificar una reserva, siempre en este orden, de modo que una solicitud
+     * que viola varias falla por la primera:
+     * <ol>
+     *     <li>RN-03: la fecha de salida es posterior a la de entrada.</li>
+     *     <li>RN-04: la fecha de entrada no es anterior a hoy.</li>
+     *     <li>El apartamento está activo y tiene tarifa en todas las temporadas.</li>
+     *     <li>RN-02: la capacidad alcanza para el total de ocupantes.</li>
+     *     <li>RN-07 y RN-01: no hay bloqueos ni reservas activas en esas noches.</li>
+     *     <li>RN-20: se respeta el tiempo de preparación respecto de la estancia anterior y la siguiente.</li>
+     * </ol>
+     * Después de las seis se aplica RP-01 (estancia mínima de fin de semana).
+     * Lo usan CreacionReservaService y ModificacionReservaService (RN-14) antes de tocar la reserva.
+     *
+     * @param reservaExcluida reserva que no se cuenta como ocupación (la que se está modificando); puede ser null.
+     * @param hoy             fecha actual en la zona horaria del alojamiento.
+     */
+    public void validarCondicionesDeReserva(Apartamento apartamento, Estancia estancia, int totalOcupantes,
+                                            CodigoReserva reservaExcluida, LocalDate hoy) {
+        requerido(apartamento, "El apartamento es obligatorio");
+        requerido(estancia, "La estancia es obligatoria");
+        requerido(hoy, "La fecha actual es obligatoria");
+        // 1. RN-03
+        if (estancia.noches() < 1) {
+            throw new ReglaDominioException("RN-03: La fecha de salida debe ser posterior a la de entrada");
+        }
+        // 2. RN-04
+        if (estancia.fechaEntrada().isBefore(hoy)) {
+            throw new ReglaDominioException("RN-04: La fecha de entrada " + estancia.fechaEntrada()
+                    + " es anterior a la fecha actual " + hoy);
+        }
+        validarDisponibilidad(apartamento, estancia, totalOcupantes, reservaExcluida);
+    }
+
+    /**
+     * Condiciones 3 a 6 de {@link #validarCondicionesDeReserva} (apartamento activo con tarifas completas,
+     * capacidad, bloqueos y solapamiento, tiempo de preparación) y después RP-01. Lanza la excepción con la
+     * primera regla que falla. Lo usa también el canal externo, que valida las fechas al armar el mensaje.
      */
     public void validarDisponibilidad(Apartamento apartamento, Estancia estancia, int totalOcupantes,
                                       CodigoReserva reservaExcluida) {
         requerido(apartamento, "El apartamento es obligatorio");
         requerido(estancia, "La estancia es obligatoria");
+        Alojamiento alojamiento = obtenerAlojamiento();
+        String codigo = apartamento.getIdentificacion().codigo();
+        // 3. Apartamento activo y con tarifas completas
         if (!apartamento.estaVigenteParaVenta()) {
-            throw new ReglaDominioException("3.3: El apartamento " + apartamento.getIdentificacion().codigo()
-                    + " no está activo para la venta");
+            throw new ReglaDominioException("3.3: El apartamento " + codigo + " no está activo para la venta");
         }
+        if (!alojamiento.getTemporadas().isEmpty() && !apartamento.tieneTarifasCompletas(alojamiento.getTemporadas())) {
+            throw new ReglaDominioException("7.4: El apartamento " + codigo + " no tiene tarifa en todas las temporadas");
+        }
+        // 4. RN-02
         apartamento.validarCapacidadPara(totalOcupantes);
-        obtenerAlojamiento().validarEstanciaMinima(estancia);
+        // 5 (RN-07 y RN-01) y 6 (RN-20)
         conflictoDeInventario(apartamento, estancia, reservaExcluida).ifPresent(motivo -> {
             throw new ReglaDominioException(motivo);
         });
+        // Regla propia que se aplica después de las seis condiciones
+        alojamiento.validarEstanciaMinima(estancia);
     }
 
     /**

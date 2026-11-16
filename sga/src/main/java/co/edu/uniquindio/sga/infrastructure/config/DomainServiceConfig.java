@@ -23,6 +23,7 @@ import co.edu.uniquindio.sga.domain.service.CreacionTemporadaService;
 import co.edu.uniquindio.sga.domain.service.DeclararNoShowService;
 import co.edu.uniquindio.sga.domain.service.DisponibilidadApartamentoService;
 import co.edu.uniquindio.sga.domain.service.EntregaApartamentoService;
+import co.edu.uniquindio.sga.domain.service.GestionServiciosAdicionalesService;
 import co.edu.uniquindio.sga.domain.service.LiquidacionSalidaService;
 import co.edu.uniquindio.sga.domain.service.ModificacionReservaService;
 import co.edu.uniquindio.sga.domain.service.PoliticaCancelacionService;
@@ -104,6 +105,14 @@ public class DomainServiceConfig {
             @Value("${sga.alojamiento.id-servicio-recepcion-nocturna}") String idRecepcionNocturna) {
         return new CreacionReservaService(reservas, folios, apartamentos, alojamientos, servicios,
                 disponibilidad, cotizador, deposito, idRecepcionNocturna);
+    }
+
+    /** RP-03: protege el servicio con el que se cobra la recepción nocturna. */
+    @Bean
+    public GestionServiciosAdicionalesService gestionServiciosAdicionalesService(
+            AlojamientoRepository alojamientos,
+            @Value("${sga.alojamiento.id-servicio-recepcion-nocturna}") String idRecepcionNocturna) {
+        return new GestionServiciosAdicionalesService(alojamientos, idRecepcionNocturna);
     }
 
     @Bean

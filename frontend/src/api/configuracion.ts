@@ -6,6 +6,7 @@ import type {
   FechaISO,
   Pagina,
   PoliticaCancelacionResponse,
+  ServicioAdicionalResponse,
   TemporadaResponse,
   TipoTemporada,
 } from './tipos'
@@ -69,6 +70,47 @@ export async function actualizarAlojamiento(datos: ActualizarAlojamientoRequest)
   return data
 }
 
+// ---------- Servicios adicionales ----------
+
+export interface ServicioAdicionalRequest {
+  nombre: string
+  descripcion: string | null
+  generaCargo: boolean
+  /** Pesos enteros; se ignora si no genera cargo */
+  valor: number | null
+}
+
+export interface RegistrarServicioAdicionalRequest extends ServicioAdicionalRequest {
+  /** Letras, números y guiones, por ejemplo SRV-SPA */
+  id: string
+}
+
+export async function crearServicioAdicional(datos: RegistrarServicioAdicionalRequest): Promise<ServicioAdicionalResponse> {
+  const { data } = await cliente.post<ServicioAdicionalResponse>('/api/alojamiento/servicios', datos)
+  return data
+}
+
+export async function actualizarServicioAdicional(
+  id: string,
+  datos: ServicioAdicionalRequest,
+): Promise<ServicioAdicionalResponse> {
+  const { data } = await cliente.put<ServicioAdicionalResponse>(
+    `/api/alojamiento/servicios/${encodeURIComponent(id)}`,
+    datos,
+  )
+  return data
+}
+
+export async function cambiarEstadoServicioAdicional(
+  id: string,
+  activar: boolean,
+): Promise<ServicioAdicionalResponse> {
+  const { data } = await cliente.put<ServicioAdicionalResponse>(
+    `/api/alojamiento/servicios/${encodeURIComponent(id)}/${activar ? 'activar' : 'desactivar'}`,
+  )
+  return data
+}
+
 export async function crearTemporada(datos: CrearTemporadaRequest): Promise<TemporadaResponse> {
   const { data } = await cliente.post<TemporadaResponse>('/api/temporadas', datos)
   return data
@@ -120,6 +162,33 @@ export function useActualizarAlojamiento() {
       queryClient.setQueryData(llavesPublicas.alojamiento, alojamiento)
       return queryClient.invalidateQueries({ queryKey: llavesPublicas.alojamiento })
     },
+  })
+}
+
+/** Los servicios viajan dentro del alojamiento: al cambiar uno se vuelve a consultar */
+function useRefrescarAlojamiento() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries({ queryKey: llavesPublicas.alojamiento })
+}
+
+export function useCrearServicioAdicional() {
+  const refrescar = useRefrescarAlojamiento()
+  return useMutation({ mutationFn: crearServicioAdicional, onSuccess: refrescar })
+}
+
+export function useActualizarServicioAdicional() {
+  const refrescar = useRefrescarAlojamiento()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: string; datos: ServicioAdicionalRequest }) => actualizarServicioAdicional(id, datos),
+    onSuccess: refrescar,
+  })
+}
+
+export function useCambiarEstadoServicioAdicional() {
+  const refrescar = useRefrescarAlojamiento()
+  return useMutation({
+    mutationFn: ({ id, activar }: { id: string; activar: boolean }) => cambiarEstadoServicioAdicional(id, activar),
+    onSuccess: refrescar,
   })
 }
 

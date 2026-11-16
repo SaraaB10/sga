@@ -25,6 +25,7 @@ import org.mapstruct.Mapper;
 
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * Mapper REST de la configuración del alojamiento (CU-28 a CU-30): Alojamiento, Temporada y PoliticaCancelacion a
@@ -47,7 +48,12 @@ public interface ConfiguracionMapper {
      * El depósito de garantía (RP-02) no es parte del agregado Alojamiento: llega del bean DepositoGarantia, el mismo
      * que usa el folio, para no duplicar el valor configurado.
      */
-    default AlojamientoResponse aAlojamientoResponse(Alojamiento a, DepositoGarantia deposito) {
+    /**
+     * @param motivoObligatorio por qué cada servicio (por su id) no puede desactivarse ni dejar de generar cargo;
+     *                          null si se puede. Lo decide GestionServiciosAdicionalesService.
+     */
+    default AlojamientoResponse aAlojamientoResponse(Alojamiento a, DepositoGarantia deposito,
+                                                     Function<String, String> motivoObligatorio) {
         if (a == null) {
             return null;
         }
@@ -70,13 +76,16 @@ public interface ConfiguracionMapper {
         return new AlojamientoResponse(a.getId(), a.getNombre(), a.getDescripcion(), a.getCiudad(),
                 a.getDireccion(), a.getUbicacion().latitud(), a.getUbicacion().longitud(), a.getHoraEntrada(),
                 a.getHoraSalida(), a.getNormaConvivencia(),
-                a.getServiciosAdicionales().stream().map(this::aServicioResponse).toList(),
+                a.getServiciosAdicionales().stream()
+                        .map(s -> aServicioResponse(s, motivoObligatorio.apply(s.getId())))
+                        .toList(),
                 parametros);
     }
 
-    default AlojamientoResponse.ServicioAdicionalResponse aServicioResponse(ServicioAdicional s) {
+    default AlojamientoResponse.ServicioAdicionalResponse aServicioResponse(ServicioAdicional s,
+                                                                            String motivoObligatorio) {
         return new AlojamientoResponse.ServicioAdicionalResponse(s.getId(), s.getNombre(), s.getDescripcion(),
-                s.isGeneraCargo(), aPesos(s.getValor()), s.isActivo());
+                s.isGeneraCargo(), aPesos(s.getValor()), s.isActivo(), motivoObligatorio);
     }
 
     // ==================== TEMPORADAS (CU-29) ====================

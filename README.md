@@ -104,7 +104,7 @@ La base es en memoria, así que cada vez que arranca la app se cargan solos esto
 
 ## Endpoints
 
-Son 74 operaciones: las 58 de esta lista, las 12 de autenticación y usuarios (ver [Seguridad](#seguridad)), la sugerencia de gravedad (ver [Modelo de IA](#modelo-de-ia)) y los 3 reportes del administrador (`GET /api/reportes/ocupacion`, `/ingresos` y `/reservas-por-canal`). Todos los listados devuelven 10 resultados por página y las páginas empiezan en 0 (`?pagina=`).
+Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (ver [Seguridad](#seguridad)), la sugerencia de gravedad (ver [Modelo de IA](#modelo-de-ia)) y los 3 reportes del administrador (`GET /api/reportes/ocupacion`, `/ingresos` y `/reservas-por-canal`). Todos los listados devuelven 10 resultados por página y las páginas empiezan en 0 (`?pagina=`).
 
 **Reservas**
 - `POST /api/reservas` crear una reserva (201 con `Location`); acepta mascotas opcionales (`cantidadMascotas`, `pesoMascotaMasPesadaKg`)
@@ -123,9 +123,10 @@ Son 74 operaciones: las 58 de esta lista, las 12 de autenticación y usuarios (v
 - `GET /api/reservas/calendario` calendario de ocupación de un apartamento noche por noche (máximo 62 noches)
 
 **Apartamentos**
-- `GET /api/apartamentos/disponibles` buscar disponibles por fechas y grupo, con filtros (capacidad, característica, precio y fechas de nacimiento)
+- `GET /api/apartamentos/disponibles` buscar disponibles por fechas y grupo, con filtros (capacidad, característica, servicios, precio y fechas de nacimiento). `servicios` acepta varios valores (`servicios=hidromasaje&servicios=vista al mar` o separados por coma) y el apartamento debe ofrecerlos todos según su dotación y su descripción
 - `GET /api/apartamentos` listado de los no retirados
 - `GET /api/apartamentos/{id}` detalle con dotación, imágenes, tarifas y bloqueos vigentes
+- `GET /api/apartamentos/{id}/disponibilidad?desde=&hasta=` calendario público: por cada noche dice si está libre, sin datos de las reservas (máximo 62 noches). Lo usa el calendario mensual del detalle del apartamento
 - `POST /api/apartamentos` registrar un apartamento (nace inactivo)
 - `PUT /api/apartamentos/{id}` actualizar; si baja la capacidad, avisa qué reservas la superan
 - `PUT /api/apartamentos/{id}/tarifas` definir tarifas por temporada
@@ -164,19 +165,20 @@ Son 74 operaciones: las 58 de esta lista, las 12 de autenticación y usuarios (v
 
 **Configuración del alojamiento**
 - `GET /api/alojamiento` y `PUT /api/alojamiento` consultar y actualizar los datos del alojamiento (los parámetros son de solo lectura)
+- `POST /api/alojamiento/servicios` crear un servicio adicional (201 con `Location`), `GET` y `PUT /api/alojamiento/servicios/{id}` consultarlo y editar su nombre, descripción, si genera cargo y su valor, y `PUT /api/alojamiento/servicios/{id}/desactivar` y `/activar` (eliminación lógica). La recepción nocturna no se puede desactivar ni dejar sin cargo, porque RP-03 la cobra a las llegadas desde las 20:00; la respuesta lo explica en `motivoObligatorio` y el panel **Administración → Alojamiento** lo muestra
 - `GET /api/temporadas`, `GET /api/temporadas/{id}` y `POST /api/temporadas` listar, consultar y crear temporadas (201 con `Location`)
 - `POST /api/temporadas/{id}/rangos` agregar un rango a una temporada (201 con `Location`)
 - `GET /api/politica-cancelacion` política vigente
 - `GET /api/politica-cancelacion/versiones` versiones de la política
 - `PUT /api/politica-cancelacion` publicar una versión nueva
 
-El detalle de cada endpoint (parámetros, respuestas y errores) está en Swagger y en el `openapi.yaml`. Los dos describen las 74 operaciones, y en cada operación protegida el `openapi.yaml` dice qué roles la pueden usar.
+El detalle de cada endpoint (parámetros, respuestas y errores) está en Swagger y en el `openapi.yaml`. Los dos describen las 80 operaciones, y en cada operación protegida el `openapi.yaml` dice qué roles la pueden usar.
 
 Los errores siempre vuelven con el mismo formato (`ErrorResponse`): **400** cuando el mensaje está mal escrito, **401** cuando falta el token o no es válido, **403** cuando el rol, el propietario o el canal no lo permiten, **404** cuando el recurso no existe y **409** cuando una regla del negocio no lo permite.
 
 ## Probar la API
 
-En `sga/docs/api/sga.http` dejamos una colección de 233 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal) y la gestión de usuarios. Con las 6 del simulador `canal-externo.http` son 239 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
+En `sga/docs/api/sga.http` dejamos una colección de 251 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 257 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
 
 1. Arranca la app desde cero.
 2. Abre `sga.http` en IntelliJ y dale a **Run All Requests in File**. En VS Code se puede usar la extensión REST Client.
@@ -196,7 +198,7 @@ En `sga/docs/api/sga.http` dejamos una colección de 233 peticiones que recorre 
     - Apartamentos y operación: operaciones del estado operativo en lugar del cambio genérico, cada una con su estado de origen, `Location` en bloqueos y novedades con su consulta por id, historial de novedades y apartamentos pendientes de preparación.
     - Folio y transversal: depósito como `AJUSTE_MODIFICACION`, consulta del folio, cargos de servicios adicionales y correcciones (RN-16), `Location` en pagos y temporadas, consulta de una temporada y disponibilidad del canal paginada.
     - Pruebas unitarias de las reglas de configuración (L-03, L-06, L-09, L-12, L-13, L-14 y L-17), del titular facturable (3.2), del apartamento activo (3.3) y del formato del código de reserva.
-- **Verificación:** las 411 pruebas pasan (`./gradlew clean test`), las 233 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
+- **Verificación:** las 436 pruebas pasan (`./gradlew clean test`), las 251 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
 
 ## Seguridad
 
@@ -234,7 +236,7 @@ curl -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/
 
 **Consultas públicas del visitante.** Responden sin token para que cualquiera pueda ver la oferta antes de iniciar sesión. Son solo lecturas y la cotización; los `PUT` y `POST` de esas mismas rutas siguen siendo del administrador:
 
-- `GET /api/apartamentos`, `GET /api/apartamentos/disponibles` y `GET /api/apartamentos/{id}`.
+- `GET /api/apartamentos`, `GET /api/apartamentos/disponibles`, `GET /api/apartamentos/{id}` y `GET /api/apartamentos/{id}/disponibilidad`.
 - `GET /api/alojamiento` y `GET /api/politica-cancelacion`.
 - `GET /api/temporadas` y `GET /api/temporadas/{id}`.
 - `POST /api/cotizaciones` (calcula el valor, no crea la reserva).

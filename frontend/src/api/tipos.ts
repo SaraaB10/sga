@@ -162,6 +162,22 @@ export interface FiltrosDisponibles {
   precioMaximo?: number
   /** Texto que debe aparecer en la dotación, por ejemplo "hidromasaje" */
   caracteristica?: string
+  /** Servicios que el apartamento debe ofrecer todos, según su dotación y sus características */
+  servicios?: string[]
+}
+
+/** Calendario público de disponibilidad: solo dice si cada noche está libre */
+export interface NocheDisponibilidad {
+  fecha: FechaISO
+  libre: boolean
+}
+
+export interface DisponibilidadApartamentoResponse {
+  apartamento: string
+  desde: FechaISO
+  /** Primera noche que ya no se incluye */
+  hasta: FechaISO
+  noches: NocheDisponibilidad[]
 }
 
 // ---------- Alojamiento ----------
@@ -173,6 +189,8 @@ export interface ServicioAdicionalResponse {
   generaCargo: boolean
   valor: number
   activo: boolean
+  /** Por qué no se puede desactivar ni dejar sin cargo (por ejemplo, la recepción nocturna); null si se puede */
+  motivoObligatorio: string | null
 }
 
 export interface ParametrosAlojamientoResponse {

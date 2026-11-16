@@ -90,6 +90,21 @@ public class ServicioAdicional {
         this.descripcion = descripcion;
     }
 
+    /**
+     * Cambia nombre, descripción, si genera cargo y su valor. Un servicio que genera cargo exige un valor mayor
+     * que cero; uno sin cargo queda en cero. Los cargos ya asentados en los folios no se alteran (RN-16).
+     */
+    public void actualizar(String nombre, String descripcion, boolean generaCargo, Dinero valor) {
+        textoRequerido(nombre, "El nombre del servicio es obligatorio");
+        if (generaCargo) {
+            validarValorCobrable(valor);
+        }
+        this.nombre = nombre.trim();
+        this.descripcion = descripcion == null || descripcion.isBlank() ? null : descripcion.trim();
+        this.generaCargo = generaCargo;
+        this.valor = generaCargo ? valor : Dinero.cero();
+    }
+
     public void activar() { this.activo = true; }
 
     public void desactivar() { this.activo = false; }

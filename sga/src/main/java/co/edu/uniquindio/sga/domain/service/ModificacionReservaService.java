@@ -94,14 +94,15 @@ public class ModificacionReservaService {
         Mascotas mascotas = cambios.nuevasMascotas() != null ? cambios.nuevasMascotas() : reserva.getMascotas();
         boolean traiaMascotas = reserva.getMascotas().traeMascotas();
 
-        // L-16: se revalidan las mascotas resultantes contra la política del alojamiento.
-        mascotas.validarContra(alojamiento.getPoliticaMascotas());
-
         Apartamento apartamento = apartamentoRepository.buscarPorIdentificacion(aptoId)
                 .orElseThrow(() -> new ReglaDominioException("No existe el apartamento " + aptoId.codigo()));
 
-        // RN-14: condiciones 5 y 6 (y el resto de la disponibilidad) sin contar la propia reserva.
-        disponibilidadService.validarDisponibilidad(apartamento, estancia, ocupantes.size(), reserva.getCodigo());
+        // RN-14: se repiten las seis condiciones de creación, en su orden, sin contar la propia reserva.
+        disponibilidadService.validarCondicionesDeReserva(apartamento, estancia, ocupantes.size(), reserva.getCodigo(),
+                ahora.toLocalDate());
+
+        // L-16: se revalidan las mascotas resultantes contra la política del alojamiento.
+        mascotas.validarContra(alojamiento.getPoliticaMascotas());
         Cotizacion nuevaCotizacion = cotizadorService.cotizar(apartamento, estancia, ocupantes,
                 alojamiento.getUmbralEdadFacturable());
         // RN-16: si ya no trae mascotas, el cargo de aseo a revertir debe existir antes de tocar la reserva o el folio.

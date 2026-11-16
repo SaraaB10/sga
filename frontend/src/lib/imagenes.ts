@@ -5,4 +5,4 @@
 
 /** Fondo de la portada del inicio público */
 export const IMAGEN_PORTADA_INICIO =
-  'https://res.cloudinary.com/xwkp6b4t/image/upload/f_auto,q_auto,w_1600/v1794457050/hero-inicio.jpg'
+  'https://res.cloudinary.com/xwkp6b4t/image/upload/f_auto,q_auto,w_1600/hero-inicio.jpg'

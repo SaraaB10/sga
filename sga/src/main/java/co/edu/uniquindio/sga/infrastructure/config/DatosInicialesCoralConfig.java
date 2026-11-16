@@ -189,26 +189,26 @@ public class DatosInicialesCoralConfig {
     /** 7.3: imágenes de cada apartamento en el servicio externo (Cloudinary); la primera es la principal. */
     private static final Map<String, List<String>> IMAGENES = Map.of(
             "APT-101", List.of(
-                    CLOUDINARY + "v1794457039/apt-101-1.jpg",
-                    CLOUDINARY + "v1794457042/apt-101-2.jpg",
-                    CLOUDINARY + "v1794457040/apt-101-3.jpg"),
+                    CLOUDINARY + "apt-101-1.jpg",
+                    CLOUDINARY + "apt-101-2.jpg",
+                    CLOUDINARY + "apt-101-3.jpg"),
             "APT-102", List.of(
-                    CLOUDINARY + "v1794457043/apt-102-1.jpg",
-                    CLOUDINARY + "v1794457046/apt-102-2.jpg",
-                    CLOUDINARY + "v1794457046/apt-102-3.jpg"),
+                    CLOUDINARY + "apt-102-1.jpg",
+                    CLOUDINARY + "apt-102-2.jpg",
+                    CLOUDINARY + "apt-102-3.jpg"),
             "APT-201", List.of(
-                    CLOUDINARY + "v1794457046/apt-201-1.jpg",
-                    CLOUDINARY + "v1794457042/apt-201-2.jpg",
-                    CLOUDINARY + "v1794457045/apt-201-3.jpg",
-                    CLOUDINARY + "v1794457047/apt-201-4.jpg"),
+                    CLOUDINARY + "apt-201-1.jpg",
+                    CLOUDINARY + "apt-201-2.jpg",
+                    CLOUDINARY + "apt-201-3.jpg",
+                    CLOUDINARY + "apt-201-4.jpg"),
             "APT-202", List.of(
-                    CLOUDINARY + "v1794457040/apt-202-1.jpg",
-                    CLOUDINARY + "v1794457039/apt-202-2.jpg",
-                    CLOUDINARY + "v1794457038/apt-202-3.jpg"),
+                    CLOUDINARY + "apt-202-1.jpg",
+                    CLOUDINARY + "apt-202-2.jpg",
+                    CLOUDINARY + "apt-202-3.jpg"),
             "APT-301", List.of(
-                    CLOUDINARY + "v1794457048/apt-301-1.jpg",
-                    CLOUDINARY + "v1794457048/apt-301-2.jpg",
-                    CLOUDINARY + "v1794457049/apt-301-3.jpg"));
+                    CLOUDINARY + "apt-301-1.jpg",
+                    CLOUDINARY + "apt-301-2.jpg",
+                    CLOUDINARY + "apt-301-3.jpg"));
 
     private static Apartamento apartamento(String id, String nombre, String descripcion, int dormitorios,
                                            int capacidad, List<String> dotacion,
