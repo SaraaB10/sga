@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ClipboardList, Plus, SlidersHorizontal } from 'lucide-react'
+import { ClipboardList, Plus, Receipt, SlidersHorizontal } from 'lucide-react'
 import { z } from 'zod'
 import { useTodosLosApartamentos } from '@/api/apartamentos'
 import { useReservas, type CanalOrigen, type FiltrosReservas, type ReservaResumenResponse } from '@/api/reservas'
@@ -168,11 +168,19 @@ export default function ListadoReservas() {
                 </Link>
               )}
               acciones={(r) => (
-                <Button asChild variant="ghost" size="sm">
-                  <Link to={enlace(r.codigo)} aria-label={`Ver la reserva ${r.codigo}`}>
-                    Ver
-                  </Link>
-                </Button>
+                <div className="flex flex-wrap justify-end gap-1">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={enlace(r.codigo)} aria-label={`Ver la reserva ${r.codigo}`}>
+                      Ver
+                    </Link>
+                  </Button>
+                  {/* Recepción y administración llegan al folio sin pasar por el detalle */}
+                  <Button asChild variant="ghost" size="sm">
+                    <Link to={`${enlace(r.codigo)}/folio`} aria-label={`Ver el folio de ${r.codigo}`}>
+                      <Receipt aria-hidden="true" /> Ver folio
+                    </Link>
+                  </Button>
+                </div>
               )}
               descripcion="Reservas del alojamiento"
             />
