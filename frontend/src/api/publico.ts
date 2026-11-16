@@ -7,6 +7,7 @@ import type {
   ApartamentoResponse,
   CotizacionResponse,
   CotizarEstanciaRequest,
+  DisponibilidadApartamentoResponse,
   FiltrosDisponibles,
   Pagina,
   PoliticaCancelacionResponse,
@@ -38,6 +39,19 @@ export async function buscarDisponibles(
 
 export async function consultarApartamento(id: string): Promise<ApartamentoDetalleResponse> {
   const { data } = await cliente.get<ApartamentoDetalleResponse>(`/api/apartamentos/${encodeURIComponent(id)}`)
+  return data
+}
+
+/** Noches libres u ocupadas del apartamento en [desde, hasta), máximo 62 noches */
+export async function consultarDisponibilidad(
+  id: string,
+  desde: string,
+  hasta: string,
+): Promise<DisponibilidadApartamentoResponse> {
+  const { data } = await cliente.get<DisponibilidadApartamentoResponse>(
+    `/api/apartamentos/${encodeURIComponent(id)}/disponibilidad`,
+    { params: { desde, hasta } },
+  )
   return data
 }
 
@@ -81,6 +95,8 @@ export const llavesPublicas = {
   apartamentos: (pagina: number) => ['apartamentos', 'lista', pagina] as const,
   disponibles: (filtros: FiltrosDisponibles, pagina: number) => ['apartamentos', 'disponibles', filtros, pagina] as const,
   apartamento: (id: string) => ['apartamentos', 'detalle', id] as const,
+  disponibilidad: (id: string, desde: string, hasta: string) =>
+    ['apartamentos', 'disponibilidad', id, desde, hasta] as const,
   alojamiento: ['alojamiento'] as const,
   temporadas: (pagina: number) => ['temporadas', 'lista', pagina] as const,
   temporada: (id: string) => ['temporadas', 'detalle', id] as const,
@@ -112,6 +128,15 @@ export function useApartamento(id: string | undefined) {
     queryKey: llavesPublicas.apartamento(id ?? ''),
     queryFn: () => consultarApartamento(id as string),
     enabled: !!id,
+  })
+}
+
+export function useDisponibilidadApartamento(id: string | undefined, desde: string, hasta: string) {
+  return useQuery({
+    queryKey: llavesPublicas.disponibilidad(id ?? '', desde, hasta),
+    queryFn: () => consultarDisponibilidad(id as string, desde, hasta),
+    enabled: !!id,
+    placeholderData: keepPreviousData,
   })
 }
 

@@ -11,6 +11,7 @@ import co.edu.uniquindio.sga.application.dto.response.ApartamentoDetalleResponse
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDisponibleResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.BloqueoResponse;
+import co.edu.uniquindio.sga.application.dto.response.DisponibilidadApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.NovedadResponse;
 import co.edu.uniquindio.sga.application.dto.response.PaginaResponse;
 import co.edu.uniquindio.sga.application.dto.response.RegistroTarifaResponse;
@@ -20,6 +21,7 @@ import co.edu.uniquindio.sga.application.usecase.ActualizarApartamentoUseCase;
 import co.edu.uniquindio.sga.application.usecase.BuscarApartamentoDisponibleUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConsultarBloqueoUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConsultarApartamentosUseCase;
+import co.edu.uniquindio.sga.application.usecase.ConsultarDisponibilidadApartamentoUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConsultarNovedadesUseCase;
 import co.edu.uniquindio.sga.application.usecase.EstadoOperativoApartamentoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarApartamentoUseCase;
@@ -89,6 +91,7 @@ public class ApartamentoController {
     private final TarifasApartamentoUseCase tarifasApartamentoUseCase;
     private final ActivarApartamentoUseCase activarApartamentoUseCase;
     private final SugerirGravedadNovedadUseCase sugerirGravedadNovedadUseCase;
+    private final ConsultarDisponibilidadApartamentoUseCase consultarDisponibilidadUseCase;
     private final ApartamentoMapper mapper;
 
     /** CU-01. GET /api/apartamentos/disponibles?entrada=&salida=&ocupantes=&...&pagina= */
@@ -96,8 +99,9 @@ public class ApartamentoController {
     @PreAuthorize("permitAll()")
     @Operation(summary = "Buscar apartamentos disponibles",
             description = "Apartamentos libres en todas las noches de la estancia y con capacidad para el grupo "
-                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, característica de la dotación "
-                    + "y rango de precio del valor estimado de la estancia (7.5). 10 resultados por página")
+                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, característica de la dotación, "
+                    + "servicios (se repite el parámetro; el apartamento debe ofrecerlos todos según su dotación y "
+                    + "sus características) y rango de precio del valor estimado de la estancia. 10 resultados por página")
     @ApiResponse(responseCode = "200", description = "Página de apartamentos disponibles (puede venir vacía)")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
     @ApiResponse(responseCode = "409", description = "Estancia o filtros inválidos (RN-03, RN-04, RP-01, 7.5)")
@@ -110,11 +114,12 @@ public class ApartamentoController {
             @RequestParam(required = false) Long precioMinimo,
             @RequestParam(required = false) Long precioMaximo,
             @RequestParam(required = false) String caracteristica,
+            @RequestParam(required = false) List<String> servicios,
             @RequestParam(defaultValue = "0") @Min(0) int pagina) {
         CriterioBusqueda criterio = new CriterioBusqueda(capacidadMinima,
                 precioMinimo == null ? null : Dinero.de(precioMinimo),
                 precioMaximo == null ? null : Dinero.de(precioMaximo),
-                caracteristica);
+                caracteristica, servicios);
         Pagina<ApartamentoDisponible> disponibles = buscarApartamentoDisponibleUseCase.buscar(entrada, salida,
                 ocupantes, fechasNacimiento, criterio, pagina);
         return ResponseEntity.ok(PaginaMapper.aResponse(disponibles, mapper::aDisponibleResponse));
@@ -164,6 +169,28 @@ public class ApartamentoController {
     public ResponseEntity<ApartamentoDetalleResponse> detalle(@PathVariable String id) {
         Apartamento apartamento = consultarApartamentosUseCase.detalle(new IdentificacionApartamento(id));
         return ResponseEntity.ok(mapper.aDetalleResponse(apartamento));
+    }
+
+    /** GET /api/apartamentos/{id}/disponibilidad?desde=&hasta=: calendario público de disponibilidad. */
+    @GetMapping("/{id}/disponibilidad")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Calendario de disponibilidad de un apartamento",
+            description = "Por cada noche entre desde (incluida) y hasta (excluida) dice si está libre para reservar, "
+                    + "con las mismas reglas de la búsqueda (bloqueos, reservas activas y tiempo de preparación). "
+                    + "Las noches anteriores a hoy no están libres. No incluye datos de las reservas. Máximo 62 noches")
+    @ApiResponse(responseCode = "200", description = "Disponibilidad noche por noche")
+    @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
+    @ApiResponse(responseCode = "404", description = "No existe o fue retirado de la venta")
+    @ApiResponse(responseCode = "409", description = "desde no es anterior a hasta o el rango supera 62 noches")
+    public ResponseEntity<DisponibilidadApartamentoResponse> disponibilidad(@PathVariable String id,
+                                                                            @RequestParam LocalDate desde,
+                                                                            @RequestParam LocalDate hasta) {
+        IdentificacionApartamento identificacion = new IdentificacionApartamento(id);
+        List<DisponibilidadApartamentoResponse.Noche> noches = consultarDisponibilidadUseCase
+                .ejecutar(identificacion, desde, hasta).stream()
+                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre()))
+                .toList();
+        return ResponseEntity.ok(new DisponibilidadApartamentoResponse(identificacion.codigo(), desde, hasta, noches));
     }
 
     /** CU-21. PUT /api/apartamentos/{id}/retirar. No hay DELETE: la eliminación es lógica (12.4). */

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { CalendarioDisponibilidad } from './CalendarioDisponibilidad'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { DesgloseCotizacion } from './comun/DesgloseCotizacion'
 import { estanciaAParams, leerEstancia, ocupantesParaCotizar } from './comun/estancia'
@@ -214,6 +215,8 @@ export default function DetalleApartamento() {
               </p>
             </div>
           </section>
+
+          <CalendarioDisponibilidad identificacion={apto.identificacion} />
 
           <MapaAlojamiento />
         </div>
