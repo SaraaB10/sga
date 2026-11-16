@@ -508,7 +508,7 @@ Content-Type: application/json
 
 {
   "ocupantes": [
-    { "nombre": "Laura Gómez", "tipoDocumento": "CC", "numeroDocumento": "1094777888", "fechaNacimiento": "1988-04-12" },
+    { "nombre": "Laura Gomez", "tipoDocumento": "CC", "numeroDocumento": "1094777888", "fechaNacimiento": "1995-01-30" },
     { "nombre": "Pedro Gómez", "fechaNacimiento": "1987-09-30" }
   ]
 }
@@ -4820,5 +4820,51 @@ Content-Type: application/json
         var e = response.body;
         client.assert(e.status === 403 && e.error === "Forbidden", "status/error: " + e.status + " " + e.error);
         client.assert(e.mensaje === "No tiene permiso para realizar esta operación", "mensaje: " + e.mensaje);
+    });
+%}
+
+### 17.18 400 Un grupo solo de menores no se cotiza: el titular siempre es facturable
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Sofía Gómez", "fechaNacimiento": "2022-03-02" },
+    { "nombre": "Tomás Gómez", "fechaNacimiento": "2025-01-10" }
+  ]
+}
+
+> {%
+    client.test("17.18 400 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "El grupo debe incluir al menos un adulto que pague noche; el titular siempre es facturable", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/cotizaciones", "path: " + e.path);
+        client.assert(e.timestamp != null, "Falta timestamp");
+        client.assert(e.errores === null, "errores debía ser null");
+    });
+%}
+
+### 17.19 Un adulto y un menor: la cotización cobra una sola persona por noche
+POST {{host}}/api/cotizaciones
+Content-Type: application/json
+
+{
+  "identificacionApartamento": "APT-201",
+  "fechaEntrada": "{{s17HoyMas200}}",
+  "fechaSalida": "{{s17HoyMas203}}",
+  "ocupantes": [
+    { "nombre": "Ana Gómez", "fechaNacimiento": "1990-05-20" },
+    { "nombre": "Sofía Gómez", "fechaNacimiento": "2022-03-02" }
+  ]
+}
+
+> {%
+    client.test("17.19 200 un solo facturable", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.detalles.every(function (d) { return d.ocupantesFacturables === 1; }), "Debía cobrar 1 persona por noche");
     });
 %}

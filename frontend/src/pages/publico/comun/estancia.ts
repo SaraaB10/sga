@@ -2,11 +2,36 @@ import { format, parseISO, subDays, subYears } from 'date-fns'
 import type { FechaISO, OcupanteRequest } from '@/api/tipos'
 import { esFechaValida, esMenorNoPaga } from './reglas'
 
-/** "3 huéspedes · 1 menor" */
+/** Mismo mensaje que responde la API cuando el grupo no tiene ningún ocupante que pague noche */
+export const MENSAJE_SIN_ADULTOS =
+  'El grupo debe incluir al menos un adulto que pague noche; el titular siempre es facturable'
+
+/**
+ * Separa el grupo en adultos (pagan noche; '' cuenta como adulto) y menores del umbral (no pagan), conservando
+ * las fechas de cada uno.
+ */
+export function separarGrupo(
+  huespedes: string[],
+  umbral: number | null,
+  referencia?: string,
+): { adultos: string[]; menores: string[] } {
+  const menores = huespedes.filter((h) => esMenorNoPaga(h, umbral, referencia))
+  const adultos = huespedes.filter((h) => !esMenorNoPaga(h, umbral, referencia))
+  return { adultos, menores }
+}
+
+/** El grupo no tiene ningún adulto que pague noche: no se puede cotizar ni reservar */
+export function grupoSinAdultos(huespedes: string[], umbral: number | null, referencia?: string): boolean {
+  return separarGrupo(huespedes, umbral, referencia).adultos.length === 0
+}
+
+/** "2 adultos · 1 menor" */
 export function resumenHuespedes(huespedes: string[], umbral: number | null, referencia?: string): string {
-  const menores = huespedes.filter((h) => esMenorNoPaga(h, umbral, referencia)).length
-  const total = `${huespedes.length} ${huespedes.length === 1 ? 'huésped' : 'huéspedes'}`
-  return menores > 0 ? `${total} · ${menores} ${menores === 1 ? 'menor' : 'menores'}` : total
+  const { adultos, menores } = separarGrupo(huespedes, umbral, referencia)
+  const textoAdultos = `${adultos.length} ${adultos.length === 1 ? 'adulto' : 'adultos'}`
+  return menores.length > 0
+    ? `${textoAdultos} · ${menores.length} ${menores.length === 1 ? 'menor' : 'menores'}`
+    : textoAdultos
 }
 
 /*

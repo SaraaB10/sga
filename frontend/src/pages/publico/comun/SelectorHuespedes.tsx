@@ -1,13 +1,14 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ChevronDown, Plus, Trash2, Users } from 'lucide-react'
+import { format, parseISO, subYears, addDays } from 'date-fns'
+import { ChevronDown, Minus, Plus, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { resumenHuespedes } from './estancia'
-import { esMenorNoPaga, hoyISO, textoMenores } from './reglas'
+import { MENSAJE_SIN_ADULTOS, resumenHuespedes, separarGrupo } from './estancia'
+import { esFechaValida, esMenorNoPaga, hoyISO } from './reglas'
 
 interface Props {
-  /** Fecha de nacimiento de cada huésped ('' si no se indicó) */
+  /** Fecha de nacimiento de cada huésped ('' si no se indicó: cuenta como adulto) */
   huespedes: string[]
   alCambiar: (huespedes: string[]) => void
   umbralEdad: number | null
@@ -19,7 +20,11 @@ interface Props {
   className?: string
 }
 
-/** Lista de huéspedes con su fecha de nacimiento; los menores del umbral no pagan noche */
+/**
+ * Composición del grupo: un contador de adultos (pagan noche, mínimo 1) y, aparte, los menores del umbral de edad,
+ * cada uno con su fecha de nacimiento (no pagan noche, pero ocupan cupo). El grupo siempre tiene al menos un adulto:
+ * el titular es siempre un ocupante que paga.
+ */
 export function SelectorHuespedes({
   huespedes,
   alCambiar,
@@ -31,6 +36,7 @@ export function SelectorHuespedes({
 }: Props) {
   const id = useId()
   const [abierto, setAbierto] = useState(false)
+  const [errorMenor, setErrorMenor] = useState<{ indice: number; texto: string } | null>(null)
   const contenedor = useRef<HTMLDivElement>(null)
 
   // Cierra el desplegable al hacer clic afuera o con Escape
@@ -48,62 +54,127 @@ export function SelectorHuespedes({
     }
   }, [desplegable, abierto])
 
-  const cambiar = (i: number, valor: string) => alCambiar(huespedes.map((h, j) => (j === i ? valor : h)))
-  const quitar = (i: number) => alCambiar(huespedes.filter((_, j) => j !== i))
-  const agregar = () => alCambiar([...huespedes, ''])
+  const { adultos, menores } = separarGrupo(huespedes, umbralEdad, referencia)
+  const lleno = maximo !== undefined && huespedes.length >= maximo
+  const base = parseISO(esFechaValida(referencia) ? referencia : hoyISO())
+  // Un menor nació después de esta fecha: aún no cumple el umbral el día de la llegada
+  const nacidoDespuesDe = umbralEdad !== null ? format(addDays(subYears(base, umbralEdad), 1), 'yyyy-MM-dd') : null
+  // Fecha propuesta al agregar un menor: un año menos que el umbral
+  const fechaPropuesta =
+    umbralEdad !== null ? format(subYears(base, Math.max(umbralEdad - 1, 0)), 'yyyy-MM-dd') : hoyISO()
+  const maximaFechaMenor = hoyISO() < format(base, 'yyyy-MM-dd') ? hoyISO() : format(base, 'yyyy-MM-dd')
+
+  const armar = (nuevosAdultos: string[], nuevosMenores: string[]) => alCambiar([...nuevosAdultos, ...nuevosMenores])
+  const cambiarAdultos = (cantidad: number) => {
+    if (cantidad < 1) return
+    armar(
+      cantidad > adultos.length ? [...adultos, ...Array(cantidad - adultos.length).fill('')] : adultos.slice(0, cantidad),
+      menores,
+    )
+  }
+  const cambiarMenor = (i: number, valor: string) => {
+    if (!esFechaValida(valor)) return
+    if (!esMenorNoPaga(valor, umbralEdad, referencia)) {
+      setErrorMenor({ indice: i, texto: `Con esa fecha tendría ${umbralEdad} años o más: súmalo a los adultos.` })
+      return
+    }
+    setErrorMenor(null)
+    armar(adultos, menores.map((m, j) => (j === i ? valor : m)))
+  }
+  const quitarMenor = (i: number) => {
+    setErrorMenor(null)
+    armar(adultos, menores.filter((_, j) => j !== i))
+  }
 
   const lista = (
-    <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-3">
-        {huespedes.map((fecha, i) => {
-          const menor = esMenorNoPaga(fecha, umbralEdad, referencia)
-          return (
-            <li key={i} className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor={`${id}-${i}`} className="text-sm font-medium">
-                  Huésped {i + 1} <span className="font-normal text-muted-foreground">· fecha de nacimiento</span>
-                </label>
-                {fecha && umbralEdad !== null && (
-                  <span
-                    className={cn(
-                      'rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap',
-                      menor ? 'bg-[#DDF2EA] text-[#1C5E45]' : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {menor ? `Menor de ${umbralEdad} · no paga noche` : 'Paga noche'}
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  id={`${id}-${i}`}
-                  type="date"
-                  max={hoyISO()}
-                  value={fecha}
-                  onChange={(e) => cambiar(i, e.target.value)}
-                />
-                {huespedes.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Quitar al huésped ${i + 1}`}
-                    onClick={() => quitar(i)}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </Button>
-                )}
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-      <Button type="button" variant="outline" onClick={agregar} disabled={maximo !== undefined && huespedes.length >= maximo}>
-        <Plus aria-hidden="true" /> Agregar huésped
-      </Button>
-      <p className="text-xs text-muted-foreground">
-        {textoMenores(umbralEdad)}. Sin fecha, el huésped se cuenta como adulto.
-      </p>
+    <div className="flex flex-col gap-4">
+      {/* ---------- Adultos ---------- */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p id={`${id}-adultos`} className="text-sm font-medium">
+            Adultos
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {umbralEdad !== null ? `Desde ${umbralEdad} años. Pagan noche.` : 'Pagan noche.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2" role="group" aria-labelledby={`${id}-adultos`}>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Quitar un adulto"
+            disabled={adultos.length <= 1}
+            onClick={() => cambiarAdultos(adultos.length - 1)}
+          >
+            <Minus aria-hidden="true" />
+          </Button>
+          <span className="w-6 text-center text-base font-semibold tabular-nums" aria-live="polite">
+            {adultos.length}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Agregar un adulto"
+            disabled={lleno}
+            onClick={() => cambiarAdultos(adultos.length + 1)}
+          >
+            <Plus aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+      {adultos.length === 0 && (
+        <p role="alert" className="text-xs font-medium text-error">
+          {MENSAJE_SIN_ADULTOS}.
+        </p>
+      )}
+
+      {/* ---------- Menores (solo si el alojamiento tiene umbral de edad) ---------- */}
+      {umbralEdad !== null && (
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <div>
+            <p className="text-sm font-medium">Menores de {umbralEdad} años</p>
+            <p className="text-xs text-muted-foreground">Van con los adultos. No pagan noche, pero ocupan cupo.</p>
+          </div>
+          {menores.length > 0 && (
+            <ul className="flex flex-col gap-3">
+              {menores.map((fecha, i) => (
+                <li key={i} className="flex flex-col gap-1.5">
+                  <label htmlFor={`${id}-menor-${i}`} className="text-sm">
+                    Menor {i + 1} <span className="text-muted-foreground">· fecha de nacimiento</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      id={`${id}-menor-${i}`}
+                      type="date"
+                      min={nacidoDespuesDe ?? undefined}
+                      max={maximaFechaMenor}
+                      value={fecha}
+                      aria-invalid={errorMenor?.indice === i || undefined}
+                      onChange={(e) => cambiarMenor(i, e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Quitar al menor ${i + 1}`}
+                      onClick={() => quitarMenor(i)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </div>
+                  {errorMenor?.indice === i && <p className="text-xs font-medium text-error">{errorMenor.texto}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button type="button" variant="outline" disabled={lleno} onClick={() => armar(adultos, [...menores, fechaPropuesta])}>
+            <Plus aria-hidden="true" /> Agregar menor
+          </Button>
+        </div>
+      )}
+      {lleno && <p className="text-xs text-muted-foreground">Llegaste a la capacidad del apartamento ({maximo} personas).</p>}
     </div>
   )
 

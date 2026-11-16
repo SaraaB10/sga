@@ -12,7 +12,14 @@ import { BuscadorEstancia } from './comun/BuscadorEstancia'
 import { useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { EncabezadoFiltros } from './comun/EncabezadoFiltros'
 import { claseContenidoPlegable } from './comun/estilos'
-import { estanciaAParams, fechasCompletas, leerEstancia, resumenHuespedes } from './comun/estancia'
+import {
+  estanciaAParams,
+  fechasCompletas,
+  grupoSinAdultos,
+  leerEstancia,
+  MENSAJE_SIN_ADULTOS,
+  resumenHuespedes,
+} from './comun/estancia'
 import { avisoEstanciaMinima, nochesEntre } from './comun/reglas'
 import { TarjetaApartamento } from './comun/TarjetaApartamento'
 import { MapaAlojamiento } from './MapaAlojamiento'
@@ -37,17 +44,20 @@ const aNumero = (texto: string | null) => {
 
 export default function Buscar() {
   const [params, setParams] = useSearchParams()
-  const { reglas } = useReglasAlojamiento()
+  const { alojamiento, reglas } = useReglasAlojamiento()
   const { temporadas } = useTemporadasAlojamiento()
   const estancia = leerEstancia(params)
   const pagina = Number(params.get('pagina') ?? 0) || 0
   const noches = nochesEntre(estancia.entrada, estancia.salida)
 
   const avisoRP01 = avisoEstanciaMinima(estancia.entrada, estancia.salida, temporadas, reglas)
+  const sinAdultos = grupoSinAdultos(estancia.huespedes, reglas.umbralEdad, estancia.entrada)
+  // Sin el umbral de edad no se sabe quién es menor: no se busca hasta tener las reglas del alojamiento
+  const reglasCargadas = !!alojamiento.data
 
   // La URL es la fuente de verdad; React Query compara los filtros por valor
   const filtros: FiltrosDisponibles | null =
-    noches < 1 || avisoRP01
+    !reglasCargadas || noches < 1 || avisoRP01 || sinAdultos
       ? null
       : {
           entrada: estancia.entrada,
@@ -107,6 +117,7 @@ export default function Buscar() {
 
         <div className="flex flex-col gap-4">
           {avisoRP01 && <AvisoError titulo="Estancia mínima de fin de semana" mensaje={avisoRP01} />}
+          {sinAdultos && noches > 0 && <AvisoError titulo="Falta un adulto" mensaje={`${MENSAJE_SIN_ADULTOS}.`} />}
 
           {noches < 1 ? (
             <div className="rounded-tarjeta border border-border bg-card">
@@ -116,7 +127,7 @@ export default function Buscar() {
                 descripcion="Indica la llegada, la salida y los huéspedes para ver los apartamentos libres y el valor de tu estancia."
               />
             </div>
-          ) : avisoRP01 ? null : consulta.error ? (
+          ) : avisoRP01 || sinAdultos ? null : consulta.error ? (
             <AvisoError error={consulta.error} />
           ) : !consulta.data ? (
             <div className="grid gap-5 sm:grid-cols-2">

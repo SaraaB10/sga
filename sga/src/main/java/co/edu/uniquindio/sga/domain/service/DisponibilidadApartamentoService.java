@@ -82,6 +82,8 @@ public class DisponibilidadApartamentoService {
                                                          List<LocalDate> fechasNacimiento,
                                                          CriterioBusqueda criterio) {
         CriterioBusqueda filtros = criterio == null ? CriterioBusqueda.sinFiltros() : criterio;
+        // El grupo debe tener al menos un ocupante facturable, aunque no haya apartamentos disponibles
+        cotizador.validarGrupoConFacturable(estancia, fechasNacimiento);
         Coordenada ubicacion = obtenerAlojamiento().getUbicacion();
         return buscarDisponibles(estancia, totalOcupantes).stream()
                 .filter(apartamento -> filtros.cumpleCapacidad(apartamento.getCapacidad()))

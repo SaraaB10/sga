@@ -14,6 +14,7 @@ import co.edu.uniquindio.sga.application.exception.TemporadaNoEncontradaExceptio
 import co.edu.uniquindio.sga.application.exception.UsuarioNoDesactivableException;
 import co.edu.uniquindio.sga.application.exception.UsuarioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.UsuarioYaRegistradoException;
+import co.edu.uniquindio.sga.domain.exception.GrupoSinOcupanteFacturableException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -83,6 +84,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ContrasenaActualIncorrectaException.class)
     public ResponseEntity<ErrorResponse> contrasenaActualIncorrecta(ContrasenaActualIncorrectaException ex,
                                                                     HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), req, null);
+    }
+
+    /**
+     * 400: el grupo no tiene ningún ocupante facturable. Es una regla del dominio, pero lo que llega mal es la
+     * composición del grupo, no un conflicto con el estado del sistema. Gana sobre el 409 de ReglaDominioException
+     * porque es una subclase más específica.
+     */
+    @ExceptionHandler(GrupoSinOcupanteFacturableException.class)
+    public ResponseEntity<ErrorResponse> grupoSinFacturable(GrupoSinOcupanteFacturableException ex,
+                                                            HttpServletRequest req) {
         return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), req, null);
     }
 

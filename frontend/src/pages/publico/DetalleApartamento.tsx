@@ -12,7 +12,13 @@ import { cn } from '@/lib/utils'
 import { CalendarioDisponibilidad } from './CalendarioDisponibilidad'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { DesgloseCotizacion } from './comun/DesgloseCotizacion'
-import { estanciaAParams, leerEstancia, ocupantesParaCotizar } from './comun/estancia'
+import {
+  estanciaAParams,
+  grupoSinAdultos,
+  leerEstancia,
+  MENSAJE_SIN_ADULTOS,
+  ocupantesParaCotizar,
+} from './comun/estancia'
 import { iconoDotacion } from './comun/iconos'
 import { MapaAlojamiento } from './MapaAlojamiento'
 import { PildoraTemporada } from './comun/PildoraTemporada'
@@ -288,13 +294,16 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
   const [salida, setSalida] = useState(inicial.salida)
   const [huespedes, setHuespedes] = useState(inicial.huespedes)
   const { roles, autenticado } = useAuth()
-  const { reglas } = useReglasAlojamiento()
+  const { alojamiento, reglas } = useReglasAlojamiento()
   const { temporadas } = useTemporadasAlojamiento()
 
   const noches = nochesEntre(entrada, salida)
+  // Sin el umbral de edad no se sabe quién es menor: no se cotiza hasta tener las reglas del alojamiento
+  const reglasCargadas = !!alojamiento.data
   const avisoRP01 = avisoEstanciaMinima(entrada, salida, temporadas, reglas)
   const sobreCapacidad = huespedes.length > capacidad
-  const listo = noches > 0 && !avisoRP01 && !sobreCapacidad
+  const sinAdultos = grupoSinAdultos(huespedes, reglas.umbralEdad, entrada)
+  const listo = reglasCargadas && noches > 0 && !avisoRP01 && !sobreCapacidad && !sinAdultos
 
   const cotizacion = useCotizacion(
     listo
@@ -361,6 +370,7 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
       </div>
 
       {sobreCapacidad && <AvisoError mensaje={`Este apartamento recibe máximo ${capacidad} personas.`} />}
+      {sinAdultos && <AvisoError titulo="Falta un adulto" mensaje={`${MENSAJE_SIN_ADULTOS}.`} />}
       {avisoRP01 && <AvisoError titulo="Estancia mínima" mensaje={avisoRP01} />}
 
       {noches < 1 ? (
