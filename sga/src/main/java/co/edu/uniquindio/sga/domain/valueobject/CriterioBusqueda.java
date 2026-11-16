@@ -8,8 +8,9 @@ import java.util.List;
  * Filtros opcionales de la búsqueda de apartamentos disponibles (7.5). Un campo null significa "sin ese filtro".
  * Los precios se comparan con el valor estimado de toda la estancia, no con la tarifa de una noche.
  *
- * Los servicios son lo que el apartamento ofrece según su dotación y sus características (por ejemplo "jacuzzi",
- * "cocina" o "vista al mar"). Se pueden pedir varios y se aplican juntos: el apartamento debe ofrecerlos todos.
+ * La característica es cómo es el apartamento como espacio (por ejemplo "2 dormitorios"); los servicios son lo que
+ * trae su dotación (por ejemplo "Cocina integral abierta"). Se pueden pedir varios servicios y se aplican juntos: el
+ * apartamento debe ofrecerlos todos.
  */
 public record CriterioBusqueda(Integer capacidadMinima, Dinero precioMinimo, Dinero precioMaximo,
                                String caracteristica, List<String> servicios) {
@@ -49,18 +50,22 @@ public record CriterioBusqueda(Integer capacidadMinima, Dinero precioMinimo, Din
         return capacidadMinima == null || capacidad.maximo() >= capacidadMinima;
     }
 
-    public boolean cumpleCaracteristica(Dotacion dotacion) {
-        return caracteristica == null || dotacion.mencionaCaracteristica(caracteristica);
+    /**
+     * La característica pedida es una de las del apartamento (Apartamento.getCaracteristicas, por ejemplo
+     * "2 dormitorios"), sin distinguir mayúsculas ni tildes. Sin característica pedida siempre se cumple.
+     */
+    public boolean cumpleCaracteristica(List<String> caracteristicas) {
+        return caracteristica == null || (caracteristicas != null && caracteristicas.stream()
+                .anyMatch(c -> Dotacion.normalizar(c).equals(Dotacion.normalizar(caracteristica))));
     }
 
     /**
-     * Cada servicio pedido lo ofrece algún elemento de la dotación o la descripción del apartamento: deben aparecer
-     * todas sus palabras, en cualquier orden, sin distinguir mayúsculas ni tildes ("vista al mar" coincide con
-     * "Vista frontal al mar Caribe"). Sin servicios pedidos siempre se cumple.
+     * Cada servicio pedido lo ofrece algún elemento de la dotación: deben aparecer todas sus palabras, en cualquier
+     * orden, sin distinguir mayúsculas ni tildes ("vista al mar" coincide con "Vista frontal al mar Caribe"). Las
+     * opciones del filtro son los elementos reales de las dotaciones. Sin servicios pedidos siempre se cumple.
      */
-    public boolean cumpleServicios(Dotacion dotacion, String descripcion) {
-        return servicios.stream().allMatch(servicio ->
-                dotacion.ofreceServicio(servicio) || Dotacion.textoMenciona(descripcion, servicio));
+    public boolean cumpleServicios(Dotacion dotacion) {
+        return servicios.stream().allMatch(dotacion::ofreceServicio);
     }
 
     /** El valor estimado de la estancia debe quedar dentro del rango [precioMinimo, precioMaximo]. */

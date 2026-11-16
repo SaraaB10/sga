@@ -495,6 +495,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/apartamentos/filtros:
+    get:
+      tags: [Apartamentos]
+      summary: Opciones de los filtros de búsqueda
+      description: |
+        Público. Características (cómo es el apartamento, por ejemplo "2 dormitorios") y servicios (los elementos
+        de su dotación) de los apartamentos activos, sin repetir. Mapea a `ConsultarApartamentosUseCase.opcionesDeFiltro`.
+      operationId: opcionesDeFiltro
+      security: []
+      responses:
+        '200':
+          description: Opciones de los filtros
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  caracteristicas: { type: array, items: { type: string }, example: [ 1 dormitorio, 2 dormitorios ] }
+                  servicios: { type: array, items: { type: string }, example: [ Cocina integral abierta ] }
+
   /api/apartamentos/disponibles:
     get:
       tags: [Apartamentos]
@@ -544,15 +564,17 @@ paths:
         - name: caracteristica
           in: query
           required: false
-          description: Texto que debe aparecer en algún elemento de la dotación
+          description: |
+            Característica del apartamento (cómo es el espacio), una de las de GET /api/apartamentos/filtros,
+            sin distinguir mayúsculas ni tildes
           schema: { type: string }
-          example: hidromasaje
+          example: 2 dormitorios
         - name: servicios
           in: query
           required: false
           description: |
-            Servicios que el apartamento debe ofrecer todos, según su dotación y sus características. Se repite
-            el parámetro o se separan por coma
+            Servicios de la dotación que el apartamento debe ofrecer todos (opciones en GET /api/apartamentos/filtros;
+            también vale parte de un elemento, por ejemplo "vista al mar"). Se repite el parámetro o se separan por coma
           style: form
           explode: true
           schema: { type: array, items: { type: string } }

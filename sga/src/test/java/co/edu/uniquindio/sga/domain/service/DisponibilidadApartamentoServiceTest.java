@@ -256,8 +256,8 @@ class DisponibilidadApartamentoServiceTest {
     void filtrarDisponibles() {
         assertTrue(buscar(new CriterioBusqueda(4, null, null, null)).isEmpty());
         assertEquals(1, buscar(new CriterioBusqueda(3, null, null, null)).size());
-        assertEquals(1, buscar(new CriterioBusqueda(null, null, null, "AIRE")).size());
-        assertTrue(buscar(new CriterioBusqueda(null, null, null, "piscina")).isEmpty());
+        assertEquals(1, buscar(new CriterioBusqueda(null, null, null, "1 dormitorio")).size());
+        assertTrue(buscar(new CriterioBusqueda(null, null, null, "3 dormitorios")).isEmpty());
         assertTrue(buscar(new CriterioBusqueda(null, null, Dinero.de(1_000_000), null)).isEmpty());
         assertEquals(1, buscar(new CriterioBusqueda(null, Dinero.de(1_240_000), Dinero.de(1_240_000), null)).size());
     }

@@ -9,7 +9,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Collator;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * CU-20. GET /api/apartamentos?pagina= y GET /api/apartamentos/{id}
@@ -43,6 +49,29 @@ public class ConsultarApartamentosUseCase {
     @Transactional(readOnly = true)
     public Pagina<Apartamento> pendientesDePreparacion(int pagina) {
         return apartamentoRepository.listarPendientesDePreparacion(pagina, tamanoPagina);
+    }
+
+    /** Opciones de los filtros de la búsqueda, con los valores reales de los apartamentos activos */
+    public record OpcionesFiltro(List<String> caracteristicas, List<String> servicios) {
+    }
+
+    /**
+     * 7.5: las características (por ejemplo "2 dormitorios") y los elementos de la dotación de los apartamentos que
+     * están a la venta, sin repetir y en orden alfabético (las características, por su número).
+     */
+    @Transactional(readOnly = true)
+    public OpcionesFiltro opcionesDeFiltro() {
+        List<Apartamento> activos = apartamentoRepository.listarVigentesParaVenta();
+        List<String> caracteristicas = activos.stream()
+                .sorted(Comparator.comparingInt(Apartamento::getDormitorios))
+                .flatMap(a -> a.getCaracteristicas().stream())
+                .distinct()
+                .toList();
+        Collator orden = Collator.getInstance(Locale.forLanguageTag("es-CO"));
+        orden.setStrength(Collator.SECONDARY);                           // sin distinguir mayúsculas
+        Map<String, String> servicios = new TreeMap<>(orden);           // sin repetir aunque cambie la mayúscula
+        activos.forEach(a -> a.getDotacion().elementos().forEach(e -> servicios.putIfAbsent(e.trim(), e.trim())));
+        return new OpcionesFiltro(caracteristicas, List.copyOf(servicios.values()));
     }
 
     /** 404 si no existe o si fue retirado de la venta (eliminado lógicamente). */

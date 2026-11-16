@@ -455,6 +455,14 @@ public class Apartamento {
     public String getNombre() { return nombre; }
     public String getDescripcion() { return descripcion; }
     public int getDormitorios() { return dormitorios; }
+
+    /**
+     * 7.5: características del apartamento como espacio (no lo que trae su dotación): hoy, cuántos dormitorios tiene,
+     * por ejemplo "2 dormitorios". Son los valores que ofrece el filtro "Características" de la búsqueda.
+     */
+    public List<String> getCaracteristicas() {
+        return List.of(dormitorios + (dormitorios == 1 ? " dormitorio" : " dormitorios"));
+    }
     public Capacidad getCapacidad() { return capacidad; }
     public Dotacion getDotacion() { return dotacion; }
     public List<Imagen> getImagenes() { return Collections.unmodifiableList(imagenes); }

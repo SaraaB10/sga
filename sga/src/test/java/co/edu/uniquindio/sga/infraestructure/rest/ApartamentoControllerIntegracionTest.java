@@ -313,14 +313,27 @@ class ApartamentoControllerIntegracionTest {
     }
 
     @Test
-    @DisplayName("7.5: filtro por característica de la dotación, sin distinguir mayúsculas")
+    @DisplayName("7.5: filtro por característica del apartamento (dormitorios), sin distinguir mayúsculas")
     void filtroPorCaracteristica() throws Exception {
-        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=HIDROMASAJE"))
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=2 DORMITORIOS"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-201")));
-        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=helipuerto"))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-201", "APT-202")));
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=1 dormitorio"))
+                .andExpect(jsonPath("$.contenido[*].identificacion", contains("APT-101", "APT-102")));
+        // La dotación ya no es una característica: eso es el filtro de servicios
+        get(disponibles(LocalDate.now(BOGOTA).plusDays(40), 2, "&caracteristica=hidromasaje"))
                 .andExpect(jsonPath("$.contenido", hasSize(0)))
                 .andExpect(jsonPath("$.totalElementos").value(0));
+    }
+
+    @Test
+    @DisplayName("7.5: las opciones de los filtros salen de los apartamentos activos, sin repetir")
+    void opcionesDeFiltro() throws Exception {
+        get("/api/apartamentos/filtros")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.caracteristicas", contains("1 dormitorio", "2 dormitorios", "3 dormitorios")))
+                .andExpect(jsonPath("$.servicios", hasItem("Cava refrigerada de vinos")))
+                .andExpect(jsonPath("$.servicios", hasItem("Hamaca artesanal de San Jacinto")));
     }
 
     @Test

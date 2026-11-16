@@ -103,6 +103,23 @@ export const llavesPublicas = {
   temporada: (id: string) => ['temporadas', 'detalle', id] as const,
   politicaVigente: ['politica-cancelacion', 'vigente'] as const,
   mediosPago: ['medios-pago', 'activos'] as const,
+  opcionesFiltro: ['apartamentos', 'filtros'] as const,
+}
+
+/** GET /api/apartamentos/filtros: opciones reales de los filtros "Características" y "Servicios" */
+export interface OpcionesFiltroResponse {
+  /** Cómo es el apartamento, por ejemplo "2 dormitorios" */
+  caracteristicas: string[]
+  /** Elementos de la dotación de los apartamentos activos */
+  servicios: string[]
+}
+
+export function useOpcionesFiltro() {
+  return useQuery({
+    queryKey: llavesPublicas.opcionesFiltro,
+    queryFn: async () => (await cliente.get<OpcionesFiltroResponse>('/api/apartamentos/filtros')).data,
+    staleTime: 5 * 60 * 1000,
+  })
 }
 
 /** GET /api/medios-pago: medios aceptados y activos (L-18), públicos */

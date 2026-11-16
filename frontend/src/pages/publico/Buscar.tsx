@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CalendarSearch, SearchX } from 'lucide-react'
 import { z } from 'zod'
-import { useApartamentosDisponibles } from '@/api/publico'
+import { useApartamentosDisponibles, useOpcionesFiltro } from '@/api/publico'
 import type { FiltrosDisponibles } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, Fecha, Paginador, Vacio } from '@/components/coral'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,7 @@ import { textoOpcional, useValidacion } from '@/lib/validacion'
 import { BuscadorEstancia } from './comun/BuscadorEstancia'
 import { useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { EncabezadoFiltros } from './comun/EncabezadoFiltros'
-import { claseContenidoPlegable } from './comun/estilos'
+import { claseContenidoPlegable, claseSelect } from './comun/estilos'
 import {
   estanciaAParams,
   fechasCompletas,
@@ -28,9 +28,6 @@ import { MapaAlojamiento } from './MapaAlojamiento'
 
 const FILTROS = ['capacidadMinima', 'caracteristica', 'servicios', 'precioMinimo', 'precioMaximo'] as const
 type Filtro = (typeof FILTROS)[number]
-
-/** Servicios que se pueden pedir; se buscan en la dotación y las características de cada apartamento */
-const SERVICIOS = ['Hidromasaje', 'Piscina', 'Terraza', 'Balcón', 'Vista al mar', 'Cocina', 'Cava de vinos'] as const
 
 /** En la URL los servicios van separados por coma: servicios=Hidromasaje,Cocina */
 const aServicios = (texto: string | null) =>
@@ -219,8 +216,12 @@ const esquemaFiltros = z
       })
   })
 
-/** Capacidad mínima, característica de la dotación, servicios y rango del valor estimado */
+/**
+ * Capacidad mínima, característica del apartamento, servicios de su dotación y rango del valor estimado. Las opciones
+ * de características y servicios salen de los apartamentos activos (GET /api/apartamentos/filtros).
+ */
 function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
+  const opciones = useOpcionesFiltro()
   const [borrador, setBorrador] = useState(valores)
   const validacion = useValidacion(esquemaFiltros, borrador)
   const errores = validacion.errores
@@ -275,21 +276,36 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
       </Campo>
       <Campo
         id="filtro-caracteristica"
-        etiqueta="Característica"
-        ayuda="Busca en la dotación, por ejemplo «hidromasaje»."
+        etiqueta="Características"
+        ayuda="Cómo es el apartamento: cuántos dormitorios tiene."
         error={errores.caracteristica}
       >
-        <Input
-          placeholder="Hidromasaje, balcón…"
+        <select
+          className={claseSelect}
           value={borrador.caracteristica}
           onChange={(e) => cambiar('caracteristica', e.target.value)}
-        />
+        >
+          <option value="">Cualquiera</option>
+          {/* Una característica de la URL que ya no ofrece ningún apartamento sigue visible para poder quitarla */}
+          {borrador.caracteristica && !opciones.data?.caracteristicas.includes(borrador.caracteristica) && (
+            <option value={borrador.caracteristica}>{borrador.caracteristica}</option>
+          )}
+          {(opciones.data?.caracteristicas ?? []).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </Campo>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-medium">Servicios</legend>
-        <p className="-mt-1 text-xs text-muted-foreground">Muestra los apartamentos que los tienen todos.</p>
+        <p className="-mt-1 text-xs text-muted-foreground">
+          Lo que trae la dotación del apartamento. Muestra los que tienen todos los que elijas.
+        </p>
+        {opciones.error && <AvisoError error={opciones.error} titulo="No se pudieron cargar los servicios" />}
+        {!opciones.data && !opciones.error && <Skeleton className="h-16" />}
         <div className="flex flex-wrap gap-2">
-          {SERVICIOS.map((servicio) => {
+          {(opciones.data?.servicios ?? []).map((servicio) => {
             const elegido = serviciosElegidos.includes(servicio)
             return (
               <label

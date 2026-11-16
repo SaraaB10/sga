@@ -360,14 +360,26 @@ Authorization: Bearer {{tokenAdmin}}
     });
 %}
 
-### 3.2 CU-01 con filtros de 7.5: capacidad mínima, característica de la dotación y rango de precio
-GET {{host}}/api/apartamentos/disponibles?entrada={{hoy}}&salida={{hoyMas3}}&ocupantes=2&capacidadMinima=4&caracteristica=piscina&precioMinimo=500000&precioMaximo=5000000&pagina=0
+### 3.2 CU-01 con filtros de 7.5: capacidad mínima, característica del apartamento, servicio de la dotación y precio
+GET {{host}}/api/apartamentos/disponibles?entrada={{hoy}}&salida={{hoyMas3}}&ocupantes=2&capacidadMinima=4&caracteristica=3%20dormitorios&servicios=piscina&precioMinimo=500000&precioMaximo=5000000&pagina=0
 Authorization: Bearer {{tokenAdmin}}
 
 > {%
     client.test("3.2 200 disponibles con filtros", function () {
         client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
         client.assert(response.body.contenido.every(function (a) { return a.capacidadMaxima >= 4; }), "Hay apartamentos con capacidad menor que 4");
+        client.assert(response.body.contenido.length === 1 && response.body.contenido[0].identificacion === "APT-301", "Solo APT-301 tiene 3 dormitorios y piscina: " + JSON.stringify(response.body.contenido.map(function (a) { return a.identificacion; })));
+    });
+%}
+
+### 3.2b Opciones reales de los filtros (sin token): características y servicios de los apartamentos activos
+GET {{host}}/api/apartamentos/filtros
+
+> {%
+    client.test("3.2b 200 opciones de filtro", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.body.caracteristicas.join(",") === "1 dormitorio,2 dormitorios,3 dormitorios", "Características: " + response.body.caracteristicas);
+        client.assert(response.body.servicios.indexOf("Cava refrigerada de vinos") >= 0, "Servicios: " + response.body.servicios);
     });
 %}
 

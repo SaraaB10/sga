@@ -9,6 +9,7 @@ import co.edu.uniquindio.sga.application.dto.request.SugerirGravedadRequest;
 import co.edu.uniquindio.sga.application.dto.response.ActualizacionApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDetalleResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDisponibleResponse;
+import co.edu.uniquindio.sga.application.dto.response.OpcionesFiltroResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.BloqueoResponse;
 import co.edu.uniquindio.sga.application.dto.response.DisponibilidadApartamentoResponse;
@@ -99,9 +100,10 @@ public class ApartamentoController {
     @PreAuthorize("permitAll()")
     @Operation(summary = "Buscar apartamentos disponibles",
             description = "Apartamentos libres en todas las noches de la estancia y con capacidad para el grupo "
-                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, característica de la dotación, "
-                    + "servicios (se repite el parámetro; el apartamento debe ofrecerlos todos según su dotación y "
-                    + "sus características) y rango de precio del valor estimado de la estancia. 10 resultados por página")
+                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, característica del apartamento "
+                    + "(por ejemplo \"2 dormitorios\"), servicios de su dotación (se repite el parámetro; el "
+                    + "apartamento debe ofrecerlos todos) y rango de precio del valor estimado de la estancia. Las "
+                    + "opciones de los dos filtros las da GET /api/apartamentos/filtros. 10 resultados por página")
     @ApiResponse(responseCode = "200", description = "Página de apartamentos disponibles (puede venir vacía)")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
     @ApiResponse(responseCode = "409", description = "Estancia o filtros inválidos (RN-03, RN-04, RP-01, 7.5)")
@@ -123,6 +125,19 @@ public class ApartamentoController {
         Pagina<ApartamentoDisponible> disponibles = buscarApartamentoDisponibleUseCase.buscar(entrada, salida,
                 ocupantes, fechasNacimiento, criterio, pagina);
         return ResponseEntity.ok(PaginaMapper.aResponse(disponibles, mapper::aDisponibleResponse));
+    }
+
+    /** 7.5. GET /api/apartamentos/filtros. Ruta fija declarada antes de /{id} */
+    @GetMapping("/filtros")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Opciones de los filtros de búsqueda",
+            description = "Características (cómo es el apartamento, por ejemplo \"2 dormitorios\") y servicios (los "
+                    + "elementos de su dotación) de los apartamentos activos, sin repetir. Son las opciones de los "
+                    + "filtros caracteristica y servicios de GET /api/apartamentos/disponibles")
+    @ApiResponse(responseCode = "200", description = "Opciones de los filtros")
+    public ResponseEntity<OpcionesFiltroResponse> opcionesDeFiltro() {
+        ConsultarApartamentosUseCase.OpcionesFiltro opciones = consultarApartamentosUseCase.opcionesDeFiltro();
+        return ResponseEntity.ok(new OpcionesFiltroResponse(opciones.caracteristicas(), opciones.servicios()));
     }
 
     /** CU-20. GET /api/apartamentos?pagina= */
