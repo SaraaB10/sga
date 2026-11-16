@@ -135,6 +135,8 @@ export interface BloqueoResponse {
   fechaFin: FechaISO
   motivo: string
   vigente: boolean
+  /** Día en que se levantó; null mientras siga vigente */
+  fechaLevantamiento?: FechaISO | null
 }
 
 export interface ApartamentoDetalleResponse {

@@ -114,6 +114,15 @@ class AutorizacionIntegracionTest {
     }
 
     @Test
+    @DisplayName("Recepción levanta un bloqueo: 403 (solo el administrador)")
+    void recepcionLevantaBloqueoResponde403() throws Exception {
+        mvc.perform(MockMvcRequestBuilders.put("/api/apartamentos/APT-301/bloqueos/BLQ-cualquiera/levantar")
+                        .with(usuario("RECEPCIONISTA", DOCUMENTO_RECEPCION)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(MENSAJE_403));
+    }
+
+    @Test
     @DisplayName("Historial del huésped 1 en /api/reservas/mias: solo reservas con su documento")
     void huespedVeSoloSusReservasEnMias() throws Exception {
         long propias = reservas.listarTodas().stream()

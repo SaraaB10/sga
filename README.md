@@ -136,7 +136,7 @@ Si la base ya existe, los cargadores no duplican nada y solo completan lo mínim
 
 ## Endpoints
 
-Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (ver [Seguridad](#seguridad)), la sugerencia de gravedad (ver [Modelo de IA](#modelo-de-ia)) y los 3 reportes del administrador (`GET /api/reportes/ocupacion`, `/ingresos` y `/reservas-por-canal`). Todos los listados devuelven 10 resultados por página y las páginas empiezan en 0 (`?pagina=`).
+Son 81 operaciones: las 65 de esta lista, las 12 de autenticación y usuarios (ver [Seguridad](#seguridad)), la sugerencia de gravedad (ver [Modelo de IA](#modelo-de-ia)) y los 3 reportes del administrador (`GET /api/reportes/ocupacion`, `/ingresos` y `/reservas-por-canal`). Todos los listados devuelven 10 resultados por página y las páginas empiezan en 0 (`?pagina=`).
 
 **Reservas**
 - `POST /api/reservas` crear una reserva (201 con `Location`); acepta mascotas opcionales (`cantidadMascotas`, `pesoMascotaMasPesadaKg`)
@@ -169,6 +169,7 @@ Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (v
 - `GET /api/apartamentos/pendientes-preparacion` los que están en PENDIENTE_PREPARACION o EN_PREPARACION
 - `POST /api/apartamentos/{id}/bloqueos` registrar un bloqueo (201 con `Location`)
 - `GET /api/apartamentos/{id}/bloqueos/{idBloqueo}` consultar un bloqueo, también si ya se levantó (es el recurso del `Location`)
+- `PUT /api/apartamentos/{id}/bloqueos/{idBloqueo}/levantar` levantar un bloqueo vigente: sus noches vuelven a la venta y el bloqueo se conserva como levantado (solo administrador)
 - `POST /api/apartamentos/{id}/novedades` registrar una novedad (201 con `Location`)
 - `GET /api/apartamentos/{id}/novedades/{idNovedad}` consultar una novedad (es el recurso del `Location`)
 - `GET /api/apartamentos/{id}/novedades` historial de novedades, de la más reciente a la más antigua
