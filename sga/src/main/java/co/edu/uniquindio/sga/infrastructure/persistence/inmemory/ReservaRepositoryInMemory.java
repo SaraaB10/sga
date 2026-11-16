@@ -5,6 +5,7 @@ import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.repository.FiltroReservas;
 import co.edu.uniquindio.sga.domain.repository.Pagina;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
+import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.EstadoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Estancia;
@@ -39,12 +40,11 @@ public class ReservaRepositoryInMemory implements ReservaRepository {
             throw new IllegalArgumentException("La reserva a guardar es obligatoria");
         }
         if (reserva.getIdentificadorCanalExterno() != null) {
-            buscarPorCanalEIdentificadorExterno(reserva.getNombreCanalExterno(), reserva.getIdentificadorCanalExterno())
+            buscarPorCanalEIdentificadorExterno(reserva.getCanalOrigen(), reserva.getIdentificadorCanalExterno())
                     .filter(existente -> !existente.equals(reserva))
                     .ifPresent(existente -> {
                         throw new ReglaDominioException("RN-19: ya existe la reserva " + existente.getCodigo().valor()
-                                + " para " + reserva.getNombreCanalExterno() + " / "
-                                + reserva.getIdentificadorCanalExterno());
+                                + " para " + reserva.getCanalOrigen() + " / " + reserva.getIdentificadorCanalExterno());
                     });
         }
         almacen.put(reserva.getCodigo(), reserva);
@@ -57,9 +57,9 @@ public class ReservaRepositoryInMemory implements ReservaRepository {
     }
 
     @Override
-    public Optional<Reserva> buscarPorCanalEIdentificadorExterno(String nombreCanal, String identificadorExterno) {
+    public Optional<Reserva> buscarPorCanalEIdentificadorExterno(CanalOrigen canal, String identificadorExterno) {
         return almacen.values().stream()
-                .filter(r -> r.correspondeA(nombreCanal, identificadorExterno))
+                .filter(r -> r.correspondeA(canal, identificadorExterno))
                 .findFirst();
     }
 

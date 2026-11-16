@@ -3,7 +3,6 @@ package co.edu.uniquindio.sga.domain.service;
 import co.edu.uniquindio.sga.domain.entity.Alojamiento;
 import co.edu.uniquindio.sga.domain.entity.Apartamento;
 import co.edu.uniquindio.sga.domain.entity.Temporada;
-import co.edu.uniquindio.sga.domain.exception.GrupoSinOcupanteFacturableException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
@@ -23,8 +22,7 @@ import java.util.Objects;
  * Calcula el valor de una estancia noche por noche (3.5, 7.4).
  *
  * Reglas: RN-05 (cada noche se cobra con la tarifa de su temporada), RN-06 (solo cuentan los ocupantes
- * facturables según el umbral de edad) y el grupo debe tener al menos un ocupante facturable, porque el titular
- * siempre lo es (GrupoSinOcupanteFacturableException).
+ * facturables según el umbral de edad).
  */
 public class CotizadorEstanciaService {
 
@@ -59,36 +57,7 @@ public class CotizadorEstanciaService {
         requerido(umbralAplicado, "L-09: El umbral de edad facturable no está configurado");
 
         int facturables = (int) grupo.stream().filter(o -> o.esFacturableEn(estancia, umbralAplicado)).count();
-        exigirOcupanteFacturable(facturables);
         return cotizarFacturables(alojamiento, apartamento, estancia, facturables);
-    }
-
-    /**
-     * Sin un apartamento de por medio: el grupo de la búsqueda debe tener al menos un ocupante facturable. Si no
-     * llegan fechas de nacimiento todos cuentan como facturables y siempre se cumple.
-     *
-     * @param fechasNacimiento puede ser null o vacía.
-     */
-    public void validarGrupoConFacturable(Estancia estancia, List<LocalDate> fechasNacimiento) {
-        requerido(estancia, "La estancia es obligatoria");
-        if (fechasNacimiento == null || fechasNacimiento.isEmpty()) {
-            return;
-        }
-        Alojamiento alojamiento = alojamientoRepository.obtener()
-                .orElseThrow(() -> new ReglaDominioException("F-13: No hay un alojamiento configurado"));
-        UmbralEdadFacturable umbral = alojamiento.getUmbralEdadFacturable();
-        requerido(umbral, "L-09: El umbral de edad facturable no está configurado");
-        long facturables = fechasNacimiento.stream()
-                .filter(fecha -> new Ocupante("Ocupante", null, fecha).esFacturableEn(estancia, umbral))
-                .count();
-        exigirOcupanteFacturable(facturables);
-    }
-
-    /** El titular siempre es facturable: un grupo sin ningún ocupante facturable no puede cotizarse ni reservarse. */
-    private static void exigirOcupanteFacturable(long facturables) {
-        if (facturables < 1) {
-            throw new GrupoSinOcupanteFacturableException();
-        }
     }
 
     /**

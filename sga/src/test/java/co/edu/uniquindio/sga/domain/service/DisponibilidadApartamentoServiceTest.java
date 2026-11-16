@@ -222,9 +222,6 @@ class DisponibilidadApartamentoServiceTest {
         escenario.alojamiento.agregarTemporada(Temporada.crear("T-MEDIA", "Media", TipoTemporada.MEDIA,
                 List.of(new RangoFechas(LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 8)))));
         escenario.alojamientos.guardar(escenario.alojamiento);
-        // Todo apartamento activo tiene tarifa en todas las temporadas
-        escenario.apartamento.definirTarifa(new Tarifa("T-MEDIA", Dinero.de(450_000)));
-        escenario.apartamentos.guardar(escenario.apartamento);
     }
 
     /** Martes 24 a jueves 26 de noviembre de 2026: 2 noches en temporada base ($310.000 por ocupante). */

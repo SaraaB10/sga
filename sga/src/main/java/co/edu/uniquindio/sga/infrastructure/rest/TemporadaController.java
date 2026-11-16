@@ -43,12 +43,14 @@ public class TemporadaController {
 
     /** CU-29. GET /api/temporadas?pagina= */
     @GetMapping
-    @PreAuthorize("permitAll()")
+    @PreAuthorize("hasAnyAuthority('HUESPED', 'RECEPCIONISTA', 'ADMINISTRADOR', 'PERSONAL_SERVICIO')")
     @Operation(summary = "Listar temporadas",
             description = "Temporadas del alojamiento con sus rangos de fechas (fecha final excluida), en el orden en "
                     + "que se registraron, 10 por página (12.4). La base no tiene rangos (F-05)")
     @ApiResponse(responseCode = "200", description = "Página de temporadas")
     @ApiResponse(responseCode = "400", description = "Número de página inválido")
+    @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
+    @ApiResponse(responseCode = "403", description = "El rol no lo permite")
     public ResponseEntity<PaginaResponse<TemporadaResponse>> listar(
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "La página no puede ser negativa") int pagina) {
         Pagina<Temporada> temporadas = temporadasUseCase.listar(pagina);
@@ -57,11 +59,13 @@ public class TemporadaController {
 
     /** CU-29. GET /api/temporadas/{id} */
     @GetMapping("/{id}")
-    @PreAuthorize("permitAll()")
+    @PreAuthorize("hasAnyAuthority('HUESPED', 'RECEPCIONISTA', 'ADMINISTRADOR', 'PERSONAL_SERVICIO')")
     @Operation(summary = "Consultar una temporada",
             description = "La temporada con sus rangos de fechas (fecha final excluida). Es el recurso al que apunta "
                     + "la cabecera Location al crearla o al agregarle un rango")
     @ApiResponse(responseCode = "200", description = "La temporada")
+    @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
+    @ApiResponse(responseCode = "403", description = "El rol no lo permite")
     @ApiResponse(responseCode = "404", description = "No existe la temporada")
     public ResponseEntity<TemporadaResponse> consultar(@PathVariable String id) {
         return ResponseEntity.ok(mapper.aTemporadaResponse(temporadasUseCase.consultar(id)));

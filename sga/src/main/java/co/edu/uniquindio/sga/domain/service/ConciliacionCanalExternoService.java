@@ -12,7 +12,6 @@ import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
 import co.edu.uniquindio.sga.domain.valueobject.Estancia;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
-import co.edu.uniquindio.sga.domain.valueobject.Mascotas;
 import co.edu.uniquindio.sga.domain.valueobject.Ocupante;
 import co.edu.uniquindio.sga.domain.valueobject.ResultadoEventoCanal;
 import co.edu.uniquindio.sga.domain.valueobject.TipoEventoCanal;
@@ -77,53 +76,44 @@ public class ConciliacionCanalExternoService {
     }
 
     /**
-     * @param nombreCanal plataforma que envió el mensaje (por ejemplo "booking"); queda en la bitácora y en el
-     *                    conflicto para que el administrador sepa de dónde vino.
-     * @param refExterna  identificador de la reserva en el canal (el catálogo usa ReferenciaExterna; aquí es texto).
-     * @param ahora       fecha y hora de recepción del mensaje.
+     * @param refExterna identificador de la reserva en el canal (el catálogo usa ReferenciaExterna; aquí es texto).
+     * @param ahora      fecha y hora de recepción del mensaje.
      */
-    public ResultadoEventoCanal procesarMensajeExterno(CanalOrigen canal, String nombreCanal, String refExterna,
-                                                       TipoEventoCanal tipoEvento, DatosReservaExterna datos,
-                                                       LocalDateTime ahora) {
+    public ResultadoEventoCanal procesarMensajeExterno(CanalOrigen canal, String refExterna, TipoEventoCanal tipoEvento,
+                                                       DatosReservaExterna datos, LocalDateTime ahora) {
         if (canal == null || tipoEvento == null || ahora == null) {
             throw new ReglaDominioException("El canal, el tipo de evento y la fecha del mensaje son obligatorios");
-        }
-        if (nombreCanal == null || nombreCanal.isBlank()) {
-            throw new ReglaDominioException("7.8: El mensaje debe traer el nombre del canal que lo envía");
         }
         if (tipoEvento.requiereIdentificadorExterno() && (refExterna == null || refExterna.isBlank())) {
             throw new ReglaDominioException("RN-19: Los mensajes de creación y cancelación traen identificador externo");
         }
         String referencia = refExterna == null ? null : refExterna.trim();
-        String nombre = nombreCanal.trim();
 
-        // RN-19: la idempotencia es por nombre del canal + identificador externo, no por el tipo EXTERNO.
         ResultadoEventoCanal resultado;
         if (canal != CanalOrigen.EXTERNO) {
             resultado = ResultadoEventoCanal.RECHAZADO_INVALIDO;
         } else if (tipoEvento.requiereIdentificadorExterno()
-                && eventoCanalRepository.existeDuplicado(nombre, referencia, tipoEvento)) {
+                && eventoCanalRepository.existeDuplicado(canal, referencia, tipoEvento)) {
             resultado = ResultadoEventoCanal.DUPLICADO_IGNORADO;
         } else {
             resultado = switch (tipoEvento) {
                 case CONSULTA_DISPONIBILIDAD -> consultar(datos);
-                case CREACION_RESERVA -> crear(canal, nombre, referencia, datos, ahora);
-                case CANCELACION_RESERVA -> cancelar(nombre, referencia, ahora);
+                case CREACION_RESERVA -> crear(canal, referencia, datos, ahora);
+                case CANCELACION_RESERVA -> cancelar(canal, referencia, ahora);
             };
         }
 
-        eventoCanalRepository.guardar(EventoCanal.auditar("EVT-" + UUID.randomUUID(), tipoEvento, canal,
-                nombreCanal, referencia, resultado, ahora));
+        eventoCanalRepository.guardar(EventoCanal.auditar("EVT-" + UUID.randomUUID(), tipoEvento, canal, referencia,
+                resultado, ahora));
         return resultado;
     }
 
     /** Consulta del canal (10.3.1): la lista la entrega DisponibilidadApartamentoService; aquí queda auditada. */
-    public List<Apartamento> consultarDisponibilidad(CanalOrigen canal, String nombreCanal, Estancia estancia,
-                                                     int totalOcupantes, LocalDateTime ahora) {
+    public List<Apartamento> consultarDisponibilidad(CanalOrigen canal, Estancia estancia, int totalOcupantes,
+                                                     LocalDateTime ahora) {
         List<Apartamento> disponibles = disponibilidadService.buscarDisponibles(estancia, totalOcupantes);
         eventoCanalRepository.guardar(EventoCanal.auditar("EVT-" + UUID.randomUUID(),
-                TipoEventoCanal.CONSULTA_DISPONIBILIDAD, canal, nombreCanal, null, ResultadoEventoCanal.ACEPTADO,
-                ahora));
+                TipoEventoCanal.CONSULTA_DISPONIBILIDAD, canal, null, ResultadoEventoCanal.ACEPTADO, ahora));
         return disponibles;
     }
 
@@ -133,14 +123,14 @@ public class ConciliacionCanalExternoService {
                 : ResultadoEventoCanal.ACEPTADO;
     }
 
-    private ResultadoEventoCanal crear(CanalOrigen canal, String nombreCanal, String referencia,
-                                       DatosReservaExterna datos, LocalDateTime ahora) {
+    private ResultadoEventoCanal crear(CanalOrigen canal, String referencia, DatosReservaExterna datos,
+                                       LocalDateTime ahora) {
         if (datos == null || datos.apartamento() == null || datos.estancia() == null || datos.titular() == null
                 || datos.ocupantes() == null || datos.ocupantes().isEmpty()) {
             return ResultadoEventoCanal.RECHAZADO_INVALIDO;
         }
         // RN-19: si la reserva ya existe (por ejemplo, aceptada antes de un reintento) no se crea otra.
-        if (reservaRepository.buscarPorCanalEIdentificadorExterno(nombreCanal, referencia).isPresent()) {
+        if (reservaRepository.buscarPorCanalEIdentificadorExterno(canal, referencia).isPresent()) {
             return ResultadoEventoCanal.DUPLICADO_IGNORADO;
         }
         Optional<Apartamento> apartamento = apartamentoRepository.buscarPorIdentificacion(datos.apartamento());
@@ -151,7 +141,7 @@ public class ConciliacionCanalExternoService {
         // RN-18: las noches ya vendidas por otro canal (o bloqueadas) son un conflicto, no un dato inválido.
         Optional<String> conflicto = disponibilidadService.conflictoDeInventario(apartamento.get(), datos.estancia(), null);
         if (conflicto.isPresent()) {
-            conflictoCanalRepository.guardar(ConflictoCanal.registrar("CNF-" + UUID.randomUUID(), canal, nombreCanal, referencia,
+            conflictoCanalRepository.guardar(ConflictoCanal.registrar("CNF-" + UUID.randomUUID(), canal, referencia,
                     conflicto.get(), ahora.toLocalDate()));
             return ResultadoEventoCanal.RECHAZADO_CONFLICTO;
         }
@@ -159,7 +149,7 @@ public class ConciliacionCanalExternoService {
         try {
             creacionReservaService.registrarNuevaReserva(datos.apartamento(), datos.estancia(), datos.titular(),
                     datos.ocupantes(), datos.horaEstimadaLlegada(), null, politicaCancelacionService.vigente(), canal,
-                    nombreCanal, referencia, Mascotas.ninguna(), ahora);
+                    referencia, ahora);
             return ResultadoEventoCanal.ACEPTADO;
         } catch (ReglaDominioException e) {
             // Capacidad, estancia mínima, fechas pasadas, titular no facturable, etc.
@@ -167,9 +157,8 @@ public class ConciliacionCanalExternoService {
         }
     }
 
-    /** Solo cancela una reserva que el MISMO canal creó con ese identificador (RN-19). */
-    private ResultadoEventoCanal cancelar(String nombreCanal, String referencia, LocalDateTime ahora) {
-        Optional<Reserva> reserva = reservaRepository.buscarPorCanalEIdentificadorExterno(nombreCanal, referencia);
+    private ResultadoEventoCanal cancelar(CanalOrigen canal, String referencia, LocalDateTime ahora) {
+        Optional<Reserva> reserva = reservaRepository.buscarPorCanalEIdentificadorExterno(canal, referencia);
         if (reserva.isEmpty()) {
             return ResultadoEventoCanal.RECHAZADO_INVALIDO;
         }

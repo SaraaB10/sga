@@ -49,43 +49,4 @@ class CriterioBusquedaTest {
         assertTrue(new CriterioBusqueda(null, null, null, "balcon").cumpleCaracteristica(dotacion));
         assertFalse(new CriterioBusqueda(null, null, null, "piscina").cumpleCaracteristica(dotacion));
     }
-
-    @Test
-    @DisplayName("Servicios: varios se aplican juntos y se buscan en la dotación y en la descripción")
-    void filtrarPorVariosServicios() {
-        Dotacion dotacion = new Dotacion(List.of("Balcón con tina de hidromasaje privada", "Cocina integral"));
-        String descripcion = "Frente al mar, con vista a la bahía";
-
-        assertTrue(servicios("hidromasaje").cumpleServicios(dotacion, descripcion));
-        assertTrue(servicios("COCINA", "Bahia").cumpleServicios(dotacion, descripcion));     // dotación + descripción
-        assertFalse(servicios("cocina", "piscina").cumpleServicios(dotacion, descripcion));  // falta uno: no cumple
-        assertFalse(servicios("piscina").cumpleServicios(dotacion, null));
-    }
-
-    @Test
-    @DisplayName("Servicios: se buscan todas las palabras en un mismo elemento, en cualquier orden")
-    void servicioDeVariasPalabras() {
-        Dotacion dotacion = new Dotacion(List.of("Vista frontal al mar Caribe", "Cocina integral"));
-
-        assertTrue(servicios("Vista al mar").cumpleServicios(dotacion, null));
-        assertTrue(servicios("mar vista").cumpleServicios(dotacion, null));
-        // "vista" y "cocina" están en elementos distintos: no es un servicio "vista cocina"
-        assertFalse(servicios("vista cocina").cumpleServicios(dotacion, null));
-    }
-
-    @Test
-    @DisplayName("Servicios: sin servicios, o solo vacíos, no se excluye nada y los repetidos cuentan una vez")
-    void serviciosVaciosNoFiltran() {
-        Dotacion dotacion = new Dotacion(List.of("Cocina integral"));
-
-        assertTrue(CriterioBusqueda.sinFiltros().cumpleServicios(dotacion, null));
-        assertTrue(new CriterioBusqueda(null, null, null, null, null).servicios().isEmpty());
-        CriterioBusqueda conVacios = servicios(" ", "", " cocina ", "cocina");
-        assertTrue(conVacios.cumpleServicios(dotacion, null));
-        assertTrue(conVacios.servicios().equals(List.of("cocina")));
-    }
-
-    private static CriterioBusqueda servicios(String... servicios) {
-        return new CriterioBusqueda(null, null, null, null, java.util.Arrays.asList(servicios));
-    }
 }

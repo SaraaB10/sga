@@ -230,8 +230,6 @@ En la misma revisión se movieron los demás valores del negocio que seguían es
 | Política de mascotas (L-16) | `new CargoAseoMascota(true, 110.000, 2, 10)` | `sga.alojamiento.mascotas.aceptadas`, `.cargo-aseo`, `.maximo`, `.peso-maximo-kg` |
 | Valor de la recepción nocturna (RP-03) | `Dinero.de(70_000)` | `sga.alojamiento.valor-recepcion-nocturna` |
 
-Se exige una edad mínima de 18 años para crear una cuenta y para ser titular de una reserva, porque el titular es el responsable del pago; el valor es configurable (sga.usuarios.edad-minima).
-
 Se dejaron en el código, a propósito:
 
 - El **catálogo de datos iniciales** (identidad del alojamiento, temporadas, tarifas, inventario de apartamentos y
@@ -423,7 +421,7 @@ definen el Anexo A, el glosario y 7.7. Así quedó:
 `GET /api/canales/{canal}/disponibilidad` devolvía una lista sin límite. Ahora recibe `pagina` (desde 0, 400 si es
 negativa) y responde `PaginaResponse<ApartamentoResponse>` de 10 en 10, como los demás listados. Las reglas de
 disponibilidad no cambian: se decide la disponibilidad primero y después se pagina. Lo prueba
-`CanalExternoControllerIntegracionTest#disponibilidadPaginada`, y en `canal-externo.http` el paso 1.
+`CanalExternoControllerIntegracionTest#disponibilidadPaginada`, y en `sga.http` la petición 4.4.
 
 ## 13. No incluido en esta entrega
 
@@ -434,13 +432,3 @@ Lo siguiente **no se implementa en esta entrega**:
   cierre del folio con saldo), CU-21 (retirar un apartamento) y poner fuera de servicio un apartamento corresponden
   solo al administrador. Entrará como adaptador de infraestructura (filtro de Spring Security y configuración de
   roles), sin tocar el dominio ni los casos de uso.
-
-## 14. Integración de salida y controladores
-
-- A.6: el proveedor de correo pasó de MailHog a SMTP de Gmail, con un adaptador local; se agregaron los recordatorios automáticos como segunda funcionalidad opcional.
-- Controladores: las operaciones de `/api/reservas` que estaban en `OperacionReservaController` (registrar la llegada y
-  la salida) y en `OcupacionController` (calendario de ocupación) pasaron a `ReservaController`, de modo que cada
-  controlador corresponde a un recurso. `FolioController` sigue aparte porque el folio es un subrecurso
-  (`/api/reservas/{codigo}/folio`), y `CanalExternoController` sigue separado de `CanalVentaController` porque lo
-  llama la plataforma externa con su propia credencial. El contrato no cambió: las 74 operaciones conservan su ruta,
-  método, cuerpos, códigos de respuesta, permisos y tags, y `openapi.yaml` queda idéntico.

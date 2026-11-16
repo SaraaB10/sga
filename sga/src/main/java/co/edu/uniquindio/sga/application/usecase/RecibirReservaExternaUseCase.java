@@ -1,7 +1,6 @@
 package co.edu.uniquindio.sga.application.usecase;
 
 import co.edu.uniquindio.sga.domain.entity.Apartamento;
-import co.edu.uniquindio.sga.domain.entity.CanalVenta;
 import co.edu.uniquindio.sga.domain.repository.Pagina;
 import co.edu.uniquindio.sga.domain.service.ConciliacionCanalExternoService;
 import co.edu.uniquindio.sga.domain.service.ConciliacionCanalExternoService.DatosReservaExterna;
@@ -24,8 +23,7 @@ import java.util.Objects;
  * PUT /api/canales/{canal}/reservas/{identificadorExterno}/cancelar (las tres operaciones de 10.3.1).
  * Recibe los mensajes del canal externo (plataformas de terceros, 10.3.1). Un mensaje repetido no crea otra reserva (RN-19);
  * si las noches ya estaban vendidas o bloqueadas se rechaza y se registra un conflicto (RN-18). Si procede,
- * incluye CU-03 (la reserva nace PENDIENTE con su folio). Todo mensaje queda en la bitácora (7.8), con el nombre
- * del canal que lo envió. Cuando llega aquí, el canal ya se autenticó con su credencial (AutenticarCanalUseCase).
+ * incluye CU-03 (la reserva nace PENDIENTE con su folio). Todo mensaje queda en la bitácora (7.8).
  * Actor: canal externo.
  */
 @Service
@@ -49,26 +47,24 @@ public class RecibirReservaExternaUseCase {
      * bitácora (7.8); aquí solo se pagina el resultado, como en la búsqueda de disponibles (CU-01).
      */
     @Transactional(readOnly = true)
-    public Pagina<Apartamento> consultarDisponibilidad(String nombreCanal, LocalDate fechaEntrada,
-                                                       LocalDate fechaSalida, int totalOcupantes, int pagina) {
+    public Pagina<Apartamento> consultarDisponibilidad(LocalDate fechaEntrada, LocalDate fechaSalida,
+                                                       int totalOcupantes, int pagina) {
         return Pagina.de(conciliacionService.consultarDisponibilidad(CanalOrigen.EXTERNO,
-                CanalVenta.normalizarNombre(nombreCanal), new Estancia(fechaEntrada, fechaSalida), totalOcupantes,
-                LocalDateTime.now(reloj)), pagina, tamanoPagina);
+                new Estancia(fechaEntrada, fechaSalida), totalOcupantes, LocalDateTime.now(reloj)),
+                pagina, tamanoPagina);
     }
 
     /** Creación de una reserva enviada por el canal. */
     @Transactional
-    public ResultadoEventoCanal ejecutar(String nombreCanal, String identificadorExterno, DatosReservaExterna datos) {
-        return conciliacionService.procesarMensajeExterno(CanalOrigen.EXTERNO,
-                CanalVenta.normalizarNombre(nombreCanal), identificadorExterno, TipoEventoCanal.CREACION_RESERVA,
-                datos, LocalDateTime.now(reloj));
+    public ResultadoEventoCanal ejecutar(String identificadorExterno, DatosReservaExterna datos) {
+        return conciliacionService.procesarMensajeExterno(CanalOrigen.EXTERNO, identificadorExterno,
+                TipoEventoCanal.CREACION_RESERVA, datos, LocalDateTime.now(reloj));
     }
 
     /** Cancelación enviada por el canal para una reserva que él mismo creó. */
     @Transactional
-    public ResultadoEventoCanal cancelar(String nombreCanal, String identificadorExterno) {
-        return conciliacionService.procesarMensajeExterno(CanalOrigen.EXTERNO,
-                CanalVenta.normalizarNombre(nombreCanal), identificadorExterno, TipoEventoCanal.CANCELACION_RESERVA,
-                null, LocalDateTime.now(reloj));
+    public ResultadoEventoCanal cancelar(String identificadorExterno) {
+        return conciliacionService.procesarMensajeExterno(CanalOrigen.EXTERNO, identificadorExterno,
+                TipoEventoCanal.CANCELACION_RESERVA, null, LocalDateTime.now(reloj));
     }
 }
