@@ -100,6 +100,34 @@ Al arrancar normal (`./gradlew bootRun`) la base H2 se guarda en el archivo `sga
 gradlew.bat bootRun --args="--spring.profiles.active=memoria"
 ```
 
+## Despliegue
+
+El sistema está desplegado: el frontend en **Vercel** y el backend en **Render**, con el perfil `prod` (`application-prod.properties`) y el `Dockerfile` de `sga/`.
+
+| Qué | URL |
+|---|---|
+| Aplicación | https://coral-pi-nine.vercel.app |
+| API | https://coral-snjd.onrender.com |
+| Estado del API | https://coral-snjd.onrender.com/actuator/health |
+
+> **Arranque en frío y disco efímero.** El plan gratuito de Render apaga el servicio tras unos 15 minutos sin tráfico: la primera petición después de eso tarda alrededor de un minuto mientras arranca (el frontend espera hasta 70 segundos). Conviene abrir `/actuator/health` antes de una demostración. Además el disco es efímero: la base H2 (`./data/sga`) y cualquier archivo guardado en el servidor se pierden en cada reinicio o despliegue, y el sistema vuelve a los datos iniciales. Por eso en Render las fotos van a Cloudinary y no al almacén local.
+
+**Variables de entorno de Render.** Los valores no están en el repositorio; se configuran en **Environment** del servicio:
+
+- `SPRING_PROFILES_ACTIVE` (`prod`)
+- `SGA_JWT_SECRET`
+- `SGA_CORS_ALLOWED_ORIGINS`
+- `SGA_ADMIN_CORREO`, `SGA_ADMIN_CONTRASENA`, `SGA_ADMIN_TELEFONO`, `SGA_ADMIN_DOCUMENTO`, `SGA_ADMIN_FECHA_NACIMIENTO` (el nombre del administrador es fijo: "Administrador SGA")
+- `SGA_RECEPCION_NOMBRE`, `SGA_RECEPCION_CORREO`, `SGA_RECEPCION_CONTRASENA`, `SGA_RECEPCION_TELEFONO`, `SGA_RECEPCION_DOCUMENTO`, `SGA_RECEPCION_FECHA_NACIMIENTO`
+- `SGA_SERVICIO_NOMBRE`, `SGA_SERVICIO_CORREO`, `SGA_SERVICIO_CONTRASENA`, `SGA_SERVICIO_TELEFONO`, `SGA_SERVICIO_DOCUMENTO`, `SGA_SERVICIO_FECHA_NACIMIENTO`
+- `SGA_CANALES_CREDENCIAL_DEMO`
+- `SGA_IA_PROVEEDOR` (`gemini`) y `SGA_IA_GEMINI_CLAVE`
+- `SGA_IMAGENES_PROVEEDOR` (`cloudinary`), `SGA_IMAGENES_CLOUDINARY_CLOUD_NAME`, `SGA_IMAGENES_CLOUDINARY_API_KEY` y `SGA_IMAGENES_CLOUDINARY_API_SECRET`
+
+`PORT` la pone Render. Las fechas de nacimiento van en formato `AAAA-MM-DD`. Los datos de los tres usuarios iniciales (administrador, recepción y personal de servicio) no tienen valores por defecto y se tratan igual: hay que definirlos todos antes de desplegar. En Vercel, `VITE_API_URL` apunta a la URL del API.
+
+**Notificaciones en Render.** En Render las notificaciones usan el adaptador **local** (los correos se escriben en el log del servicio), porque el plan gratuito bloquea las conexiones SMTP salientes. El envío real con Gmail (`sga.notificaciones.proveedor=smtp`) se demuestra en local; ver [Notificaciones](#notificaciones).
+
 ## Datos iniciales
 
 Cuando la base está vacía (el primer arranque, después de borrar `sga/data/` o en cada arranque con el perfil `memoria`) se cargan solos estos datos. Las fechas de los bloqueos y de las reservas son relativas al día en que se cargan (hoy en Colombia), así que con una base guardada de días anteriores esas fechas ya no son las de hoy:
@@ -248,7 +276,7 @@ echo "sga.jwt.secret=$(openssl rand -base64 48)" > src/main/resources/applicatio
 
 > **`application-secrets.properties` nunca se sube al repositorio.** Está en `.gitignore` y cada integrante genera su propia clave con el comando de arriba; no se comparte por chat ni por correo. Si una clave llega a GitHub se considera comprometida: hay que sacar el archivo (`git rm --cached`) y generar una nueva, porque borrar el commit no basta.
 
-La plantilla es `application-secrets.properties.example`. En despliegue y en GitHub Actions se usa la variable de entorno `SGA_JWT_SECRET`.
+La plantilla es `application-secrets.properties.example`. En despliegue y en GitHub Actions se usa la variable de entorno `SGA_JWT_SECRET`. El archivo nunca entra al jar: `build.gradle` lo excluye de `processResources`, y `./gradlew bootRun` lo lee directamente de `src/main/resources`.
 
 **Usuarios iniciales.** Son datos de prueba de H2, no credenciales reales:
 
@@ -306,15 +334,17 @@ Ninguna respuesta incluye la contraseña.
 
 ## Modelo de IA
 
-Al registrar una novedad, el SGA sugiere su gravedad (BAJA, MEDIA o ALTA) con una explicación corta (`POST /api/apartamentos/novedades/sugerir-gravedad`, para personal de servicio y administración). Es solo una ayuda: la gravedad que se guarda la elige siempre la persona, y si la IA falla, tarda más de 4 segundos o está apagada, el formulario funciona igual y el error queda en el log.
+Al registrar una novedad, el SGA sugiere su gravedad (BAJA, MEDIA o ALTA) con una explicación corta (`POST /api/apartamentos/novedades/sugerir-gravedad`, para personal de servicio y administración). Es solo una ayuda: la gravedad que se guarda la elige siempre la persona. La pantalla dice de dónde salió: **"Sugerencia de IA"** si la dio Gemini o **"Sugerencia local"** si la dieron las reglas por palabras clave (la respuesta lo trae en `origen`: `IA` o `LOCAL`).
+
+Con Gemini, si responde **429** (límite de peticiones) o **503** (saturado), el SGA reintenta **una sola vez tras 1 segundo**. Si vuelve a fallar, o hay cualquier otro error (sin clave, sin red, más de 15 segundos o una respuesta inválida), responde la sugerencia local como respaldo y el motivo queda en el log (`IA: se usa la sugerencia local porque ...`). El formulario nunca se bloquea.
 
 El proveedor se elige con `sga.ia.proveedor` en `application.properties`:
 
 | Valor | Qué hace |
 |---|---|
 | `local` (por defecto) | Reglas por palabras clave, sin internet ni clave. Por ejemplo, gas, fuga, eléctrico o inundación → ALTA. Es el que usan las pruebas. |
-| `gemini` | Le pregunta a Gemini por la API REST de Google AI Studio. Necesita la clave. |
-| `deshabilitado` | Nunca sugiere nada; en el formulario sale "Sugerencia no disponible". |
+| `gemini` | Le pregunta a Gemini por la API REST de Google AI Studio. Necesita la clave. Si Gemini falla, responde el local. |
+| `deshabilitado` | Nunca sugiere nada, ni siquiera la local; en el formulario sale "Sugerencia no disponible". |
 
 **Sacar la clave gratis de Google AI Studio:**
 
@@ -328,7 +358,7 @@ El proveedor se elige con `sga.ia.proveedor` en `application.properties`:
 
 4. Arranca con Gemini: cambia `sga.ia.proveedor=gemini` en `application.properties` o, sin tocar el archivo, `./gradlew bootRun --args='--sga.ia.proveedor=gemini'`.
 
-El modelo (`sga.ia.gemini.modelo`, por defecto `gemini-2.5-flash`), la URL de la API y el tiempo de espera (`sga.ia.gemini.tiempo-espera=PT4S`) también están en `application.properties`. La clave solo va en `application-secrets.properties`; en despliegue se puede pasar con la variable de entorno `SGA_IA_GEMINI_CLAVE`.
+El modelo (`sga.ia.gemini.modelo`, por defecto `gemini-3.8-flash`), la URL de la API y el tiempo de espera de cada consulta (`sga.ia.gemini.tiempo-espera=PT15S`) también están en `application.properties`. La clave solo va en `application-secrets.properties`; en despliegue se puede pasar con la variable de entorno `SGA_IA_GEMINI_CLAVE`.
 
 **Apagar la IA:** pon `sga.ia.proveedor=deshabilitado` en `application.properties` (o arranca con `--sga.ia.proveedor=deshabilitado`). No hace falta borrar la clave.
 
@@ -439,6 +469,8 @@ sga.imagenes.cloudinary.api-secret=tu-api-secret
 
 Luego arranca con `--sga.imagenes.proveedor=cloudinary`. La carpeta de Cloudinary (`sga.imagenes.cloudinary.carpeta=sga/apartamentos`) y el tiempo de espera (`sga.imagenes.cloudinary.tiempo-espera=PT20S`) están en `application.properties`. En despliegue las credenciales van en las variables de entorno `SGA_IMAGENES_CLOUDINARY_CLOUD_NAME`, `SGA_IMAGENES_CLOUDINARY_API_KEY` y `SGA_IMAGENES_CLOUDINARY_API_SECRET`.
 
+**En Render** se usa Cloudinary (`SGA_IMAGENES_PROVEEDOR=cloudinary`): el disco del servidor es efímero y las fotos del almacén local se perderían en cada reinicio o despliegue (ver [Despliegue](#despliegue)).
+
 Las URL de las imágenes deben empezar por `https://`; la única excepción es `http://localhost` o `http://127.0.0.1`, que son las del almacén local con el backend en el propio equipo. Las fotos de los datos iniciales son URL fijas y no dependen del proveedor.
 
 ## Integraciones
@@ -449,7 +481,7 @@ Cada servicio externo entra por un puerto y tiene un adaptador real y uno local,
 |---|---|---|---|---|---|---|
 | Canal externo | `AutenticarCanalUseCase` y `RecibirReservaExternaUseCase` (entrada) | `CanalExternoController` con `CanalCredencialFilter` (credencial en `X-Canal-Credencial`) | El simulador `sga/docs/api/canal-externo.http` y el canal `booking` de los datos iniciales (`sga.canales.credencial-demo`) | No tiene propiedad: el administrador apaga cada canal con `PUT /api/canales/{nombre}/desactivar` | No espera a nadie: el canal llama al SGA y la respuesta es inmediata | 401 o 403 con `ErrorResponse`, 409 `RECHAZADO_CONFLICTO` con el conflicto registrado; todo queda en la bitácora |
 | Notificaciones por correo | `NotificadorTitular` | `NotificadorTitularSmtp` (SMTP de Gmail) | `NotificadorTitularLocal` (en memoria y en el log) | `sga.notificaciones.proveedor` (`smtp` o `local`); los recordatorios se apagan con `sga.recordatorios.activo=false` | `sga.notificaciones.smtp.tiempo-espera=PT5S` | La operación ya quedó guardada: el usuario no ve ningún error y el fallo queda en el log |
-| Modelo de IA | `SugeridorGravedad` | `SugeridorGravedadGemini` (Google AI Studio) | `SugeridorGravedadLocal` (palabras clave); `SugeridorGravedadDeshabilitado` la apaga | `sga.ia.proveedor` (`gemini`, `local` o `deshabilitado`) | `sga.ia.gemini.tiempo-espera=PT4S` | No hay sugerencia: el formulario muestra "Sugerencia no disponible", la novedad se guarda igual y el fallo queda en el log |
+| Modelo de IA | `SugeridorGravedad` | `SugeridorGravedadGemini` (Google AI Studio) | `SugeridorGravedadLocal` (palabras clave); `SugeridorGravedadDeshabilitado` la apaga | `sga.ia.proveedor` (`gemini`, `local` o `deshabilitado`) | `sga.ia.gemini.tiempo-espera=PT15S`, con un reintento tras 1 s ante 429 o 503 | Responde la sugerencia local ("Sugerencia local") y el motivo queda en el log; con `deshabilitado` sale "Sugerencia no disponible". La novedad se guarda igual |
 | Subida de fotos | `AlmacenImagenes` | `AlmacenImagenesCloudinary` (subida firmada a Cloudinary) | `AlmacenImagenesLocal` (disco del servidor, servido en `/api/imagenes/{nombre}`) | `sga.imagenes.proveedor` (`cloudinary` o `local`) | `sga.imagenes.cloudinary.tiempo-espera=PT20S` | `POST /api/imagenes` responde 502; el apartamento se guarda con las demás imágenes y la pantalla avisa |
 | Mostrar las fotos | URL de cada imagen del apartamento (`imagenes`) y de la portada (`frontend/src/lib/imagenes.ts`) | `FotoApartamento` carga la imagen de `res.cloudinary.com` o del backend | El fondo crema con ondas de `FotoApartamento` | No tiene propiedad: basta con que la imagen no cargue | El del navegador | Se muestra el fondo con ondas en lugar de la foto, sin errores en pantalla |
 | Mapa con OpenStreetMap | Latitud y longitud de `GET /api/alojamiento` | `MapaAlojamiento` con Leaflet y los mosaicos de `tile.openstreetmap.org` | La dirección con las coordenadas y el enlace a OpenStreetMap | No tiene propiedad: basta con que el mapa no cargue | 8 segundos (`ESPERA_MAXIMA_MS` en `MapaAlojamiento.tsx`) | Se muestra "El mapa no está disponible en este momento" con la dirección y las coordenadas |
