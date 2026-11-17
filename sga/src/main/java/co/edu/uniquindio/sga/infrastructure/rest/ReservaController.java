@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.application.dto.request.CancelarReservaRequest;
 import co.edu.uniquindio.sga.application.dto.request.ConfirmarReservaRequest;
 import co.edu.uniquindio.sga.application.dto.request.CrearReservaRequest;
 import co.edu.uniquindio.sga.application.dto.request.ModificarReservaRequest;
+import co.edu.uniquindio.sga.application.dto.request.ReglaDocumento;
 import co.edu.uniquindio.sga.application.dto.response.CalendarioOcupacionResponse;
 import co.edu.uniquindio.sga.application.dto.response.ModificacionReservaResponse;
 import co.edu.uniquindio.sga.application.dto.response.PaginaResponse;
@@ -37,6 +38,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -111,15 +114,17 @@ public class ReservaController {
         return ResponseEntity.created(location).body(mapper.aDetalle(reserva));
     }
 
-    /** CU-19. GET /api/reservas?estado=&apartamento=&canal=&titular=&desde=&hasta=&pagina=0 */
+    /** CU-19. GET /api/reservas?estado=&apartamento=&canal=&titular=&desde=&hasta=&buscar=&pagina=0 */
     @GetMapping
     @PreAuthorize("hasAnyAuthority('RECEPCIONISTA', 'ADMINISTRADOR')")
     @Operation(tags = TAG_RESERVAS, summary ="Listar reservas",
             description = "Reservas de la más reciente a la más antigua, 10 por página (7.5, 12.4). Todos los filtros "
-                    + "son opcionales; desde y hasta acotan la fecha de entrada (ambas incluidas) y titular es el "
-                    + "número de documento del titular. La numeración de páginas empieza en 0")
+                    + "son opcionales; desde y hasta acotan la fecha de entrada (ambas incluidas), titular es el "
+                    + "número de documento del titular y buscar encuentra la reserva por una parte de su código o "
+                    + "del nombre del titular, sin distinguir mayúsculas. La numeración de páginas empieza en 0")
     @ApiResponse(responseCode = "200", description = "Página de reservas (puede venir vacía)")
-    @ApiResponse(responseCode = "400", description = "Página negativa, o estado, canal o fecha mal escritos")
+    @ApiResponse(responseCode = "400", description = "Página negativa, buscar de más de 100 caracteres, titular que "
+            + "no tiene de 6 a 10 dígitos, o estado, canal o fecha mal escritos")
     @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
     @ApiResponse(responseCode = "403", description = "El rol no lo permite")
     @ApiResponse(responseCode = "409", description = "La fecha desde es posterior a la fecha hasta")
@@ -127,12 +132,15 @@ public class ReservaController {
             @RequestParam(required = false) EstadoReserva estado,
             @RequestParam(required = false) String apartamento,
             @RequestParam(required = false) CanalOrigen canal,
-            @RequestParam(required = false) String titular,
+            @RequestParam(required = false)
+            @Pattern(regexp = ReglaDocumento.PATRON, message = ReglaDocumento.MENSAJE) String titular,
             @RequestParam(required = false) LocalDate desde,
             @RequestParam(required = false) LocalDate hasta,
+            @RequestParam(required = false)
+            @Size(max = 100, message = "La búsqueda admite máximo 100 caracteres") String buscar,
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "La página no puede ser negativa") int pagina) {
         FiltroReservas filtro = new FiltroReservas(estado, mapper.aIdentificacion(apartamento), canal, titular,
-                desde, hasta);
+                desde, hasta, buscar);
         Pagina<Reserva> reservas = listarReservasUseCase.ejecutar(filtro, pagina);
         return ResponseEntity.ok(PaginaMapper.aResponse(reservas, mapper::aResumen));
     }

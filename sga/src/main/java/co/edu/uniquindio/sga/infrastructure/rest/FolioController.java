@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.infrastructure.rest;
 
 import co.edu.uniquindio.sga.application.dto.request.AutorizarCierreFolioRequest;
+import co.edu.uniquindio.sga.application.dto.request.DevolverDepositoRequest;
 import co.edu.uniquindio.sga.application.dto.request.RegistrarCargoServicioRequest;
 import co.edu.uniquindio.sga.application.dto.request.RegistrarCorreccionRequest;
 import co.edu.uniquindio.sga.application.dto.request.RegistrarPagoRequest;
@@ -8,12 +9,14 @@ import co.edu.uniquindio.sga.application.dto.response.FolioResponse;
 import co.edu.uniquindio.sga.application.usecase.AutorizarCierreFolioUseCase;
 import co.edu.uniquindio.sga.application.usecase.CerrarFolioUseCase;
 import co.edu.uniquindio.sga.application.usecase.ConsultarFolioUseCase;
+import co.edu.uniquindio.sga.application.usecase.DevolverDepositoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarCargoServicioUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarCorreccionFolioUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarPagoUseCase;
 import co.edu.uniquindio.sga.domain.entity.Folio;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
 import co.edu.uniquindio.sga.infrastructure.rest.mapper.FolioMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -51,6 +54,7 @@ public class FolioController {
     private final ConsultarFolioUseCase consultarFolioUseCase;
     private final RegistrarCargoServicioUseCase registrarCargoServicioUseCase;
     private final RegistrarCorreccionFolioUseCase registrarCorreccionFolioUseCase;
+    private final DevolverDepositoUseCase devolverDepositoUseCase;
     private final FolioMapper mapper;
 
     /** GET /api/reservas/{codigo}/folio: el recurso al que apunta la Location de un pago registrado. */
@@ -80,11 +84,12 @@ public class FolioController {
     @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
     @ApiResponse(responseCode = "403", description = "El rol no lo permite")
     @ApiResponse(responseCode = "404", description = "No existe la reserva o su folio")
-    @ApiResponse(responseCode = "409", description = "El folio ya está cerrado")
+    @ApiResponse(responseCode = "409", description = "El folio ya está cerrado o el medio de pago no está aceptado "
+            + "(no existe o está desactivado)")
     public ResponseEntity<FolioResponse> registrarPago(@PathVariable String codigo,
                                                        @Valid @RequestBody RegistrarPagoRequest request) {
         Folio folio = registrarPagoUseCase.ejecutar(new CodigoReserva(codigo), Dinero.de(request.valor()),
-                request.medio());
+                new MedioPago(request.medio()));
         URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/api/reservas/{codigo}/folio")
                 .buildAndExpand(folio.getReserva().valor())
@@ -130,6 +135,28 @@ public class FolioController {
                                                              @Valid @RequestBody RegistrarCorreccionRequest request) {
         Folio folio = registrarCorreccionFolioUseCase.ejecutar(new CodigoReserva(codigo), request.indiceCargo(),
                 request.motivo());
+        return ResponseEntity.created(ubicacionDelFolio(folio)).body(mapper.aResponse(folio));
+    }
+
+    /** RP-02. POST /api/reservas/{codigo}/folio/devolucion-deposito */
+    @PostMapping("/devolucion-deposito")
+    @PreAuthorize("hasAnyAuthority('RECEPCIONISTA', 'ADMINISTRADOR')")
+    @Operation(summary = "Devolver el depósito de garantía",
+            description = "Durante la estancia (reserva EN_CURSO), antes de la salida: asienta el movimiento inverso "
+                    + "del cargo del depósito (RN-16) y registra como devolución al huésped el dinero que ya había "
+                    + "pagado de él, con el medio indicado y la fecha de hoy. El SGA registra la devolución; el "
+                    + "desembolso ocurre fuera. Así el folio puede cerrarse en cero (RN-17). Una sola vez por folio")
+    @ApiResponse(responseCode = "201", description = "Devolución registrada; devuelve el folio con el nuevo saldo y "
+            + "Location apunta al folio")
+    @ApiResponse(responseCode = "400", description = "Falta el medio")
+    @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
+    @ApiResponse(responseCode = "403", description = "El rol no lo permite")
+    @ApiResponse(responseCode = "404", description = "No existe la reserva o su folio")
+    @ApiResponse(responseCode = "409", description = "La reserva no está EN_CURSO, el folio está cerrado, el "
+            + "depósito ya se devolvió o el medio no está aceptado")
+    public ResponseEntity<FolioResponse> devolverDeposito(@PathVariable String codigo,
+                                                          @Valid @RequestBody DevolverDepositoRequest request) {
+        Folio folio = devolverDepositoUseCase.ejecutar(new CodigoReserva(codigo), new MedioPago(request.medio()));
         return ResponseEntity.created(ubicacionDelFolio(folio)).body(mapper.aResponse(folio));
     }
 

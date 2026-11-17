@@ -1,6 +1,8 @@
 package co.edu.uniquindio.sga.application.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 /**
  * CU-07. POST /api/reservas/{codigo}/folio/autorizacion-cierre
@@ -8,9 +10,11 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record AutorizarCierreFolioRequest(
         @NotBlank(message = "Debe indicar quién autoriza el cierre")
+        @Pattern(regexp = ReglaNombre.PATRON, message = ReglaNombre.MENSAJE)
         String autorizadoPor,
 
         @NotBlank(message = "El motivo de la autorización es obligatorio")
+        @Size(max = ReglaTexto.MAXIMO_MOTIVO, message = "El motivo admite máximo 250 caracteres")
         String motivo
 ) {
 }

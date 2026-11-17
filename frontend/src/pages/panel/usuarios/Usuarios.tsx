@@ -122,18 +122,23 @@ export default function Usuarios() {
             filas={consulta.data.contenido}
             claveFila={(u) => String(u.id)}
             tituloTarjeta={(u) => <NombreUsuario usuario={u} esYo={u.id === yo?.id} />}
-            acciones={(u) => (
-              <div className="flex flex-wrap justify-end gap-1">
-                <Button variant="ghost" size="sm" onClick={() => abrir('rol', u)}>
-                  <UserCog aria-hidden="true" /> Cambiar rol
-                </Button>
-                {u.activo && (
-                  <Button variant="ghost" size="sm" className="text-error" onClick={() => abrir('desactivar', u)}>
-                    <UserX aria-hidden="true" /> Desactivar
+            acciones={(u) =>
+              // El administrador no cambia su propio rol ni se desactiva (el backend responde 409)
+              u.id === yo?.id ? (
+                <p className="text-right text-xs text-muted-foreground">Tu cuenta</p>
+              ) : (
+                <div className="flex flex-wrap justify-end gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => abrir('rol', u)}>
+                    <UserCog aria-hidden="true" /> Cambiar rol
                   </Button>
-                )}
-              </div>
-            )}
+                  {u.activo && (
+                    <Button variant="ghost" size="sm" className="text-error" onClick={() => abrir('desactivar', u)}>
+                      <UserX aria-hidden="true" /> Desactivar
+                    </Button>
+                  )}
+                </div>
+              )
+            }
           />
         )}
       </div>
@@ -152,7 +157,7 @@ export default function Usuarios() {
         abierto={dialogo === 'desactivar'}
         alCambiar={(abierto) => !desactivar.isPending && alCambiar(abierto)}
         titulo={`Desactivar a ${elegido?.nombre ?? ''}`}
-        descripcion="No podrá volver a iniciar sesión. Sus datos y sus reservas se conservan. No se puede desactivar a quien tiene reservas pendientes, confirmadas o en curso, ni a uno mismo."
+        descripcion="No podrá volver a iniciar sesión. Sus datos y sus reservas se conservan. No se puede desactivar a quien tiene reservas pendientes, confirmadas o en curso."
         textoConfirmar="Desactivar"
         textoCancelar="Volver"
         peligroso

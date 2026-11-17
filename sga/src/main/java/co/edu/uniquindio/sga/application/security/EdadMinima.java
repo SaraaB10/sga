@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.application.security;
 
-import org.springframework.beans.factory.annotation.Value;
+import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
+import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -10,25 +11,26 @@ import java.util.Objects;
 
 /**
  * Edad mínima para crear una cuenta y para ser titular de una reserva tomada por la recepción: el titular es el
- * responsable del pago. El valor sale de sga.usuarios.edad-minima y la edad se calcula con la fecha de hoy del
- * reloj del SGA (zona horaria de Colombia).
+ * responsable del pago. El valor es un parámetro del alojamiento (lo edita el administrador y rige de inmediato) y la
+ * edad se calcula con la fecha de hoy del reloj del SGA (zona horaria de Colombia).
  */
 @Component
 public class EdadMinima {
 
-    private final int anios;
+    private final AlojamientoRepository alojamientos;
     private final Clock reloj;
 
-    public EdadMinima(@Value("${sga.usuarios.edad-minima}") int anios, Clock reloj) {
-        if (anios < 0) {
-            throw new IllegalArgumentException("sga.usuarios.edad-minima no puede ser negativa");
-        }
-        this.anios = anios;
+    public EdadMinima(AlojamientoRepository alojamientos, Clock reloj) {
+        this.alojamientos = Objects.requireNonNull(alojamientos);
         this.reloj = Objects.requireNonNull(reloj);
     }
 
+    /** Edad mínima vigente, leída del alojamiento en cada consulta */
     public int anios() {
-        return anios;
+        return alojamientos.obtener()
+                .map(a -> a.getEdadMinimaCuenta())
+                .filter(Objects::nonNull)
+                .orElseThrow(() -> new ReglaDominioException("La edad mínima de la cuenta no está configurada"));
     }
 
     /** Fecha de hoy en la zona horaria del alojamiento */
@@ -40,6 +42,6 @@ public class EdadMinima {
     public boolean laCumple(LocalDate fechaNacimiento) {
         LocalDate hoy = hoy();
         return fechaNacimiento != null && !fechaNacimiento.isAfter(hoy)
-                && Period.between(fechaNacimiento, hoy).getYears() >= anios;
+                && Period.between(fechaNacimiento, hoy).getYears() >= anios();
     }
 }

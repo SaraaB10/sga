@@ -13,11 +13,15 @@ import { AvisoError, Campo, Dinero, formatearFecha } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { rangoFiltro, validar } from '@/lib/validacion'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { NOMBRE_MEDIO } from '@/pages/panel/folio/movimientos'
+import { useNombreMedio } from '@/lib/mediosPago'
 import { NOMBRE_CANAL } from '@/pages/huesped/reserva/formato'
 import { BarraPorcentaje } from './BarraPorcentaje'
 import { formatearPorcentaje } from './formato'
+
+// Los reportes piden desde y hasta, ambas incluidas; hasta no va antes de desde
+const esquemaPeriodo = rangoFiltro({ obligatorio: true })
 
 /** Por defecto, el mes en curso completo */
 function periodoInicial(): PeriodoReporte {
@@ -27,9 +31,8 @@ function periodoInicial(): PeriodoReporte {
 
 export default function Reportes() {
   const [periodo, setPeriodo] = useState<PeriodoReporte>(periodoInicial)
-  const completo = !!periodo.desde && !!periodo.hasta
-  const invertido = completo && periodo.desde > periodo.hasta
-  const valido = completo && !invertido
+  // Mientras el periodo tenga errores no se consulta ni se descarga nada
+  const { exito: valido, errores } = validar(esquemaPeriodo, periodo)
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -45,14 +48,14 @@ export default function Reportes() {
 
       {/* ---------- Selector de fechas ---------- */}
       <div className="flex flex-col gap-4 rounded-tarjeta border border-border bg-card p-5 shadow-tarjeta sm:flex-row sm:items-start">
-        <Campo id="reporte-desde" etiqueta="Desde" className="sm:w-52">
+        <Campo id="reporte-desde" etiqueta="Desde" className="sm:w-52" error={errores.desde}>
           <Input type="date" value={periodo.desde} onChange={(e) => setPeriodo({ ...periodo, desde: e.target.value })} />
         </Campo>
         <Campo
           id="reporte-hasta"
           etiqueta="Hasta"
           className="sm:w-52"
-          error={invertido ? 'Debe ser igual o posterior a la fecha desde' : !completo ? 'Elige las dos fechas' : undefined}
+          error={errores.hasta}
         >
           <Input
             type="date"
@@ -84,6 +87,7 @@ function BotonDescargarPdf({ periodo, habilitado }: { periodo: PeriodoReporte; h
   const ingresos = useReporteIngresos(periodo, habilitado)
   const canales = useReporteReservasPorCanal(periodo, habilitado)
   const alojamiento = useAlojamiento()
+  const nombreMedio = useNombreMedio()
   const [generando, setGenerando] = useState(false)
   // Con placeholderData los datos del periodo anterior siguen visibles mientras llegan los nuevos: no se exportan
   const listos =
@@ -106,6 +110,7 @@ function BotonDescargarPdf({ periodo, habilitado }: { periodo: PeriodoReporte; h
         ocupacion: ocupacion.data,
         ingresos: ingresos.data,
         canales: canales.data,
+        nombreMedio,
       })
     } catch {
       toast.error('No se pudo generar el PDF', { description: 'Inténtalo de nuevo.' })
@@ -214,6 +219,7 @@ function TablaOcupacion({ periodo, habilitada }: PropsTabla) {
 
 function TablaIngresos({ periodo, habilitada }: PropsTabla) {
   const reporte = useReporteIngresos(periodo, habilitada)
+  const nombreMedio = useNombreMedio()
   const datos = reporte.data
 
   return (
@@ -239,13 +245,13 @@ function TablaIngresos({ periodo, habilitada }: PropsTabla) {
               <TableBody>
                 {datos.medios.map((m) => (
                   <TableRow key={m.medio}>
-                    <TableCell className="font-medium">{NOMBRE_MEDIO[m.medio]}</TableCell>
+                    <TableCell className="font-medium">{nombreMedio(m.medio)}</TableCell>
                     <TableCell className="text-right tabular-nums">{m.cantidadPagos}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       <Dinero valor={m.total} />
                     </TableCell>
                     <TableCell>
-                      <BarraPorcentaje valor={m.porcentaje} etiqueta={`Participación de ${NOMBRE_MEDIO[m.medio]}`} />
+                      <BarraPorcentaje valor={m.porcentaje} etiqueta={`Participación de ${nombreMedio(m.medio)}`} />
                     </TableCell>
                   </TableRow>
                 ))}

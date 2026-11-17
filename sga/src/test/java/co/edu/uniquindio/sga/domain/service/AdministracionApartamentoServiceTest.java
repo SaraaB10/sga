@@ -5,6 +5,7 @@ import co.edu.uniquindio.sga.domain.entity.Reserva;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.DocumentoIdentidad;
@@ -45,8 +46,8 @@ class AdministracionApartamentoServiceTest {
         Reserva grupoDeUno = reserva(2, new Estancia(HOY.plusDays(30), HOY.plusDays(32)), 1);
 
         ResultadoActualizacionApartamento resultado = administracion.actualizar(EscenarioCoral.APT_101,
-                "Apartamento 101", "Vista al mar", 1, new Dotacion(List.of("Aire acondicionado")), new Capacidad(2),
-                HOY);
+                "Apartamento 101", "Vista al mar", 1, new Dotacion(List.of("Aire acondicionado")),
+                Caracteristicas.ninguna(), new Capacidad(2), HOY);
 
         assertTrue(resultado.tieneAdvertencia());
         assertEquals(List.of(grupoDeTres.getCodigo()), resultado.reservasSobreCapacidad());
@@ -61,10 +62,14 @@ class AdministracionApartamentoServiceTest {
         reserva(1, new Estancia(HOY.plusDays(20), HOY.plusDays(22)), 2);
 
         ResultadoActualizacionApartamento resultado = administracion.actualizar(EscenarioCoral.APT_101,
-                "Coral Luminoso", null, 1, new Dotacion(List.of("Aire acondicionado")), new Capacidad(2), HOY);
+                "Coral Luminoso", null, 1, new Dotacion(List.of("Aire acondicionado")),
+                new Caracteristicas(List.of("Vista al mar", "Balcón")), new Capacidad(2), HOY);
 
         assertFalse(resultado.tieneAdvertencia());
         assertEquals("Coral Luminoso", resultado.apartamento().getNombre());
+        // 7.3: las características se guardan aparte de la dotación
+        assertEquals(List.of("Vista al mar", "Balcón"), resultado.apartamento().getCaracteristicas().elementos());
+        assertEquals(List.of("Aire acondicionado"), resultado.apartamento().getDotacion().elementos());
     }
 
     @Test

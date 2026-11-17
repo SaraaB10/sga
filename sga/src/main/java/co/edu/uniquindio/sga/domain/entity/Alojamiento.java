@@ -3,6 +3,7 @@ package co.edu.uniquindio.sga.domain.entity;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.valueobject.CargoAseoMascota;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
+import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
 import co.edu.uniquindio.sga.domain.valueobject.EstanciaMinima;
 import co.edu.uniquindio.sga.domain.valueobject.Estancia;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
@@ -55,6 +56,10 @@ public class Alojamiento {
     private boolean exigeAnticipo;
     private int porcentajeAnticipo;
     private CargoAseoMascota politicaMascotas;
+    /** RP-02: depósito que se asienta en el folio de toda reserva nueva; null hasta que se configura */
+    private DepositoGarantia depositoGarantia;
+    /** Edad mínima para crear una cuenta y para ser titular de una reserva de recepción; null hasta configurarla */
+    private Integer edadMinimaCuenta;
 
     /** Apartamento es otro agregado: aquí solo se guarda su identificación (L-03, L-04). */
     private final List<IdentificacionApartamento> apartamentos;
@@ -178,6 +183,27 @@ public class Alojamiento {
     public void definirPoliticaMascotas(CargoAseoMascota politica) {
         requerido(politica, "L-16: la política de mascotas es obligatoria");
         this.politicaMascotas = politica;
+    }
+
+    /** RP-02: depósito de garantía (concepto y monto mayor que cero) para los folios de las reservas nuevas. */
+    public void configurarDepositoGarantia(DepositoGarantia deposito) {
+        requerido(deposito, "RP-02: el depósito de garantía es obligatorio");
+        this.depositoGarantia = DepositoGarantia.de(deposito.concepto(), deposito.monto());
+    }
+
+    /** Edad mínima de la cuenta y del titular de una reserva de recepción: entre 0 y 120 años. */
+    public void configurarEdadMinimaCuenta(int anios) {
+        if (anios < 0 || anios > 120) {
+            throw new ReglaDominioException("La edad mínima de la cuenta debe estar entre 0 y 120 años");
+        }
+        this.edadMinimaCuenta = anios;
+    }
+
+    /** Los parámetros de la sección 6, el depósito y la edad mínima de la cuenta ya tienen valor. */
+    public boolean tieneParametrosConfigurados() {
+        return umbralEdadFacturable != null && tiempoPreparacion != null && plazoConfirmacion != null
+                && horaLimiteNoShow != null && horaInicioLlegadaNocturna != null && estanciaMinima != null
+                && depositoGarantia != null && edadMinimaCuenta != null;
     }
 
     /** Anexo A: mínimo 5 apartamentos, temporada base, al menos 2 temporadas adicionales y parámetros definidos. */
@@ -347,6 +373,8 @@ public class Alojamiento {
     public boolean isExigeAnticipo() { return exigeAnticipo; }
     public int getPorcentajeAnticipo() { return porcentajeAnticipo; }
     public CargoAseoMascota getPoliticaMascotas() { return politicaMascotas; }
+    public DepositoGarantia getDepositoGarantia() { return depositoGarantia; }
+    public Integer getEdadMinimaCuenta() { return edadMinimaCuenta; }
     public List<IdentificacionApartamento> getApartamentos() { return Collections.unmodifiableList(apartamentos); }
     public List<Temporada> getTemporadas() { return Collections.unmodifiableList(temporadas); }
     public List<ServicioAdicional> getServiciosAdicionales() { return Collections.unmodifiableList(serviciosAdicionales); }

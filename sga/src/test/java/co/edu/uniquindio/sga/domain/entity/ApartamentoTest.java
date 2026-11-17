@@ -455,12 +455,13 @@ class ApartamentoTest {
     }
 
     @Test
-    @DisplayName("7.3: la URL de la imagen debe empezar con http:// o https://")
-    void rechazarUrlQueNoSeaHttp() {
-        assertDoesNotThrow(() -> new Imagen("http://coral.co/a.jpg", true));
+    @DisplayName("7.3: la URL de la imagen debe empezar con https:// y no tener espacios")
+    void rechazarUrlQueNoSeaHttps() {
         assertDoesNotThrow(() -> new Imagen("https://coral.co/a.jpg", true));
+        assertDoesNotThrow(() -> new Imagen("  https://coral.co/a.jpg ", true));
 
-        for (String url : List.of("ftp://coral.co/a.jpg", "coral.co/a.jpg", "file:///C:/a.jpg", " ")) {
+        for (String url : List.of("http://coral.co/a.jpg", "ftp://coral.co/a.jpg", "coral.co/a.jpg", "file:///C:/a.jpg",
+                " ", "https://", "https://coral.co/una foto.jpg")) {
             ReglaDominioException error = assertThrows(ReglaDominioException.class, () -> new Imagen(url, true));
             assertTrue(error.getMessage().startsWith("7.3"), url);
         }

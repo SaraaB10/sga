@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.domain.entity.Apartamento;
 import co.edu.uniquindio.sga.domain.entity.Bloqueo;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.Imagen;
@@ -35,6 +36,8 @@ public class ApartamentoPersistenceMapper {
         e.setDormitorios(a.getDormitorios());
         e.setCapacidadMaxima(a.getCapacidad().maximo());
         e.setDotacion(new ArrayList<>(a.getDotacion().elementos()));
+        e.setCaracteristicas(new ArrayList<>(a.getCaracteristicas().elementos()));
+        e.setCaracteristicasDefinidas(true);
         e.setImagenes(new ArrayList<>(a.getImagenes().stream()
                 .map(i -> new ImagenEmbedable(i.url(), i.esPrincipal()))
                 .toList()));
@@ -52,7 +55,7 @@ public class ApartamentoPersistenceMapper {
     }
 
     public Apartamento aDominio(ApartamentoEntity e, List<BloqueoEntity> bloqueos) {
-        return Apartamento.reconstruir(
+        Apartamento apartamento = Apartamento.reconstruir(
                 new IdentificacionApartamento(e.getIdentificacion()), e.getNombre(), e.getDescripcion(),
                 e.getDormitorios(), new Capacidad(e.getCapacidadMaxima()), new Dotacion(List.copyOf(e.getDotacion())),
                 e.getImagenes().stream().map(i -> new Imagen(i.getUrl(), i.isEsPrincipal())).toList(),
@@ -65,6 +68,9 @@ public class ApartamentoPersistenceMapper {
                         .map(r -> new RegistroTarifa(r.getIdTemporada(), new Dinero(r.getValorPorOcupante()),
                                 r.getVigenteDesde(), r.getVigenteHasta()))
                         .toList());
+        apartamento.definirCaracteristicas(new Caracteristicas(
+                e.getCaracteristicas() == null ? List.of() : List.copyOf(e.getCaracteristicas())));
+        return apartamento;
     }
 
     //  BLOQUEO

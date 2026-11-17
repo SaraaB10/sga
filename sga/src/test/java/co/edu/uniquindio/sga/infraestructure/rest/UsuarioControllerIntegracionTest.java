@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.infraestructure.rest;
 
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.UsuarioJpaDataRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.entity.UsuarioEntity;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,7 @@ import java.time.ZoneId;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -202,6 +204,54 @@ class UsuarioControllerIntegracionTest {
 
         login(correo(n), "Nueva2027").andExpect(status().isOk());
         login(correo(n), CONTRASENA).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Cambio de contraseña: la nueva igual a la actual responde 400 sobre contrasenaNueva y no cambia nada")
+    void contrasenaNuevaIgualALaActual() throws Exception {
+        int n = SECUENCIA.incrementAndGet();
+        crear(correo(n), documento(n), "HUESPED");
+
+        cambiarContrasena(correo(n), CONTRASENA, CONTRASENA)
+                .andExpect(CuerpoError.validacion("/api/usuarios/me/contrasena",
+                        Map.of("contrasenaNueva", "La contraseña nueva debe ser distinta de la actual")));
+        login(correo(n), CONTRASENA).andExpect(status().isOk());
+
+        // La actual errada se informa primero: no se revela si la nueva coincide con la guardada
+        cambiarContrasena(correo(n), "Errada2026", CONTRASENA)
+                .andExpect(jsonPath("$.mensaje").value("La contraseña actual no es correcta"));
+
+        // Tras cambiarla, la anterior ya no es la actual y vuelve a ser válida como nueva
+        cambiarContrasena(correo(n), CONTRASENA, "Nueva2027").andExpect(status().isNoContent());
+        cambiarContrasena(correo(n), "Nueva2027", "Nueva2027")
+                .andExpect(jsonPath("$.errores.contrasenaNueva")
+                        .value("La contraseña nueva debe ser distinta de la actual"));
+        cambiarContrasena(correo(n), "Nueva2027", CONTRASENA).andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("El administrador no puede desactivarse ni cambiar su propio rol: 409 y su cuenta no cambia")
+    void administradorNoModificaSuPropiaCuenta() throws Exception {
+        int n = SECUENCIA.incrementAndGet();
+        long id = crear(correo(n), documento(n), "ADMINISTRADOR");
+
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/{id}/desactivar", id), "ADMINISTRADOR", correo(n)))
+                .andExpect(CuerpoError.error(HttpStatus.CONFLICT, "El administrador no puede desactivar su propia cuenta",
+                        "/api/usuarios/" + id + "/desactivar"));
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/{id}/rol", id), "ADMINISTRADOR", correo(n))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"rol\":\"HUESPED\"}"))
+                .andExpect(CuerpoError.error(HttpStatus.CONFLICT, "El administrador no puede cambiar su propio rol",
+                        "/api/usuarios/" + id + "/rol"));
+
+        UsuarioEntity cuenta = usuarios.findById(id).orElseThrow();
+        assertTrue(cuenta.isActivo());
+        assertEquals("ADMINISTRADOR", cuenta.getRol().name());
+
+        // Otro administrador sí puede cambiarle el rol
+        mvc.perform(como(MockMvcRequestBuilders.put("/api/usuarios/{id}/rol", id), "ADMINISTRADOR", CORREO_ADMIN)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"rol\":\"RECEPCIONISTA\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rol").value("RECEPCIONISTA"));
     }
 
     @Test

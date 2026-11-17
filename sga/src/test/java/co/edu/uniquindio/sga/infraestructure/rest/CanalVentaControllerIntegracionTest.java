@@ -291,9 +291,9 @@ class CanalVentaControllerIntegracionTest {
         String json = """
                 {"identificadorExterno":"%s","identificacionApartamento":"APT-102","fechaEntrada":"%s",
                  "fechaSalida":"%s",
-                 "titular":{"nombre":"Ana Torres","tipoDocumento":"PASAPORTE","numeroDocumento":"Y7654321",
+                 "titular":{"nombre":"Ana Torres","tipoDocumento":"PASAPORTE","numeroDocumento":"97654321",
                             "email":"ana@correo.com","telefono":"3101234567"},
-                 "ocupantes":[{"nombre":"Ana Torres","tipoDocumento":"PASAPORTE","numeroDocumento":"Y7654321",
+                 "ocupantes":[{"nombre":"Ana Torres","tipoDocumento":"PASAPORTE","numeroDocumento":"97654321",
                                "fechaNacimiento":"1990-06-01"}]}
                 """.formatted(idExterno, entrada, salida);
         return mvc.perform(MockMvcRequestBuilders.post("/api/canales/{canal}/reservas", canal)

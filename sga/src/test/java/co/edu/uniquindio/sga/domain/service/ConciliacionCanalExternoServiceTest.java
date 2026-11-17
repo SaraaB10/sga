@@ -49,7 +49,7 @@ class ConciliacionCanalExternoServiceTest {
         CreacionReservaService creacion = new CreacionReservaService(escenario.reservas, escenario.folios,
                 escenario.apartamentos, escenario.alojamientos, new ServicioAdicionalRepositoryInMemory(),
                 disponibilidad, new CotizadorEstanciaService(escenario.apartamentos, escenario.alojamientos),
-                DepositoGarantia.de("Depósito de garantía", Dinero.de(250_000)), "SRV-RECEPCION-NOCTURNA");
+                "SRV-RECEPCION-NOCTURNA");
         PoliticaCancelacionRepositoryInMemory politicas = new PoliticaCancelacionRepositoryInMemory();
         politicas.guardar(escenario.politica);
         conciliacion = new ConciliacionCanalExternoService(escenario.reservas, escenario.apartamentos, eventos,

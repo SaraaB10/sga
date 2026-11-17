@@ -89,9 +89,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/api/apartamentos",
                                 "/api/apartamentos/disponibles",
+                                "/api/apartamentos/filtros",
                                 "/api/apartamentos/{id}",
                                 "/api/apartamentos/{id}/disponibilidad",
                                 "/api/alojamiento",
+                                "/api/medios-pago",
                                 "/api/politica-cancelacion",
                                 "/api/temporadas",
                                 "/api/temporadas/{id}"

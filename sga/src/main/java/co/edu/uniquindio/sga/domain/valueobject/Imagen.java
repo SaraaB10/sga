@@ -13,8 +13,8 @@ public record Imagen(String url, boolean esPrincipal) {
             throw new ReglaDominioException("7.3: la imagen debe tener una URL");
         }
         url = url.trim();
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            throw new ReglaDominioException("7.3: la URL de la imagen debe empezar con http:// o https://");
+        if (!url.startsWith("https://") || url.length() == "https://".length() || url.chars().anyMatch(Character::isWhitespace)) {
+            throw new ReglaDominioException("7.3: la URL de la imagen debe empezar con https:// y no tener espacios");
         }
     }
 }

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, BedDouble, CalendarCheck, Clock, Dog, ShieldCheck, Users } from 'lucide-react'
-import { useApartamento } from '@/api/publico'
+import { ArrowLeft, BedDouble, CalendarCheck, Check, Clock, CreditCard, Dog, ScrollText, ShieldCheck, Users } from 'lucide-react'
+import { z } from 'zod'
+import { useApartamento, useMediosPago, usePoliticaVigente } from '@/api/publico'
 import { useAuth } from '@/auth/AuthContext'
 import { ROLES_PANEL, tieneAlgunRol } from '@/auth/roles'
 import { AvisoError, Campo, Dinero, Fecha, FotoApartamento, Vacio } from '@/components/coral'
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { fechaOpcional, finDespuesDeInicio, validar } from '@/lib/validacion'
 import { CalendarioDisponibilidad } from './CalendarioDisponibilidad'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { DesgloseCotizacion } from './comun/DesgloseCotizacion'
@@ -20,6 +22,7 @@ import {
   ocupantesParaCotizar,
 } from './comun/estancia'
 import { iconoDotacion } from './comun/iconos'
+import { ListaPolitica } from './comun/ListaPolitica'
 import { MapaAlojamiento } from './MapaAlojamiento'
 import { PildoraTemporada } from './comun/PildoraTemporada'
 import {
@@ -129,6 +132,25 @@ export default function DetalleApartamento() {
             </section>
           )}
 
+          {(apto.caracteristicas ?? []).length > 0 && (
+            <section aria-labelledby="titulo-caracteristicas">
+              <h2 id="titulo-caracteristicas" className="font-titulo text-2xl font-semibold">
+                Características
+              </h2>
+              <ul className="mt-4 flex flex-wrap gap-2">
+                {apto.caracteristicas.map((c) => (
+                  <li
+                    key={c}
+                    className="flex items-center gap-1.5 rounded-full border border-coral/40 bg-crema px-3 py-1.5 text-sm"
+                  >
+                    <Check aria-hidden="true" className="size-4 text-coral" />
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {apto.dotacion.length > 0 && (
             <section aria-labelledby="titulo-dotacion">
               <h2 id="titulo-dotacion" className="font-titulo text-2xl font-semibold">
@@ -231,6 +253,8 @@ export default function DetalleApartamento() {
             </div>
           </section>
 
+          <PoliticaYPagos />
+
           <CalendarioDisponibilidad identificacion={apto.identificacion} />
 
           <MapaAlojamiento />
@@ -249,6 +273,51 @@ const MAXIMO_FOTOS_GALERIA = 5
  * ancho. Desde md: 1 foto ocupa todo; 2 van lado a lado; 3 o más, la principal ocupa la mitad izquierda y las
  * demás se reparten a la derecha en dos filas.
  */
+/** Política de cancelación vigente y, junto a ella, los medios de pago que acepta el alojamiento (L-18) */
+function PoliticaYPagos() {
+  const politica = usePoliticaVigente()
+  const medios = useMediosPago()
+  return (
+    <section aria-labelledby="titulo-politica" className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+      <div className="rounded-tarjeta border border-border bg-card p-4">
+        <h2 id="titulo-politica" className="flex items-center gap-2 text-sm font-semibold">
+          <ScrollText aria-hidden="true" className="size-5 text-coral" /> Política de cancelación
+        </h2>
+        {politica.error ? (
+          <AvisoError className="mt-3" error={politica.error} />
+        ) : !politica.data ? (
+          <Skeleton className="mt-3 h-20" />
+        ) : (
+          <>
+            <ListaPolitica className="mt-3" politica={politica.data} />
+            {politica.data.consecuenciaNoShow && (
+              <p className="mt-3 text-sm text-muted-foreground">Si no te presentas: {politica.data.consecuenciaNoShow}</p>
+            )}
+          </>
+        )}
+      </div>
+      <div className="rounded-tarjeta border border-border bg-card p-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <CreditCard aria-hidden="true" className="size-5 text-coral" /> Medios de pago
+        </h2>
+        {medios.error ? (
+          <AvisoError className="mt-3" error={medios.error} />
+        ) : !medios.data ? (
+          <Skeleton className="mt-3 h-16" />
+        ) : medios.data.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Consulta los medios de pago con recepción.</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-1.5 text-sm" aria-label="Medios de pago aceptados">
+            {medios.data.map((m) => (
+              <li key={m.codigo}>{m.nombre}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function claseCuadricula(total: number): string {
   if (total === 1) return 'grid-cols-1 md:h-[28rem]'
   if (total === 2) return 'grid-cols-2 md:h-[28rem]'
@@ -287,6 +356,17 @@ function RangosTemporada({ temporada }: { temporada: { tipo: string; rangos: { f
 }
 
 /** Tarjeta fija con las fechas, los huéspedes y la cotización noche por noche */
+/*
+ * CotizarEstanciaRequest: la cotización se pide sola cuando las fechas son válidas. Mientras no se escriban no se
+ * marca nada; escritas, la llegada no es pasada y la salida va después de la llegada.
+ */
+const esquemaCotizacion = z
+  .object({
+    entrada: fechaOpcional().refine((f) => !f || f >= hoyISO(), 'La llegada no puede ser en el pasado.'),
+    salida: fechaOpcional(),
+  })
+  .superRefine(finDespuesDeInicio('entrada', 'salida', 'La salida debe ser después de la llegada.'))
+
 function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string; capacidad: number }) {
   const [params] = useSearchParams()
   const inicial = leerEstancia(params)
@@ -303,7 +383,9 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
   const avisoRP01 = avisoEstanciaMinima(entrada, salida, temporadas, reglas)
   const sobreCapacidad = huespedes.length > capacidad
   const sinAdultos = grupoSinAdultos(huespedes, reglas.umbralEdad, entrada)
-  const listo = reglasCargadas && noches > 0 && !avisoRP01 && !sobreCapacidad && !sinAdultos
+  // Mientras las fechas tengan errores no se pide la cotización
+  const { exito: fechasValidas, errores } = validar(esquemaCotizacion, { entrada, salida })
+  const listo = reglasCargadas && fechasValidas && noches > 0 && !avisoRP01 && !sobreCapacidad && !sinAdultos
 
   const cotizacion = useCotizacion(
     listo
@@ -336,7 +418,7 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
         Cotiza tu estancia
       </h2>
       <div className="grid grid-cols-2 gap-3">
-        <Campo id="cotizar-entrada" etiqueta="Llegada">
+        <Campo id="cotizar-entrada" etiqueta="Llegada" error={errores.entrada}>
           <Input
             type="date"
             min={hoyISO()}
@@ -348,7 +430,7 @@ function TarjetaCotizar({ identificacion, capacidad }: { identificacion: string;
             }}
           />
         </Campo>
-        <Campo id="cotizar-salida" etiqueta="Salida">
+        <Campo id="cotizar-salida" etiqueta="Salida" error={errores.salida}>
           <Input
             type="date"
             min={entrada ? sumarDias(entrada, 1) : hoyISO()}

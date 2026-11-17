@@ -17,6 +17,9 @@ public interface ApartamentoJpaDataRepository extends JpaRepository<ApartamentoE
 
     boolean existsByIdentificacion(String identificacion);
 
+    /** Apartamentos guardados antes de que existieran sus características: las completa el cargador de datos */
+    List<ApartamentoEntity> findByCaracteristicasDefinidasIsNull();
+
     List<ApartamentoEntity> findByEliminadoFalseOrderByIdentificacionAsc();
 
     /** CU-20: página de apartamentos no eliminados; el orden llega en el Pageable. */

@@ -9,6 +9,7 @@ import co.edu.uniquindio.sga.application.dto.request.SugerirGravedadRequest;
 import co.edu.uniquindio.sga.application.dto.response.ActualizacionApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDetalleResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoDisponibleResponse;
+import co.edu.uniquindio.sga.application.dto.response.OpcionesFiltroResponse;
 import co.edu.uniquindio.sga.application.dto.response.ApartamentoResponse;
 import co.edu.uniquindio.sga.application.dto.response.BloqueoResponse;
 import co.edu.uniquindio.sga.application.dto.response.DisponibilidadApartamentoResponse;
@@ -25,6 +26,7 @@ import co.edu.uniquindio.sga.application.usecase.ConsultarDisponibilidadApartame
 import co.edu.uniquindio.sga.application.usecase.ConsultarNovedadesUseCase;
 import co.edu.uniquindio.sga.application.usecase.EstadoOperativoApartamentoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarApartamentoUseCase;
+import co.edu.uniquindio.sga.application.usecase.LevantarBloqueoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarBloqueoUseCase;
 import co.edu.uniquindio.sga.application.usecase.RegistrarNovedadUseCase;
 import co.edu.uniquindio.sga.application.usecase.RetirarApartamentoUseCase;
@@ -36,8 +38,10 @@ import co.edu.uniquindio.sga.domain.entity.Novedad;
 import co.edu.uniquindio.sga.domain.repository.Pagina;
 import co.edu.uniquindio.sga.domain.valueobject.ApartamentoDisponible;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.CriterioBusqueda;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.RegistroTarifa;
@@ -81,6 +85,7 @@ public class ApartamentoController {
     private final BuscarApartamentoDisponibleUseCase buscarApartamentoDisponibleUseCase;
     private final RegistrarBloqueoUseCase registrarBloqueoUseCase;
     private final ConsultarBloqueoUseCase consultarBloqueoUseCase;
+    private final LevantarBloqueoUseCase levantarBloqueoUseCase;
     private final EstadoOperativoApartamentoUseCase estadoOperativoUseCase;
     private final RegistrarNovedadUseCase registrarNovedadUseCase;
     private final ConsultarNovedadesUseCase consultarNovedadesUseCase;
@@ -99,9 +104,12 @@ public class ApartamentoController {
     @PreAuthorize("permitAll()")
     @Operation(summary = "Buscar apartamentos disponibles",
             description = "Apartamentos libres en todas las noches de la estancia y con capacidad para el grupo "
-                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, característica de la dotación, "
-                    + "servicios (se repite el parámetro; el apartamento debe ofrecerlos todos según su dotación y "
-                    + "sus características) y rango de precio del valor estimado de la estancia. 10 resultados por página")
+                    + "(RN-01, RN-02, RN-07, RN-20), filtrados por capacidad mínima, número de dormitorios, "
+                    + "característica del apartamento (por ejemplo \"Vista al mar\"), servicios de su dotación (se "
+                    + "repite el parámetro; el apartamento debe ofrecerlos todos) y rango de precio del valor estimado "
+                    + "de la estancia. Las opciones de dormitorios, características y servicios las da "
+                    + "GET /api/apartamentos/filtros. Ordenados primero por la capacidad más cercana al tamaño del "
+                    + "grupo y después por el valor estimado, de menor a mayor. 10 resultados por página")
     @ApiResponse(responseCode = "200", description = "Página de apartamentos disponibles (puede venir vacía)")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
     @ApiResponse(responseCode = "409", description = "Estancia o filtros inválidos (RN-03, RN-04, RP-01, 7.5)")
@@ -115,14 +123,30 @@ public class ApartamentoController {
             @RequestParam(required = false) Long precioMaximo,
             @RequestParam(required = false) String caracteristica,
             @RequestParam(required = false) List<String> servicios,
+            @RequestParam(required = false) Integer dormitorios,
             @RequestParam(defaultValue = "0") @Min(0) int pagina) {
         CriterioBusqueda criterio = new CriterioBusqueda(capacidadMinima,
                 precioMinimo == null ? null : Dinero.de(precioMinimo),
                 precioMaximo == null ? null : Dinero.de(precioMaximo),
-                caracteristica, servicios);
+                caracteristica, servicios, dormitorios);
         Pagina<ApartamentoDisponible> disponibles = buscarApartamentoDisponibleUseCase.buscar(entrada, salida,
                 ocupantes, fechasNacimiento, criterio, pagina);
         return ResponseEntity.ok(PaginaMapper.aResponse(disponibles, mapper::aDisponibleResponse));
+    }
+
+    /** 7.5. GET /api/apartamentos/filtros. Ruta fija declarada antes de /{id} */
+    @GetMapping("/filtros")
+    @PreAuthorize("permitAll()")
+    @Operation(summary = "Opciones de los filtros de búsqueda",
+            description = "Números de dormitorios, características (rasgos del apartamento, por ejemplo \"Vista al "
+                    + "mar\") y servicios (los elementos de su dotación) de los apartamentos activos, sin repetir. Son "
+                    + "las opciones de los filtros dormitorios, caracteristica y servicios de "
+                    + "GET /api/apartamentos/disponibles")
+    @ApiResponse(responseCode = "200", description = "Opciones de los filtros")
+    public ResponseEntity<OpcionesFiltroResponse> opcionesDeFiltro() {
+        ConsultarApartamentosUseCase.OpcionesFiltro opciones = consultarApartamentosUseCase.opcionesDeFiltro();
+        return ResponseEntity.ok(new OpcionesFiltroResponse(opciones.dormitorios(), opciones.caracteristicas(),
+                opciones.servicios()));
     }
 
     /** CU-20. GET /api/apartamentos?pagina= */
@@ -173,22 +197,32 @@ public class ApartamentoController {
 
     /** GET /api/apartamentos/{id}/disponibilidad?desde=&hasta=: calendario público de disponibilidad. */
     @GetMapping("/{id}/disponibilidad")
-    @PreAuthorize("permitAll()")
+    // Público; excluir una reserva solo lo puede hacer el personal o el titular de esa reserva (no revela sus fechas)
+    @PreAuthorize("#excluirReserva == null or hasAnyAuthority('RECEPCIONISTA', 'ADMINISTRADOR') "
+            + "or (hasAuthority('HUESPED') and @propietarioReserva.esTitular(#excluirReserva, authentication))")
     @Operation(summary = "Calendario de disponibilidad de un apartamento",
             description = "Por cada noche entre desde (incluida) y hasta (excluida) dice si está libre para reservar, "
                     + "con las mismas reglas de la búsqueda (bloqueos, reservas activas y tiempo de preparación). "
-                    + "Las noches anteriores a hoy no están libres. No incluye datos de las reservas. Máximo 62 noches")
+                    + "Las noches anteriores a hoy no están libres. No incluye datos de las reservas. Máximo 62 noches. "
+                    + "Con excluirReserva (al modificar una reserva, RN-14) sus noches no cuentan como ocupadas; ese "
+                    + "parámetro solo lo pueden usar la recepción, el administrador o el titular de la reserva")
     @ApiResponse(responseCode = "200", description = "Disponibilidad noche por noche")
     @ApiResponse(responseCode = "400", description = "Falta un parámetro o una fecha está mal escrita")
+    @ApiResponse(responseCode = "403", description = "excluirReserva sin token o de una reserva que no es del usuario")
     @ApiResponse(responseCode = "404", description = "No existe o fue retirado de la venta")
-    @ApiResponse(responseCode = "409", description = "desde no es anterior a hasta o el rango supera 62 noches")
+    @ApiResponse(responseCode = "409", description = "desde no es anterior a hasta, el rango supera 62 noches o el "
+            + "código de reserva está mal formado")
     public ResponseEntity<DisponibilidadApartamentoResponse> disponibilidad(@PathVariable String id,
                                                                             @RequestParam LocalDate desde,
-                                                                            @RequestParam LocalDate hasta) {
+                                                                            @RequestParam LocalDate hasta,
+                                                                            @RequestParam(required = false)
+                                                                            String excluirReserva) {
         IdentificacionApartamento identificacion = new IdentificacionApartamento(id);
+        CodigoReserva excluida = excluirReserva == null || excluirReserva.isBlank() ? null
+                : new CodigoReserva(excluirReserva.trim());
         List<DisponibilidadApartamentoResponse.Noche> noches = consultarDisponibilidadUseCase
-                .ejecutar(identificacion, desde, hasta).stream()
-                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre()))
+                .ejecutar(identificacion, desde, hasta, excluida).stream()
+                .map(noche -> new DisponibilidadApartamentoResponse.Noche(noche.fecha(), noche.libre(), noche.bloqueada()))
                 .toList();
         return ResponseEntity.ok(new DisponibilidadApartamentoResponse(identificacion.codigo(), desde, hasta, noches));
     }
@@ -243,6 +277,23 @@ public class ApartamentoController {
             + "apartamento")
     public ResponseEntity<BloqueoResponse> consultarBloqueo(@PathVariable String id, @PathVariable String idBloqueo) {
         Bloqueo bloqueo = consultarBloqueoUseCase.consultar(new IdentificacionApartamento(id), idBloqueo);
+        return ResponseEntity.ok(mapper.aBloqueoResponse(bloqueo));
+    }
+
+    /** CU-13. PUT /api/apartamentos/{id}/bloqueos/{idBloqueo}/levantar */
+    @PutMapping("/{id}/bloqueos/{idBloqueo}/levantar")
+    @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
+    @Operation(summary = "Levantar un bloqueo",
+            description = "Sus noches vuelven a la venta (RN-07). Eliminación lógica: el bloqueo se conserva como no "
+                    + "vigente, con la fecha en que se levantó")
+    @ApiResponse(responseCode = "200", description = "Bloqueo levantado")
+    @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
+    @ApiResponse(responseCode = "403", description = "El rol no lo permite")
+    @ApiResponse(responseCode = "404", description = "No existe el apartamento, no existe el bloqueo o es de otro "
+            + "apartamento")
+    @ApiResponse(responseCode = "409", description = "El bloqueo ya estaba levantado")
+    public ResponseEntity<BloqueoResponse> levantarBloqueo(@PathVariable String id, @PathVariable String idBloqueo) {
+        Bloqueo bloqueo = levantarBloqueoUseCase.ejecutar(new IdentificacionApartamento(id), idBloqueo);
         return ResponseEntity.ok(mapper.aBloqueoResponse(bloqueo));
     }
 
@@ -391,7 +442,8 @@ public class ApartamentoController {
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
     @Operation(summary = "Registrar un apartamento",
-            description = "Crea el apartamento con datos, dotación, imágenes (1 a 10, una principal) y, opcionalmente, "
+            description = "Crea el apartamento con datos, dotación, características (opcionales), imágenes (1 a 10, "
+                    + "una principal) y, opcionalmente, "
                     + "tarifas por temporada. Nace PREPARADO e INACTIVO hasta que se active (7.3, 7.4)")
     @ApiResponse(responseCode = "201", description = "Apartamento registrado; Location apunta a su detalle")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos")
@@ -403,7 +455,8 @@ public class ApartamentoController {
         Apartamento apartamento = registrarApartamentoUseCase.ejecutar(
                 new IdentificacionApartamento(request.identificacion()), request.nombre(), request.descripcion(),
                 request.dormitorios(), new Capacidad(request.capacidadMaxima()), new Dotacion(request.dotacion()),
-                mapper.aImagenes(request.imagenes()), mapper.aTarifas(request.tarifas()));
+                new Caracteristicas(request.caracteristicas()), mapper.aImagenes(request.imagenes()),
+                mapper.aTarifas(request.tarifas()));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
                 .buildAndExpand(apartamento.getIdentificacion().codigo())
@@ -415,7 +468,8 @@ public class ApartamentoController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
     @Operation(summary = "Actualizar un apartamento",
-            description = "Nombre, descripción, dormitorios, dotación y capacidad. Cambiar la capacidad no afecta las "
+            description = "Nombre, descripción, dormitorios, dotación, características y capacidad. Cambiar la "
+                    + "capacidad no afecta las "
                     + "reservas ya creadas; la respuesta lista las activas o futuras que la superan (7.3)")
     @ApiResponse(responseCode = "200", description = "Apartamento actualizado, con la advertencia de capacidad")
     @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos")
@@ -427,7 +481,8 @@ public class ApartamentoController {
             @PathVariable String id, @Valid @RequestBody ActualizarApartamentoRequest request) {
         ResultadoActualizacionApartamento resultado = actualizarApartamentoUseCase.ejecutar(
                 new IdentificacionApartamento(id), request.nombre(), request.descripcion(), request.dormitorios(),
-                new Dotacion(request.dotacion()), new Capacidad(request.capacidadMaxima()));
+                new Dotacion(request.dotacion()), new Caracteristicas(request.caracteristicas()),
+                new Capacidad(request.capacidadMaxima()));
         return ResponseEntity.ok(mapper.aActualizacionResponse(resultado));
     }
 

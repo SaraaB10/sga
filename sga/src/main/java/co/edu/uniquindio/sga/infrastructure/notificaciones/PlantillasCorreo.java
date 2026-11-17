@@ -10,6 +10,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Textos en español de los correos al titular (7.8). Los usan todos los adaptadores del puerto NotificadorTitular,
@@ -23,18 +24,29 @@ public class PlantillasCorreo {
     private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
 
     private final String nombreAlojamiento;
-    private final LocalTime horaEntrada;
-    private final LocalTime horaSalida;
+    private final Supplier<LocalTime> horaEntrada;
+    private final Supplier<LocalTime> horaSalida;
 
     /**
      * @param nombreAlojamiento firma de los correos, por ejemplo "Apartahotel Coral".
-     * @param horaEntrada       desde qué hora se recibe a los huéspedes (para el recordatorio de llegada).
+     * @param horaEntrada       desde qué hora se recibe a los huéspedes (para el recordatorio de llegada). Se lee en
+     *                          cada correo: el administrador puede cambiar el horario sin reiniciar.
      * @param horaSalida        hasta qué hora se entrega el apartamento (para el recordatorio de salida).
      */
-    public PlantillasCorreo(String nombreAlojamiento, LocalTime horaEntrada, LocalTime horaSalida) {
+    public PlantillasCorreo(String nombreAlojamiento, Supplier<LocalTime> horaEntrada, Supplier<LocalTime> horaSalida) {
         this.nombreAlojamiento = Objects.requireNonNull(nombreAlojamiento);
         this.horaEntrada = Objects.requireNonNull(horaEntrada);
         this.horaSalida = Objects.requireNonNull(horaSalida);
+    }
+
+    /** Horario fijo (pruebas y usos sin alojamiento guardado) */
+    public PlantillasCorreo(String nombreAlojamiento, LocalTime horaEntrada, LocalTime horaSalida) {
+        this(nombreAlojamiento, constante(horaEntrada), constante(horaSalida));
+    }
+
+    private static Supplier<LocalTime> constante(LocalTime hora) {
+        Objects.requireNonNull(hora);
+        return () -> hora;
     }
 
     public MensajeCorreo reservaCreada(Reserva reserva) {
@@ -54,8 +66,8 @@ public class PlantillasCorreo {
                 + "¡Tu reserva está CONFIRMADA! Te esperamos.\n\n"
                 + detalle(reserva)
                 + llegada
-                + "\nLa entrada es desde las " + horaEntrada.format(HORA) + " y la salida hasta las "
-                + horaSalida.format(HORA) + ".\n"
+                + "\nLa entrada es desde las " + horaEntrada.get().format(HORA) + " y la salida hasta las "
+                + horaSalida.get().format(HORA) + ".\n"
                 + despedida();
         return new MensajeCorreo("RESERVA_CONFIRMADA", destinatario(reserva),
                 "Tu reserva " + reserva.getCodigo().valor() + " está confirmada", cuerpo);
@@ -84,9 +96,9 @@ public class PlantillasCorreo {
         LocalDate fecha = llegada ? reserva.getEstancia().fechaEntrada() : reserva.getEstancia().fechaSalida();
         String aviso = llegada
                 ? "Te recordamos que mañana, " + fecha(fecha) + ", es tu llegada. La entrada es desde las "
-                + horaEntrada.format(HORA) + ". Si cambia tu hora de llegada, avísale a recepción."
+                + horaEntrada.get().format(HORA) + ". Si cambia tu hora de llegada, avísale a recepción."
                 : "Te recordamos que mañana, " + fecha(fecha) + ", termina tu estancia. La salida es hasta las "
-                + horaSalida.format(HORA) + " y el folio debe quedar a paz y salvo antes de entregar el apartamento.";
+                + horaSalida.get().format(HORA) + " y el folio debe quedar a paz y salvo antes de entregar el apartamento.";
         String cuerpo = saludo(reserva)
                 + aviso + "\n\n"
                 + detalle(reserva)

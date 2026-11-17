@@ -21,7 +21,12 @@ public interface UsuarioService {
 
     UsuarioResponse consultar(Long id);
 
-    UsuarioResponse cambiarRol(Long id, CambioRolRequest request);
+    /**
+     * Cambia el rol de otro usuario. 409 si el administrador intenta cambiar el suyo.
+     *
+     * @param correoSolicitante sub del token del administrador: no puede cambiar su propio rol
+     */
+    UsuarioResponse cambiarRol(Long id, CambioRolRequest request, String correoSolicitante);
 
     /**
      * Eliminación lógica (activo = false). No borra al titular ni sus reservas.

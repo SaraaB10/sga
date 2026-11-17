@@ -16,6 +16,7 @@ public record ApartamentoResponse(
         int dormitorios,
         int capacidadMaxima,
         List<String> dotacion,
+        List<String> caracteristicas,         // rasgos del apartamento (vista al mar, balcón...), aparte de la dotación
         List<String> imagenes,
         EstadoOperativo estadoOperativo
 ) {

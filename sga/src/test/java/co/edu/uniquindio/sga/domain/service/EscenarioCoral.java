@@ -8,6 +8,7 @@ import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
+import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.DocumentoIdentidad;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
@@ -69,6 +70,8 @@ final class EscenarioCoral {
         alojamiento.configurarParametros(new UmbralEdadFacturable(6), new TiempoPreparacion(3),
                 new PlazoConfirmacion(12), LocalTime.of(22, 0), LocalTime.of(20, 0), new EstanciaMinima(2, true),
                 true, 50);
+        alojamiento.configurarDepositoGarantia(DepositoGarantia.de("Depósito de garantía", Dinero.de(250_000)));
+        alojamiento.configurarEdadMinimaCuenta(18);
         alojamiento.agregarTemporada(Temporada.crearBase("T-BASE", "Base"));
         alojamiento.agregarTemporada(Temporada.crear("T-ALTA", "Alta", TipoTemporada.ALTA,
                 List.of(new RangoFechas(LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 15)))));

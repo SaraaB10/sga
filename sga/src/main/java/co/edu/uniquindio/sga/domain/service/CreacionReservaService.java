@@ -48,20 +48,19 @@ public class CreacionReservaService {
     private final ServicioAdicionalRepository servicioAdicionalRepository;
     private final DisponibilidadApartamentoService disponibilidadService;
     private final CotizadorEstanciaService cotizadorService;
-    private final DepositoGarantia depositoGarantia;
     private final String idServicioRecepcionNocturna;
 
     /**
-     * @param depositoGarantia            RP-02, configurable ($250.000 en el Anexo A).
-     * @param idServicioRecepcionNocturna id del ServicioAdicional que cobra el recargo de RP-03 ($70.000).
+     * El depósito de garantía (RP-02) se lee del alojamiento en cada reserva: cambiarlo no exige reiniciar.
+     *
+     * @param idServicioRecepcionNocturna id del ServicioAdicional que cobra el recargo de RP-03.
      */
     public CreacionReservaService(ReservaRepository reservaRepository, FolioRepository folioRepository,
                                   ApartamentoRepository apartamentoRepository,
                                   AlojamientoRepository alojamientoRepository,
                                   ServicioAdicionalRepository servicioAdicionalRepository,
                                   DisponibilidadApartamentoService disponibilidadService,
-                                  CotizadorEstanciaService cotizadorService,
-                                  DepositoGarantia depositoGarantia, String idServicioRecepcionNocturna) {
+                                  CotizadorEstanciaService cotizadorService, String idServicioRecepcionNocturna) {
         this.reservaRepository = Objects.requireNonNull(reservaRepository);
         this.folioRepository = Objects.requireNonNull(folioRepository);
         this.apartamentoRepository = Objects.requireNonNull(apartamentoRepository);
@@ -69,10 +68,6 @@ public class CreacionReservaService {
         this.servicioAdicionalRepository = Objects.requireNonNull(servicioAdicionalRepository);
         this.disponibilidadService = Objects.requireNonNull(disponibilidadService);
         this.cotizadorService = Objects.requireNonNull(cotizadorService);
-        if (depositoGarantia == null) {
-            throw new ReglaDominioException("RP-02: El depósito de garantía debe estar configurado");
-        }
-        this.depositoGarantia = depositoGarantia;
         this.idServicioRecepcionNocturna = idServicioRecepcionNocturna;
     }
 
@@ -160,6 +155,10 @@ public class CreacionReservaService {
                 nombreCanalExterno, identificadorExterno, horaLlegada, vigente, mascotasDelGrupo, politica,
                 alojamiento.getUmbralEdadFacturable(), ahora);
 
+        DepositoGarantia depositoGarantia = alojamiento.getDepositoGarantia();
+        if (depositoGarantia == null) {
+            throw new ReglaDominioException("RP-02: El depósito de garantía debe estar configurado");
+        }
         LocalDate hoy = ahora.toLocalDate();
         Cargo cargoAlojamiento = new Cargo(TipoCargo.ALOJAMIENTO,
                 "Alojamiento " + estancia.noches() + " noches en " + aptoId.codigo(), vigente.valorTotal(), hoy);

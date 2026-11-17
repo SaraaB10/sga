@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Banknote, CircleCheckBig, Lock, PackagePlus, ShieldCheck, Undo2 } from 'lucide-react'
+import { ArrowLeft, Banknote, CircleCheckBig, HandCoins, Lock, PackagePlus, ShieldCheck, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAlojamiento, useApartamento } from '@/api/publico'
 import { useFolio, useReserva, type FolioResponse } from '@/api/reservas'
@@ -18,17 +18,20 @@ import {
 } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useNombreMedio } from '@/lib/mediosPago'
 import { cn } from '@/lib/utils'
+import { anticipoPendiente, reglasDe, type AnticipoPendiente } from '@/pages/publico/comun/reglas'
 import { DialogoAutorizarCierre } from './DialogoAutorizarCierre'
-import { DialogoCorreccion, DialogoPago, DialogoServicio } from './DialogosFolio'
+import { DialogoCorreccion, DialogoDevolverDeposito, DialogoPago, DialogoServicio } from './DialogosFolio'
 import { cargosCorregibles, movimientosDe, type ClaseMovimiento, type Movimiento } from './movimientos'
 
-type Dialogo = 'pago' | 'servicio' | 'correccion' | 'cerrar' | 'autorizar' | null
+type Dialogo = 'pago' | 'servicio' | 'correccion' | 'deposito' | 'cerrar' | 'autorizar' | null
 
 const ESTILO_CLASE: Record<ClaseMovimiento, { fondo: string; texto: string; etiqueta: string }> = {
   cargo: { fondo: '#F7E7E1', texto: '#57434F', etiqueta: 'Cargo' },
   correccion: { fondo: '#FFF1C2', texto: '#6B4800', etiqueta: 'Corrección' },
   pago: { fondo: '#DDF2EA', texto: '#1C5E45', etiqueta: 'Pago' },
+  devolucion: { fondo: '#E2ECF8', texto: '#1F4470', etiqueta: 'Devolución' },
 }
 
 export default function Folio() {
@@ -38,6 +41,7 @@ export default function Folio() {
   const apartamento = useApartamento(reserva.data?.identificacionApartamento)
   const alojamiento = useAlojamiento()
   const { roles, usuario } = useAuth()
+  const nombreMedio = useNombreMedio()
   const esAdministrador = roles.includes('ADMINISTRADOR')
   const cerrar = useCerrarFolio(codigo)
 
@@ -80,9 +84,12 @@ export default function Folio() {
   }
 
   const r = reserva.data
-  const movimientos = movimientosDe(f)
+  const movimientos = movimientosDe(f, nombreMedio)
+  const anticipo = f.cerrado ? null : anticipoPendiente(r?.estado, r?.valorTotal, f.totalPagado, reglasDe(alojamiento.data))
   const corregibles = cargosCorregibles(movimientos)
   const abierto = !f.cerrado
+  // RP-02: el depósito se devuelve durante la estancia, antes de registrar la salida
+  const puedeDevolverDeposito = abierto && f.depositoGarantia > 0 && !f.depositoReembolsado && r?.estado === 'EN_CURSO'
 
   const columnas: ColumnaTabla<Movimiento>[] = [
     { clave: 'numero', titulo: 'N.º', celda: (m) => <span className="font-mono text-xs">{m.numero}</span>, ocultarEnTarjeta: true },
@@ -193,6 +200,7 @@ export default function Folio() {
         {/* ---------- Saldo y acciones ---------- */}
         <aside className="order-1 flex flex-col gap-4 2xl:order-2">
           <Saldo folio={f} />
+          {anticipo && <TarjetaAnticipo anticipo={anticipo} />}
 
           {abierto ? (
             <div className="grid grid-cols-2 gap-2 2xl:grid-cols-1">
@@ -212,6 +220,11 @@ export default function Folio() {
               >
                 <Undo2 aria-hidden="true" /> Corregir un cargo
               </Button>
+              {puedeDevolverDeposito && (
+                <Button variant="outline" onClick={() => setDialogo('deposito')}>
+                  <HandCoins aria-hidden="true" /> Devolver depósito
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setDialogo('cerrar')}>
                 <CircleCheckBig aria-hidden="true" /> Cerrar folio
               </Button>
@@ -226,6 +239,11 @@ export default function Folio() {
                   {esAdministrador ? ' Con saldo, autoriza el cierre indicando el motivo.' : ''}
                 </p>
               )}
+              {puedeDevolverDeposito && (
+                <p className="col-span-2 text-xs text-muted-foreground 2xl:col-span-1">
+                  Antes de cerrar, devuelve el depósito de garantía al huésped.
+                </p>
+              )}
             </div>
           ) : (
             <CierreFolio folio={f} />
@@ -234,7 +252,13 @@ export default function Folio() {
       </div>
 
       {/* ---------- Diálogos ---------- */}
-      <DialogoPago codigo={codigo} saldo={f.saldo} abierto={dialogo === 'pago'} alCambiar={alCambiar} />
+      <DialogoPago
+        codigo={codigo}
+        saldo={f.saldo}
+        anticipo={anticipo}
+        abierto={dialogo === 'pago'}
+        alCambiar={alCambiar}
+      />
       <DialogoServicio
         codigo={codigo}
         servicios={alojamiento.data?.serviciosAdicionales}
@@ -247,6 +271,13 @@ export default function Folio() {
         cargos={corregibles}
         indiceInicial={indiceACorregir}
         abierto={dialogo === 'correccion'}
+        alCambiar={alCambiar}
+      />
+      <DialogoDevolverDeposito
+        codigo={codigo}
+        saldo={f.saldo}
+        deposito={f.depositoGarantia}
+        abierto={dialogo === 'deposito'}
         alCambiar={alCambiar}
       />
       {esAdministrador && (
@@ -307,6 +338,17 @@ function PildoraMovimiento({ movimiento }: { movimiento: Movimiento }) {
 }
 
 function ConceptoMovimiento({ movimiento: m }: { movimiento: Movimiento }) {
+  if (m.clase === 'devolucion') {
+    return (
+      <span className="flex flex-col gap-0.5">
+        <span className="inline-flex items-center gap-1">
+          <HandCoins aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          {m.corrige ? `Devolución de ${m.concepto} (${m.corrige})` : m.concepto}
+        </span>
+        {m.motivo && <span className="text-xs text-muted-foreground">{m.motivo}</span>}
+      </span>
+    )
+  }
   if (m.clase === 'correccion') {
     return (
       <span className="flex flex-col gap-0.5">
@@ -323,6 +365,34 @@ function ConceptoMovimiento({ movimiento: m }: { movimiento: Movimiento }) {
       <span>{m.concepto}</span>
       {m.corregidoPor && <span className="text-xs text-muted-foreground">Corregido por {m.corregidoPor}</span>}
     </span>
+  )
+}
+
+/** L-11: cuánto falta para el anticipo que confirma la reserva PENDIENTE */
+function TarjetaAnticipo({ anticipo }: { anticipo: AnticipoPendiente }) {
+  const cubierto = anticipo.falta === 0
+  return (
+    <div
+      role="status"
+      aria-label="Anticipo para confirmar"
+      className={cn(
+        'flex flex-col gap-1.5 rounded-tarjeta border p-4 text-sm',
+        cubierto ? 'border-[#9fd4bd] bg-[#DDF2EA] text-[#1C5E45]' : 'border-[#f0c987] bg-[#FFF4DF] text-[#6B4A0B]',
+      )}
+    >
+      <p className="font-semibold">
+        Anticipo para confirmar ({anticipo.porcentaje} %): <Dinero valor={anticipo.valor} />
+      </p>
+      <p>
+        {cubierto ? (
+          'Cubierto: ya se puede confirmar la reserva.'
+        ) : (
+          <>
+            Falta <Dinero valor={anticipo.falta} /> para cubrirlo.
+          </>
+        )}
+      </p>
+    </div>
   )
 }
 
@@ -348,8 +418,9 @@ function Saldo({ folio }: { folio: FolioResponse }) {
         {folio.depositoGarantia > 0 && (
           <div className="flex justify-between gap-3">
             <dt className="text-muted-foreground">Depósito de garantía</dt>
-            <dd>
+            <dd className="text-right">
               <Dinero valor={folio.depositoGarantia} />
+              {folio.depositoReembolsado && <span className="block text-xs text-muted-foreground">Devuelto</span>}
             </dd>
           </div>
         )}

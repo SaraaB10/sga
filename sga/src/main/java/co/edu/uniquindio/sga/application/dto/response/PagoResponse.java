@@ -1,13 +1,17 @@
 package co.edu.uniquindio.sga.application.dto.response;
 
-import co.edu.uniquindio.sga.domain.valueobject.MedioPago;
-
 import java.time.LocalDate;
 
-/** Un pago registrado en el folio con su medio y su fecha (RN-15). El valor va en pesos enteros. */
+/**
+ * Un movimiento de dinero del folio con su medio y su fecha (RN-15). El valor va en pesos enteros y el medio, como su
+ * código (el nombre está en GET /api/medios-pago).
+ *
+ * @param devolucion true si es dinero devuelto al huésped (el depósito de garantía, RP-02): resta del total pagado.
+ */
 public record PagoResponse(
         long valor,
-        MedioPago medio,
-        LocalDate fecha
+        String medio,
+        LocalDate fecha,
+        boolean devolucion
 ) {
 }

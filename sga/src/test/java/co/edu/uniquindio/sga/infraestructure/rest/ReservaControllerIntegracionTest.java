@@ -293,6 +293,47 @@ class ReservaControllerIntegracionTest {
         get("/api/reservas?pagina=-1").andExpect(status().isBadRequest());
     }
 
+    @Test
+    @DisplayName("CU-19: buscar encuentra por una parte del nombre del titular, sin distinguir mayúsculas")
+    void listarBuscaPorNombreDelTitular() throws Exception {
+        get("/api/reservas?buscar=EMILY joh")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contenido", not(empty())))
+                .andExpect(jsonPath("$.contenido[*].nombreTitular", everyItem(is("Emily Johnson"))));
+    }
+
+    @Test
+    @DisplayName("CU-19: buscar encuentra una reserva por su código, también escrito en minúsculas")
+    void listarBuscaPorCodigo() throws Exception {
+        String codigo = JsonPath.read(get("/api/reservas?estado=CANCELADA").andReturn().getResponse()
+                .getContentAsString(), "$.contenido[0].codigo");
+
+        get("/api/reservas?buscar=" + codigo.toLowerCase())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1))
+                .andExpect(jsonPath("$.contenido[0].codigo").value(codigo));
+    }
+
+    @Test
+    @DisplayName("CU-19: en buscar, % y _ son texto, no comodines; sin coincidencias la página viene vacía")
+    void listarBuscaSinComodines() throws Exception {
+        get("/api/reservas?buscar=%25")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contenido", empty()))
+                .andExpect(jsonPath("$.totalElementos").value(0));
+        get("/api/reservas?buscar=_")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(0));
+    }
+
+    @Test
+    @DisplayName("CU-19, 400: buscar admite máximo 100 caracteres")
+    void listarConBusquedaMuyLargaResponde400() throws Exception {
+        get("/api/reservas?buscar=" + "a".repeat(101))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.buscar").value("La búsqueda admite máximo 100 caracteres"));
+    }
+
 
     /** POST /api/reservas que debe responder 201 con el header Location. */
     private ResultActions crear(String apartamento, LocalDate entrada, LocalDate salida, String hora, String canal)

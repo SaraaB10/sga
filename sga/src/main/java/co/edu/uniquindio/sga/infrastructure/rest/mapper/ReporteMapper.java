@@ -27,7 +27,7 @@ public class ReporteMapper {
         return new ReporteIngresosResponse(reporte.desde(), reporte.hasta(), pesos(reporte.total()),
                 reporte.cantidadPagos(),
                 reporte.medios().stream()
-                        .map(m -> new ReporteIngresosResponse.Medio(m.medio(), m.cantidadPagos(), pesos(m.total()),
+                        .map(m -> new ReporteIngresosResponse.Medio(m.medio().codigo(), m.cantidadPagos(), pesos(m.total()),
                                 m.porcentaje()))
                         .toList());
     }

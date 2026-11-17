@@ -104,7 +104,7 @@ export default function InicioRecepcion() {
       alCambiarPagina: irAPagina('salidas'),
       vacio: {
         titulo: 'No hay salidas este día',
-        descripcion: textoReserva('La próxima salida', proximaSalida, 'fechaSalida') ?? 'No hay huéspedes en casa.',
+        descripcion: textoReserva('La próxima salida', proximaSalida, 'fechaSalida') ?? 'No hay huéspedes hospedados.',
       },
     },
     'en-casa': {
@@ -112,7 +112,7 @@ export default function InicioRecepcion() {
       pagina: paginas['en-casa'],
       alCambiarPagina: irAPagina('en-casa'),
       vacio: {
-        titulo: 'No hay huéspedes en casa',
+        titulo: 'No hay huéspedes hospedados',
         descripcion: textoReserva('La próxima llegada', proximaLlegada, 'fechaEntrada'),
       },
     },
@@ -153,8 +153,8 @@ export default function InicioRecepcion() {
 
       {/* b) Franja de indicadores */}
       <dl className="grid grid-cols-5 divide-x divide-border rounded-tarjeta border border-border bg-card py-3 shadow-tarjeta">
-        <Indicador etiqueta="En casa" valor={enCursoTodas.data?.length} detalle={aLaVenta ? `/${aLaVenta}` : undefined}
-          titulo={aLaVenta ? `Huéspedes en casa, de ${aLaVenta} apartamentos a la venta` : undefined} />
+        <Indicador etiqueta="Hospedados" valor={enCursoTodas.data?.length} detalle={aLaVenta ? `/${aLaVenta}` : undefined}
+          titulo={aLaVenta ? `Apartamentos con huéspedes hospedados, de ${aLaVenta} a la venta` : undefined} />
         <Indicador etiqueta="Llegadas" valor={llegadas.data?.totalElementos} />
         <Indicador etiqueta="Salidas" valor={salidas.data?.totalElementos} />
         <Indicador etiqueta="Por confirmar" valor={porConfirmar.data?.totalElementos} />

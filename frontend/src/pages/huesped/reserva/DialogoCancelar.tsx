@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { z } from 'zod'
 import { usePoliticaVigente } from '@/api/publico'
 import { useCancelarReserva, type ReservaDetalleResponse, type RetencionResponse } from '@/api/reservas'
 import { AvisoError, ConfirmarDialogo, Dinero } from '@/components/coral'
 import { Label } from '@/components/ui/label'
+import { erroresDelServidor, esErrorDeCampos, MAXIMO_MOTIVO, textoObligatorio, useValidacion } from '@/lib/validacion'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 import { retencionEstimada } from '@/pages/publico/comun/reglas'
 
@@ -13,26 +15,30 @@ interface Props {
   alCancelar: (resultado: RetencionResponse) => void
 }
 
+// CancelarReservaRequest: el motivo es obligatorio
+const esquema = z.object({
+  motivo: textoObligatorio('Escribe el motivo de la cancelación.', MAXIMO_MOTIVO, 'El motivo admite máximo 250 caracteres'),
+})
+
 /** Pide el motivo y muestra la retención estimada antes de cancelar */
 export function DialogoCancelar({ reserva, abierto, alCambiar, alCancelar }: Props) {
   const politica = usePoliticaVigente()
   const cancelar = useCancelarReserva(reserva.codigo)
   const [motivo, setMotivo] = useState('')
-  const [errorMotivo, setErrorMotivo] = useState<string>()
+  const validacion = useValidacion(esquema, { motivo })
+  const errorMotivo = validacion.errores.motivo ?? erroresDelServidor(cancelar.error).motivo
 
   const estimada = retencionEstimada(politica.data, reserva.valorTotal, reserva.fechaEntrada)
   const otraVersion = politica.data && politica.data.version !== reserva.versionPoliticaCancelacion
 
   const confirmar = () => {
-    if (!motivo.trim()) {
-      setErrorMotivo('Escribe el motivo de la cancelación.')
-      return
-    }
-    setErrorMotivo(undefined)
-    cancelar.mutate(motivo.trim(), {
+    const limpios = validacion.comprobar()
+    if (!limpios) return
+    cancelar.mutate(limpios.motivo, {
       onSuccess: (resultado) => {
         alCambiar(false)
         setMotivo('')
+        validacion.reiniciar()
         alCancelar(resultado)
       },
     })
@@ -42,7 +48,10 @@ export function DialogoCancelar({ reserva, abierto, alCambiar, alCancelar }: Pro
     <ConfirmarDialogo
       abierto={abierto}
       alCambiar={(a) => {
-        if (!a) cancelar.reset()
+        if (!a) {
+          cancelar.reset()
+          validacion.reiniciar()
+        }
         alCambiar(a)
       }}
       titulo={`Cancelar ${reserva.codigo}`}
@@ -95,7 +104,7 @@ export function DialogoCancelar({ reserva, abierto, alCambiar, alCancelar }: Pro
             </p>
           )}
         </div>
-        {cancelar.error && <AvisoError error={cancelar.error} />}
+        {cancelar.error && !esErrorDeCampos(cancelar.error) && <AvisoError error={cancelar.error} />}
       </div>
     </ConfirmarDialogo>
   )

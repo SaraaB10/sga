@@ -25,7 +25,7 @@ export default function ListadoApartamentos() {
   const consulta = useApartamentos(pagina)
   const filas = consulta.data?.contenido ?? []
   const detalles = useDetallesApartamentos(filas.map((a) => a.identificacion))
-  const activo = (id: string) => detalles[filas.findIndex((a) => a.identificacion === id)]?.data?.activo
+  const detalle = (id: string) => detalles[filas.findIndex((a) => a.identificacion === id)]?.data
 
   const columnas: ColumnaTabla<ApartamentoResponse>[] = [
     {
@@ -62,7 +62,7 @@ export default function ListadoApartamentos() {
     {
       clave: 'venta',
       titulo: 'Venta',
-      celda: (a) => <EtiquetaActivo activo={activo(a.identificacion)} />,
+      celda: (a) => <EtiquetaActivo apartamento={detalle(a.identificacion)} />,
     },
   ]
 

@@ -1,16 +1,27 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { useRegistrarCargoServicio, useRegistrarCorreccion, useRegistrarPago } from '@/api/folio'
+import { z } from 'zod'
+import { useDevolverDeposito, useRegistrarCargoServicio, useRegistrarCorreccion, useRegistrarPago } from '@/api/folio'
+import { useMediosPago } from '@/api/publico'
 import type { MedioPago } from '@/api/reservas'
 import type { ServicioAdicionalResponse } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, formatearDinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { aPesos } from '@/pages/panel/apartamentos/utilidades'
+import {
+  aPesos,
+  erroresDelServidor,
+  MAXIMO_MOTIVO,
+  pesos,
+  textoObligatorio,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { claseSelect, claseTextarea } from '@/pages/publico/comun/estilos'
+import type { AnticipoPendiente } from '@/pages/publico/comun/reglas'
 import { DialogoFormulario } from './DialogoFormulario'
 import { erroresDe } from './erroresDe'
-import { NOMBRE_MEDIO, type Movimiento } from './movimientos'
+import { type Movimiento } from './movimientos'
 import { useAlAbrir } from './useAlAbrir'
 
 export interface BaseDialogoFolio {
@@ -21,33 +32,49 @@ export interface BaseDialogoFolio {
 
 // ---------- Registrar pago ----------
 
-const MEDIOS: MedioPago[] = ['TARJETA_DEBITO_CREDITO', 'TRANSFERENCIA_BANCARIA']
+// RegistrarPagoRequest: valor positivo en pesos enteros y uno de los medios activos del catálogo (L-18)
+function esquemaPago(activos: MedioPago[]) {
+  return z.object({
+    valor: pesos('El valor del pago debe ser mayor que cero, sin decimales'),
+    medio: z.string().refine((m) => activos.includes(m), 'Elige el medio de pago'),
+  })
+}
 
-export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFolio & { saldo: number }) {
+export function DialogoPago({
+  codigo,
+  saldo,
+  anticipo,
+  abierto,
+  alCambiar,
+}: BaseDialogoFolio & { saldo: number; anticipo?: AnticipoPendiente | null }) {
   const pago = useRegistrarPago(codigo)
+  const mediosPago = useMediosPago()
+  const activos = (mediosPago.data ?? []).filter((m) => m.activo)
   const [valor, setValor] = useState('')
-  const [medio, setMedio] = useState<MedioPago>('TRANSFERENCIA_BANCARIA')
-  const [error, setError] = useState<string>()
+  const [elegido, setMedio] = useState<MedioPago>('')
+  // Sin elección (o si el elegido se desactivó), el primero de los activos
+  const medio = activos.some((m) => m.codigo === elegido) ? elegido : (activos[0]?.codigo ?? '')
+  const validacion = useValidacion(
+    esquemaPago(activos.map((m) => m.codigo)),
+    { valor, medio },
+  )
+  const errores = unirErrores(validacion.errores, erroresDe(pago.error))
 
   useAlAbrir(abierto, () => {
     setValor('')
-    setMedio('TRANSFERENCIA_BANCARIA')
-    setError(undefined)
+    setMedio('')
+    validacion.reiniciar()
     pago.reset()
   })
 
   const enviar = () => {
-    const pesos = aPesos(valor)
-    if (!Number.isInteger(pesos) || pesos <= 0) {
-      setError('Escribe un valor mayor que cero, sin decimales')
-      return
-    }
-    setError(undefined)
+    if (!validacion.comprobar()) return
+    const monto = aPesos(valor)
     pago.mutate(
-      { valor: pesos, medio },
+      { valor: monto, medio },
       {
         onSuccess: (folio) => {
-          toast.success(`Pago de ${formatearDinero(pesos)} registrado`, {
+          toast.success(`Pago de ${formatearDinero(monto)} registrado`, {
             description: `Nuevo saldo: ${formatearDinero(folio.saldo)}`,
           })
           alCambiar(false)
@@ -72,25 +99,165 @@ export function DialogoPago({ codigo, saldo, abierto, alCambiar }: BaseDialogoFo
       <Campo
         id="pago-valor"
         etiqueta="Valor en pesos"
-        error={error ?? erroresDe(pago.error).valor}
+        error={errores.valor}
         ayuda={
-          saldo > 0 ? (
-            <>
-              Saldo pendiente: <Dinero valor={saldo} />.{' '}
-              <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setValor(String(saldo))}>
-                Usar el saldo
-              </Button>
-            </>
+          anticipo || saldo > 0 ? (
+            <span className="flex flex-col gap-1">
+              {/* L-11: una reserva PENDIENTE se confirma cuando lo pagado cubre el anticipo */}
+              {anticipo && (
+                <span>
+                  Anticipo para confirmar ({anticipo.porcentaje} %): <Dinero valor={anticipo.valor} />
+                  {anticipo.falta === 0 ? (
+                    ' · ya está cubierto.'
+                  ) : (
+                    <>
+                      {anticipo.falta < anticipo.valor && (
+                        <>
+                          {' '}
+                          (falta <Dinero valor={anticipo.falta} />)
+                        </>
+                      )}
+                      .{' '}
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto min-h-0 p-0 text-xs"
+                        onClick={() => setValor(String(anticipo.falta))}
+                      >
+                        Usar el anticipo
+                      </Button>
+                    </>
+                  )}
+                </span>
+              )}
+              {saldo > 0 && (
+                <span>
+                  Saldo pendiente: <Dinero valor={saldo} />.{' '}
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto min-h-0 p-0 text-xs"
+                    onClick={() => setValor(String(saldo))}
+                  >
+                    Usar el saldo
+                  </Button>
+                </span>
+              )}
+            </span>
           ) : undefined
         }
       >
         <Input inputMode="numeric" placeholder="310000" value={valor} onChange={(e) => setValor(e.target.value)} />
       </Campo>
-      <Campo id="pago-medio" etiqueta="Medio de pago">
-        <select className={claseSelect} value={medio} onChange={(e) => setMedio(e.target.value as MedioPago)}>
-          {MEDIOS.map((m) => (
-            <option key={m} value={m}>
-              {NOMBRE_MEDIO[m]}
+      <Campo
+        id="pago-medio"
+        etiqueta="Medio de pago"
+        error={errores.medio ?? (mediosPago.error ? 'No se pudieron consultar los medios de pago' : undefined)}
+      >
+        <select
+          className={claseSelect}
+          value={medio}
+          disabled={activos.length === 0}
+          onChange={(e) => setMedio(e.target.value)}
+        >
+          {activos.length === 0 && <option value="">{mediosPago.isPending ? 'Cargando…' : 'Sin medios activos'}</option>}
+          {activos.map((m) => (
+            <option key={m.codigo} value={m.codigo}>
+              {m.nombre}
+            </option>
+          ))}
+        </select>
+      </Campo>
+    </DialogoFormulario>
+  )
+}
+
+// ---------- Devolver el depósito de garantía ----------
+
+/**
+ * Lo que se devuelve al huésped: tras anular el cargo del depósito, el saldo a favor, hasta el valor del depósito.
+ * Es el mismo cálculo de Folio.devolverDeposito en el servidor.
+ */
+function dineroADevolver(saldo: number, deposito: number): number {
+  return Math.min(deposito, Math.max(0, deposito - saldo))
+}
+
+export function DialogoDevolverDeposito({
+  codigo,
+  saldo,
+  deposito,
+  abierto,
+  alCambiar,
+}: BaseDialogoFolio & { saldo: number; deposito: number }) {
+  const devolver = useDevolverDeposito(codigo)
+  const mediosPago = useMediosPago()
+  const activos = (mediosPago.data ?? []).filter((m) => m.activo)
+  const [elegido, setMedio] = useState<MedioPago>('')
+  const medio = activos.some((m) => m.codigo === elegido) ? elegido : (activos[0]?.codigo ?? '')
+  const aDevolver = dineroADevolver(saldo, deposito)
+
+  useAlAbrir(abierto, () => {
+    setMedio('')
+    devolver.reset()
+  })
+
+  const enviar = () => {
+    if (!medio) return
+    devolver.mutate(medio, {
+      onSuccess: (folio) => {
+        toast.success('Depósito devuelto', {
+          description:
+            aDevolver > 0
+              ? `${formatearDinero(aDevolver)} devueltos al huésped. Saldo: ${formatearDinero(folio.saldo)}`
+              : `Se anuló el cargo del depósito. Saldo: ${formatearDinero(folio.saldo)}`,
+        })
+        alCambiar(false)
+      },
+    })
+  }
+
+  return (
+    <DialogoFormulario
+      id="form-devolver-deposito"
+      abierto={abierto}
+      alCambiar={alCambiar}
+      titulo="Devolver depósito"
+      descripcion={
+        <>
+          Se asienta el movimiento inverso del depósito de garantía (<Dinero valor={deposito} />)
+          {aDevolver > 0 ? (
+            <>
+              {' '}
+              y se registra la devolución de <Dinero valor={aDevolver} /> al huésped. El sistema solo la registra: el
+              dinero se entrega por fuera.
+            </>
+          ) : (
+            '. El huésped no había pagado el depósito, así que no hay dinero que devolver.'
+          )}{' '}
+          Solo se hace una vez.
+        </>
+      }
+      textoEnviar="Devolver depósito"
+      cargando={devolver.isPending}
+      error={devolver.error}
+      tituloError="No se pudo devolver el depósito"
+      alEnviar={enviar}
+    >
+      <Campo
+        id="devolucion-medio"
+        etiqueta="Medio de la devolución"
+        error={mediosPago.error ? 'No se pudieron consultar los medios de pago' : undefined}
+      >
+        <select
+          className={claseSelect}
+          value={medio}
+          disabled={activos.length === 0}
+          onChange={(e) => setMedio(e.target.value)}
+        >
+          {activos.length === 0 && <option value="">{mediosPago.isPending ? 'Cargando…' : 'Sin medios activos'}</option>}
+          {activos.map((m) => (
+            <option key={m.codigo} value={m.codigo}>
+              {m.nombre}
             </option>
           ))}
         </select>
@@ -110,22 +277,26 @@ export function DialogoServicio({ codigo, servicios, errorServicios, abierto, al
   const cargo = useRegistrarCargoServicio(codigo)
   const disponibles = (servicios ?? []).filter((s) => s.activo && s.generaCargo)
   const [idServicio, setIdServicio] = useState('')
-  const [error, setError] = useState<string>()
+  // RegistrarCargoServicioRequest: el id del servicio, que debe ser uno de los ofrecidos
+  const esquema = z.object({
+    idServicio: z
+      .string()
+      .min(1, 'Elige un servicio')
+      .refine((id) => disponibles.some((s) => s.id === id), 'Elige un servicio activo que genere cargo'),
+  })
+  const validacion = useValidacion(esquema, { idServicio })
+  const error = validacion.errores.idServicio ?? erroresDe(cargo.error).idServicio
 
   useAlAbrir(abierto, () => {
     setIdServicio('')
-    setError(undefined)
+    validacion.reiniciar()
     cargo.reset()
   })
 
   const elegido = disponibles.find((s) => s.id === idServicio)
 
   const enviar = () => {
-    if (!elegido) {
-      setError('Elige un servicio')
-      return
-    }
-    setError(undefined)
+    if (!validacion.comprobar() || !elegido) return
     cargo.mutate(elegido.id, {
       onSuccess: () => {
         toast.success('Servicio cargado al folio', { description: `${elegido.nombre}: ${formatearDinero(elegido.valor)}` })
@@ -185,26 +356,33 @@ export function DialogoCorreccion({ codigo, cargos, indiceInicial, abierto, alCa
   const correccion = useRegistrarCorreccion(codigo)
   const [indice, setIndice] = useState('')
   const [motivo, setMotivo] = useState('')
-  const [errores, setErrores] = useState<{ indice?: string; motivo?: string }>({})
+  // RegistrarCorreccionRequest: la posición de un cargo del folio y el motivo
+  const esquema = z.object({
+    indice: z
+      .string()
+      .refine((valor) => cargos.some((c) => String(c.indiceCargo) === valor), 'Elige el cargo que vas a corregir'),
+    motivo: textoObligatorio('Escribe el motivo de la corrección', MAXIMO_MOTIVO, 'El motivo admite máximo 250 caracteres'),
+  })
+  const validacion = useValidacion(esquema, { indice, motivo })
+  const errores = unirErrores(
+    validacion.errores,
+    erroresDelServidor(correccion.error, { indiceCargo: 'indice' }),
+  )
 
   useAlAbrir(abierto, () => {
     setIndice(indiceInicial !== null ? String(indiceInicial) : '')
     setMotivo('')
-    setErrores({})
+    validacion.reiniciar()
     correccion.reset()
   })
 
   const elegido = cargos.find((c) => String(c.indiceCargo) === indice)
 
   const enviar = () => {
-    const nuevos = {
-      indice: elegido ? undefined : 'Elige el cargo que vas a corregir',
-      motivo: motivo.trim() ? undefined : 'Escribe el motivo de la corrección',
-    }
-    setErrores(nuevos)
-    if (nuevos.indice || nuevos.motivo || !elegido) return
+    const limpios = validacion.comprobar()
+    if (!limpios || !elegido) return
     correccion.mutate(
-      { indiceCargo: elegido.indiceCargo as number, motivo: motivo.trim() },
+      { indiceCargo: elegido.indiceCargo as number, motivo: limpios.motivo },
       {
         onSuccess: () => {
           toast.success(`Corrección de ${elegido.numero} registrada`)
@@ -249,7 +427,7 @@ export function DialogoCorreccion({ codigo, cargos, indiceInicial, abierto, alCa
           <Dinero valor={-elegido.valor} className="font-semibold" />
         </p>
       )}
-      <Campo id="correccion-motivo" etiqueta="Motivo" error={errores.motivo ?? erroresDe(correccion.error).motivo}>
+      <Campo id="correccion-motivo" etiqueta="Motivo" error={errores.motivo}>
         <textarea
           className={claseTextarea}
           placeholder="La cena no se consumió"

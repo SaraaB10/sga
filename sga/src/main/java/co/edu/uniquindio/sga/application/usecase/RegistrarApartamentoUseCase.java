@@ -3,6 +3,7 @@ package co.edu.uniquindio.sga.application.usecase;
 import co.edu.uniquindio.sga.domain.entity.Apartamento;
 import co.edu.uniquindio.sga.domain.service.AdministracionApartamentoService;
 import co.edu.uniquindio.sga.domain.valueobject.Capacidad;
+import co.edu.uniquindio.sga.domain.valueobject.Caracteristicas;
 import co.edu.uniquindio.sga.domain.valueobject.Dotacion;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.Imagen;
@@ -35,10 +36,11 @@ public class RegistrarApartamentoUseCase {
 
     @Transactional
     public Apartamento ejecutar(IdentificacionApartamento identificacion, String nombre, String descripcion,
-                                int dormitorios, Capacidad capacidad, Dotacion dotacion, List<Imagen> imagenes,
-                                List<Tarifa> tarifas) {
+                                int dormitorios, Capacidad capacidad, Dotacion dotacion,
+                                Caracteristicas caracteristicas, List<Imagen> imagenes, List<Tarifa> tarifas) {
         Apartamento nuevo = Apartamento.crear(identificacion, nombre, descripcion, dormitorios, capacidad,
                 dotacion, imagenes);
+        nuevo.definirCaracteristicas(caracteristicas);
         return administracionService.registrar(nuevo, tarifas, LocalDate.now(reloj));
     }
 }

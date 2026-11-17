@@ -14,7 +14,7 @@ import java.util.Objects;
  * CU-28. GET /api/alojamiento y PUT /api/alojamiento
  * Consulta el alojamiento (datos, ubicación, horario, normas, servicios adicionales y parámetros vigentes) y
  * actualiza sus datos descriptivos, su ubicación, sus normas y, si se indica, su horario (L-12). Los parámetros de la
- * sección 6 no se cambian por API: se configuran en application.properties. Las reglas las aplica el agregado
+ * sección 6 se cambian en ParametrosAlojamientoUseCase. Las reglas las aplica el agregado
  * Alojamiento (409).
  * Actor: administrador.
  */

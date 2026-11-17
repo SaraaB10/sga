@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * CU-28. El alojamiento tal como lo ve el administrador: datos, ubicación, horario, normas, servicios adicionales y
- * parámetros vigentes (sección 6, solo lectura: se configuran en application.properties). Dinero viaja como pesos
+ * parámetros vigentes (sección 6: los edita el administrador y se guardan en la base). Dinero viaja como pesos
  * enteros.
  */
 public record AlojamientoResponse(
@@ -53,7 +53,10 @@ public record AlojamientoResponse(
             long cargoAseoMascota,
             int maximoMascotas,
             int pesoMaximoMascotaKg,
-            long depositoGarantia
+            long depositoGarantia,
+            String conceptoDepositoGarantia,
+            Long recargoRecepcionNocturna,      // RP-03: valor del servicio de recepción nocturna
+            Integer edadMinimaCuenta            // para crear una cuenta y ser titular de una reserva de recepción
     ) {
     }
 }

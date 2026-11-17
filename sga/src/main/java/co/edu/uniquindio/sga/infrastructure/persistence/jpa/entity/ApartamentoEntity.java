@@ -55,6 +55,19 @@ public class ApartamentoEntity {
     @OrderColumn(name = "posicion")
     private List<String> dotacion = new ArrayList<>();
 
+    /** Rasgos del apartamento (vista al mar, balcón...), aparte de la dotación */
+    @ElementCollection
+    @CollectionTable(name = "apartamento_caracteristica", joinColumns = @JoinColumn(name = "apartamento_id"))
+    @Column(name = "caracteristica", nullable = false)
+    @OrderColumn(name = "posicion")
+    private List<String> caracteristicas = new ArrayList<>();
+
+    /**
+     * true desde que se guardan sus características (aunque sean ninguna). En una base creada antes de este campo
+     * queda en null: así DatosInicialesCaracteristicasConfig sabe qué apartamentos debe completar.
+     */
+    private Boolean caracteristicasDefinidas;
+
     @ElementCollection
     @CollectionTable(name = "apartamento_imagen", joinColumns = @JoinColumn(name = "apartamento_id"))
     @OrderColumn(name = "posicion")

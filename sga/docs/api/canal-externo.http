@@ -9,7 +9,8 @@
 #   1. Ponga la credencial del canal en @credencial (abajo). Es el valor de sga.canales.credencial-demo de
 #      src/main/resources/application-secrets.properties. Si no la configuró, la app genera una al arrancar y la
 #      escribe en el log: busque "Credencial generada para el canal externo 'booking'".
-#   2. Arranque la app desde cero (./gradlew bootRun; H2 en memoria carga los datos iniciales).
+#   2. Arranque la app en limpio: ./gradlew bootRun --args='--spring.profiles.active=memoria' (H2 en memoria
+#      carga los datos iniciales), o borre la carpeta data/ antes de arrancar normal.
 #   3. En IntelliJ use "Run All Requests in File". Corre COMPLETO y en orden; cada petición valida su respuesta
 #      con client.test y lleva arriba el resultado esperado.
 # Si lo ejecuta dos veces sin reiniciar, el paso 2 responde DUPLICADO_IGNORADO y el 5 RECHAZADO_INVALIDO (la
@@ -24,7 +25,7 @@
 
 @host = http://localhost:8080
 @canal = booking
-@credencial = pegue-aqui-la-credencial-del-canal
+@credencial = PJ48v_xUYhBToobVVZ13b0UFNaXbXk5-5hrlVWv7wFc
 
 ### 1. Consultar disponibilidad
 # Esperado: 200 con la página 0 de apartamentos libres (10 por página, 12.4); APT-301 está entre ellos.
@@ -70,13 +71,13 @@ Content-Type: application/json
   "titular": {
     "nombre": "Sophie Martin",
     "tipoDocumento": "PA",
-    "numeroDocumento": "PA8880001",
+    "numeroDocumento": "88800001",
     "email": "sophie.martin@mail.com",
-    "telefono": "+33612345678"
+    "telefono": "3176123456"
   },
   "ocupantes": [
-    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880001", "fechaNacimiento": "1987-04-09" },
-    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880002", "fechaNacimiento": "1985-10-21" }
+    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "88800001", "fechaNacimiento": "1987-04-09" },
+    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "88800002", "fechaNacimiento": "1985-10-21" }
   ]
 }
 
@@ -105,13 +106,13 @@ Content-Type: application/json
   "titular": {
     "nombre": "Sophie Martin",
     "tipoDocumento": "PA",
-    "numeroDocumento": "PA8880001",
+    "numeroDocumento": "88800001",
     "email": "sophie.martin@mail.com",
-    "telefono": "+33612345678"
+    "telefono": "3176123456"
   },
   "ocupantes": [
-    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880001", "fechaNacimiento": "1987-04-09" },
-    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "PA8880002", "fechaNacimiento": "1985-10-21" }
+    { "nombre": "Sophie Martin", "tipoDocumento": "PA", "numeroDocumento": "88800001", "fechaNacimiento": "1987-04-09" },
+    { "nombre": "Luc Martin", "tipoDocumento": "PA", "numeroDocumento": "88800002", "fechaNacimiento": "1985-10-21" }
   ]
 }
 
@@ -138,12 +139,12 @@ Content-Type: application/json
   "titular": {
     "nombre": "Hans Weber",
     "tipoDocumento": "PA",
-    "numeroDocumento": "PA9990001",
+    "numeroDocumento": "99900001",
     "email": "hans.weber@mail.com",
-    "telefono": "+4915123456789"
+    "telefono": "3184915123"
   },
   "ocupantes": [
-    { "nombre": "Hans Weber", "tipoDocumento": "PA", "numeroDocumento": "PA9990001", "fechaNacimiento": "1979-12-02" }
+    { "nombre": "Hans Weber", "tipoDocumento": "PA", "numeroDocumento": "99900001", "fechaNacimiento": "1979-12-02" }
   ]
 }
 

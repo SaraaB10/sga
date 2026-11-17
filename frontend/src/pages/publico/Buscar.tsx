@@ -1,17 +1,19 @@
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CalendarSearch, SearchX } from 'lucide-react'
-import { useApartamentosDisponibles } from '@/api/publico'
+import { z } from 'zod'
+import { useApartamentosDisponibles, useOpcionesFiltro } from '@/api/publico'
 import type { FiltrosDisponibles } from '@/api/tipos'
 import { AvisoError, Campo, Dinero, Fecha, Paginador, Vacio } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { textoOpcional, useValidacion } from '@/lib/validacion'
 import { BuscadorEstancia } from './comun/BuscadorEstancia'
 import { useReglasAlojamiento, useTemporadasAlojamiento } from './comun/consultas'
 import { EncabezadoFiltros } from './comun/EncabezadoFiltros'
-import { claseContenidoPlegable } from './comun/estilos'
+import { claseContenidoPlegable, claseSelect } from './comun/estilos'
 import {
   estanciaAParams,
   fechasCompletas,
@@ -24,11 +26,15 @@ import { avisoEstanciaMinima, nochesEntre } from './comun/reglas'
 import { TarjetaApartamento } from './comun/TarjetaApartamento'
 import { MapaAlojamiento } from './MapaAlojamiento'
 
-const FILTROS = ['capacidadMinima', 'caracteristica', 'servicios', 'precioMinimo', 'precioMaximo'] as const
+const FILTROS = [
+  'capacidadMinima',
+  'dormitorios',
+  'caracteristica',
+  'servicios',
+  'precioMinimo',
+  'precioMaximo',
+] as const
 type Filtro = (typeof FILTROS)[number]
-
-/** Servicios que se pueden pedir; se buscan en la dotación y las características de cada apartamento */
-const SERVICIOS = ['Hidromasaje', 'Piscina', 'Terraza', 'Balcón', 'Vista al mar', 'Cocina', 'Cava de vinos'] as const
 
 /** En la URL los servicios van separados por coma: servicios=Hidromasaje,Cocina */
 const aServicios = (texto: string | null) =>
@@ -65,6 +71,7 @@ export default function Buscar() {
           ocupantes: estancia.huespedes.length,
           fechasNacimiento: fechasCompletas(estancia.huespedes),
           capacidadMinima: aNumero(params.get('capacidadMinima')),
+          dormitorios: aNumero(params.get('dormitorios')),
           caracteristica: params.get('caracteristica')?.trim() || undefined,
           servicios: aServicios(params.get('servicios')),
           precioMinimo: aNumero(params.get('precioMinimo')),
@@ -188,10 +195,49 @@ interface PropsFiltros {
   alAplicar: (valores: Record<Filtro, string>) => void
 }
 
-/** Capacidad mínima, característica de la dotación, servicios y rango del valor estimado */
+/** Valor en pesos opcional de un filtro: vacío o entero de 0 en adelante */
+const pesosFiltro = z
+  .string()
+  .trim()
+  .refine((v) => v === '' || /^\d+$/.test(v.replace(/[$.\s]/g, '')), 'Escribe un valor en pesos, sin decimales')
+
+// Filtros de GET /api/apartamentos/disponibles: capacidad entera de 1 o más y el precio mínimo no pasa del máximo
+const esquemaFiltros = z
+  .object({
+    capacidadMinima: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Escribe una capacidad entera de 1 o más'),
+    dormitorios: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || (/^\d+$/.test(v) && Number(v) >= 1), 'Elige un número de dormitorios'),
+    caracteristica: textoOpcional(60, 'La característica admite máximo 60 caracteres'),
+    servicios: z.string(),
+    precioMinimo: pesosFiltro,
+    precioMaximo: pesosFiltro,
+  })
+  .superRefine((datos, contexto) => {
+    const min = aNumero(datos.precioMinimo)
+    const max = aNumero(datos.precioMaximo)
+    if (min !== undefined && max !== undefined && min > max)
+      contexto.addIssue({
+        code: 'custom',
+        path: ['precioMaximo'],
+        message: 'El precio máximo no puede ser menor que el mínimo.',
+      })
+  })
+
+/**
+ * Capacidad mínima, dormitorios, característica del apartamento, servicios de su dotación y rango del valor estimado.
+ * Las opciones de dormitorios, características y servicios salen de los apartamentos activos
+ * (GET /api/apartamentos/filtros).
+ */
 function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
+  const opciones = useOpcionesFiltro()
   const [borrador, setBorrador] = useState(valores)
-  const [error, setError] = useState<string>()
+  const validacion = useValidacion(esquemaFiltros, borrador)
+  const errores = validacion.errores
   // En el celular los filtros empiezan plegados para que los resultados queden a la vista
   const [abierto, setAbierto] = useState(false)
 
@@ -205,20 +251,20 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
 
   const aplicar = (e: FormEvent) => {
     e.preventDefault()
-    const min = aNumero(borrador.precioMinimo)
-    const max = aNumero(borrador.precioMaximo)
-    if (min !== undefined && max !== undefined && min > max) {
-      setError('El precio mínimo no puede ser mayor que el máximo.')
-      return
-    }
-    setError(undefined)
-    alAplicar(borrador)
+    if (validacion.comprobar()) alAplicar(borrador)
   }
 
   const limpiar = () => {
-    const vacios = { capacidadMinima: '', caracteristica: '', servicios: '', precioMinimo: '', precioMaximo: '' }
+    const vacios = {
+      capacidadMinima: '',
+      dormitorios: '',
+      caracteristica: '',
+      servicios: '',
+      precioMinimo: '',
+      precioMaximo: '',
+    }
     setBorrador(vacios)
-    setError(undefined)
+    validacion.reiniciar()
     alAplicar(vacios)
   }
 
@@ -238,7 +284,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
         desde="lg"
       />
       <div id="contenido-filtros" className={claseContenidoPlegable(abierto, 'lg')}>
-      <Campo id="filtro-capacidad" etiqueta="Capacidad mínima">
+      <Campo id="filtro-capacidad" etiqueta="Capacidad mínima" error={errores.capacidadMinima}>
         <Input
           type="number"
           inputMode="numeric"
@@ -248,18 +294,56 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
           onChange={(e) => cambiar('capacidadMinima', e.target.value)}
         />
       </Campo>
-      <Campo id="filtro-caracteristica" etiqueta="Característica" ayuda="Busca en la dotación, por ejemplo «hidromasaje».">
-        <Input
-          placeholder="Hidromasaje, balcón…"
+      <Campo id="filtro-dormitorios" etiqueta="Dormitorios" error={errores.dormitorios}>
+        <select
+          className={claseSelect}
+          value={borrador.dormitorios}
+          onChange={(e) => cambiar('dormitorios', e.target.value)}
+        >
+          <option value="">Cualquiera</option>
+          {/* Un número de la URL que ya no tiene ningún apartamento sigue visible para poder quitarlo */}
+          {borrador.dormitorios && !opciones.data?.dormitorios.map(String).includes(borrador.dormitorios) && (
+            <option value={borrador.dormitorios}>{borrador.dormitorios}</option>
+          )}
+          {(opciones.data?.dormitorios ?? []).map((d) => (
+            <option key={d} value={String(d)}>
+              {d} {d === 1 ? 'dormitorio' : 'dormitorios'}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      <Campo
+        id="filtro-caracteristica"
+        etiqueta="Características"
+        ayuda="Rasgos del apartamento: vista, balcón, terraza, piso alto…"
+        error={errores.caracteristica}
+      >
+        <select
+          className={claseSelect}
           value={borrador.caracteristica}
           onChange={(e) => cambiar('caracteristica', e.target.value)}
-        />
+        >
+          <option value="">Cualquiera</option>
+          {/* Una característica de la URL que ya no ofrece ningún apartamento sigue visible para poder quitarla */}
+          {borrador.caracteristica && !opciones.data?.caracteristicas.includes(borrador.caracteristica) && (
+            <option value={borrador.caracteristica}>{borrador.caracteristica}</option>
+          )}
+          {(opciones.data?.caracteristicas ?? []).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </Campo>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-medium">Servicios</legend>
-        <p className="-mt-1 text-xs text-muted-foreground">Muestra los apartamentos que los tienen todos.</p>
+        <p className="-mt-1 text-xs text-muted-foreground">
+          Lo que trae la dotación del apartamento. Muestra los que tienen todos los que elijas.
+        </p>
+        {opciones.error && <AvisoError error={opciones.error} titulo="No se pudieron cargar los servicios" />}
+        {!opciones.data && !opciones.error && <Skeleton className="h-16" />}
         <div className="flex flex-wrap gap-2">
-          {SERVICIOS.map((servicio) => {
+          {(opciones.data?.servicios ?? []).map((servicio) => {
             const elegido = serviciosElegidos.includes(servicio)
             return (
               <label
@@ -284,7 +368,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1.5 text-sm font-medium">Valor de la estancia</legend>
         <div className="grid grid-cols-2 gap-2">
-          <Campo id="filtro-precio-min" etiqueta="Desde">
+          <Campo id="filtro-precio-min" etiqueta="Desde" error={errores.precioMinimo}>
             <Input
               inputMode="numeric"
               placeholder="$0"
@@ -292,7 +376,7 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
               onChange={(e) => cambiar('precioMinimo', e.target.value)}
             />
           </Campo>
-          <Campo id="filtro-precio-max" etiqueta="Hasta">
+          <Campo id="filtro-precio-max" etiqueta="Hasta" error={errores.precioMaximo}>
             <Input
               inputMode="numeric"
               placeholder="Sin límite"
@@ -301,7 +385,6 @@ function FiltrosBusqueda({ valores, alAplicar }: PropsFiltros) {
             />
           </Campo>
         </div>
-        {error && <p className="text-xs font-medium text-error">{error}</p>}
       </fieldset>
       <div className="flex gap-2">
         <Button type="submit" className="flex-1">

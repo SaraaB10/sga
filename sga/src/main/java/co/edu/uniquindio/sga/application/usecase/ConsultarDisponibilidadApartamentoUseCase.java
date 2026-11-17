@@ -4,6 +4,7 @@ import co.edu.uniquindio.sga.application.exception.ApartamentoNoEncontradoExcept
 import co.edu.uniquindio.sga.domain.entity.Apartamento;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
 import co.edu.uniquindio.sga.domain.service.DisponibilidadApartamentoService;
+import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
 import co.edu.uniquindio.sga.domain.valueobject.NocheDisponibilidad;
 import org.springframework.stereotype.Service;
@@ -40,9 +41,20 @@ public class ConsultarDisponibilidadApartamentoUseCase {
     @Transactional(readOnly = true)
     public List<NocheDisponibilidad> ejecutar(IdentificacionApartamento identificacion, LocalDate desde,
                                               LocalDate hasta) {
+        return ejecutar(identificacion, desde, hasta, null);
+    }
+
+    /**
+     * @param reservaExcluida reserva que se está modificando: sus noches no cuentan como ocupadas (RN-14). Puede ser
+     *                        null.
+     */
+    @Transactional(readOnly = true)
+    public List<NocheDisponibilidad> ejecutar(IdentificacionApartamento identificacion, LocalDate desde,
+                                              LocalDate hasta, CodigoReserva reservaExcluida) {
         Apartamento apartamento = apartamentoRepository.buscarPorIdentificacion(identificacion)
                 .filter(encontrado -> !encontrado.isEliminado())
                 .orElseThrow(() -> new ApartamentoNoEncontradoException(identificacion));
-        return disponibilidadService.disponibilidadPorNoche(apartamento, desde, hasta, LocalDate.now(reloj));
+        return disponibilidadService.disponibilidadPorNoche(apartamento, desde, hasta, LocalDate.now(reloj),
+                reservaExcluida);
     }
 }

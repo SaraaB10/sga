@@ -7,12 +7,8 @@ export const NOMBRE_TIPO_CARGO: Record<TipoCargo, string> = {
   PENALIDAD_CANCELACION_NOSHOW: 'Penalidad',
 }
 
-export const NOMBRE_MEDIO: Record<MedioPago, string> = {
-  TARJETA_DEBITO_CREDITO: 'Tarjeta débito o crédito',
-  TRANSFERENCIA_BANCARIA: 'Transferencia bancaria',
-}
-
-export type ClaseMovimiento = 'cargo' | 'correccion' | 'pago'
+/** devolucion: el inverso del cargo del depósito y el dinero devuelto al huésped */
+export type ClaseMovimiento = 'cargo' | 'correccion' | 'pago' | 'devolucion'
 
 export interface Movimiento {
   clave: string
@@ -39,25 +35,33 @@ const numeroCargo = (indice: number) => `C${indice + 1}`
 /** Prefijo con el que el backend asienta toda corrección (Cargo.inverso) */
 const PREFIJO_REVERSO = "Reverso de '"
 
+/** Prefijo con el que el backend asienta el inverso del depósito (DepositoGarantia.generarDevolucion) */
+const PREFIJO_DEVOLUCION = 'Devolución de '
+
 const esReverso = (cargo: CargoResponse) => cargo.concepto.startsWith(PREFIJO_REVERSO)
+const esDevolucion = (cargo: CargoResponse) => cargo.valor < 0 && cargo.concepto.startsWith(PREFIJO_DEVOLUCION)
 
 /**
  * El backend asienta la corrección como un cargo del mismo tipo, valor opuesto y concepto
- * "Reverso de '<concepto>': <motivo>" (Cargo.inverso). La respuesta no trae el enlace, así que se reconstruye:
- * cada corrección se asocia al primer cargo anterior que encaja y que todavía no estaba corregido.
+ * "Reverso de '<concepto>': <motivo>" (Cargo.inverso), y la devolución del depósito como "Devolución de <concepto>".
+ * La respuesta no trae el enlace, así que se reconstruye: cada corrección se asocia al primer cargo anterior que
+ * encaja y que todavía no estaba corregido.
  */
 export function enlazarCorrecciones(cargos: CargoResponse[]): Map<number, number> {
   const corregidoPor = new Map<number, number>() // cargo original → corrección
   cargos.forEach((cargo, i) => {
-    if (!esReverso(cargo)) return
+    if (!esReverso(cargo) && !esDevolucion(cargo)) return
     for (let j = 0; j < i; j++) {
       const original = cargos[j]
+      const encaja = esReverso(cargo)
+        ? cargo.concepto.startsWith(`Reverso de '${original.concepto}': `)
+        : cargo.concepto === `${PREFIJO_DEVOLUCION}${original.concepto}`
       if (
         !corregidoPor.has(j) &&
         ![...corregidoPor.values()].includes(j) &&
         original.tipo === cargo.tipo &&
         original.valor === -cargo.valor &&
-        cargo.concepto.startsWith(`Reverso de '${original.concepto}': `)
+        encaja
       ) {
         corregidoPor.set(j, i)
         return
@@ -68,7 +72,8 @@ export function enlazarCorrecciones(cargos: CargoResponse[]): Map<number, number
 }
 
 /** Cargos, correcciones y pagos en una sola lista, por fecha (y en el orden en que se asentaron) */
-export function movimientosDe(folio: FolioResponse): Movimiento[] {
+/** @param nombreMedio nombre de cada medio de pago por su código (useNombreMedio) */
+export function movimientosDe(folio: FolioResponse, nombreMedio: (codigo: MedioPago) => string): Movimiento[] {
   const enlaces = enlazarCorrecciones(folio.cargos)
   const corrigeA = new Map([...enlaces].map(([original, correccion]) => [correccion, original]))
 
@@ -77,30 +82,36 @@ export function movimientosDe(folio: FolioResponse): Movimiento[] {
     const correccion = enlaces.get(i)
     // Una corrección cuyo cargo no se encuentra se muestra igual, con su concepto completo y sin enlace
     const esCorreccion = esReverso(c)
+    const esDevolucionDeposito = !esCorreccion && esDevolucion(c)
     const enlazada = original !== undefined
     return {
       clave: `c-${i}`,
       numero: numeroCargo(i),
-      clase: esCorreccion ? 'correccion' : 'cargo',
+      clase: esCorreccion ? 'correccion' : esDevolucionDeposito ? 'devolucion' : 'cargo',
       fecha: c.fecha,
-      tipo: esCorreccion ? 'Corrección' : NOMBRE_TIPO_CARGO[c.tipo],
+      tipo: esCorreccion ? 'Corrección' : esDevolucionDeposito ? 'Devolución' : NOMBRE_TIPO_CARGO[c.tipo],
       concepto: enlazada ? folio.cargos[original].concepto : c.concepto,
       valor: c.valor,
       indiceCargo: i,
       corrige: enlazada ? numeroCargo(original) : undefined,
       corregidoPor: correccion !== undefined ? numeroCargo(correccion) : undefined,
-      motivo: enlazada ? c.concepto.slice(`${PREFIJO_REVERSO}${folio.cargos[original].concepto}': `.length) : undefined,
+      motivo: esDevolucionDeposito
+        ? 'Se anula el cargo del depósito'
+        : enlazada
+          ? c.concepto.slice(`${PREFIJO_REVERSO}${folio.cargos[original].concepto}': `.length)
+          : undefined,
     }
   })
 
+  // Las devoluciones al huésped suman al saldo (es dinero que sale); los abonos restan
   const pagos: Movimiento[] = folio.pagos.map((p, i) => ({
     clave: `p-${i}`,
     numero: `P${i + 1}`,
-    clase: 'pago',
+    clase: p.devolucion ? 'devolucion' : 'pago',
     fecha: p.fecha,
-    tipo: 'Pago',
-    concepto: NOMBRE_MEDIO[p.medio],
-    valor: -p.valor,
+    tipo: p.devolucion ? 'Devolución' : 'Pago',
+    concepto: p.devolucion ? `Devuelto al huésped · ${nombreMedio(p.medio)}` : nombreMedio(p.medio),
+    valor: p.devolucion ? p.valor : -p.valor,
   }))
 
   // sort es estable: dentro del mismo día se conserva el orden de asiento, primero cargos y luego pagos

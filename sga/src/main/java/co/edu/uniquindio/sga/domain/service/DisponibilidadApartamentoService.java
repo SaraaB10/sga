@@ -17,6 +17,7 @@ import co.edu.uniquindio.sga.domain.valueobject.NocheDisponibilidad;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -76,7 +77,7 @@ public class DisponibilidadApartamentoService {
      *
      * @param fechasNacimiento opcional (null o vacía); si trae datos debe haber una por ocupante.
      * @param criterio         opcional; null equivale a {@link CriterioBusqueda#sinFiltros()}.
-     * @return disponibles ordenados por identificación, con su valor estimado.
+     * @return disponibles con su valor estimado, ordenados por {@link #ordenBusqueda(int)}.
      */
     public List<ApartamentoDisponible> buscarDisponibles(Estancia estancia, int totalOcupantes,
                                                          List<LocalDate> fechasNacimiento,
@@ -87,13 +88,27 @@ public class DisponibilidadApartamentoService {
         Coordenada ubicacion = obtenerAlojamiento().getUbicacion();
         return buscarDisponibles(estancia, totalOcupantes).stream()
                 .filter(apartamento -> filtros.cumpleCapacidad(apartamento.getCapacidad()))
-                .filter(apartamento -> filtros.cumpleCaracteristica(apartamento.getDotacion()))
-                .filter(apartamento -> filtros.cumpleServicios(apartamento.getDotacion(), apartamento.getDescripcion()))
+                .filter(apartamento -> filtros.cumpleDormitorios(apartamento.getDormitorios()))
+                .filter(apartamento -> filtros.cumpleCaracteristica(apartamento.getCaracteristicas()))
+                .filter(apartamento -> filtros.cumpleServicios(apartamento.getDotacion()))
                 .map(apartamento -> new ApartamentoDisponible(apartamento,
                         cotizador.estimar(apartamento, estancia, totalOcupantes, fechasNacimiento).valorTotal(),
                         ubicacion))
                 .filter(disponible -> filtros.cumplePrecio(disponible.valorEstimado()))
+                .sorted(ordenBusqueda(totalOcupantes))
                 .toList();
+    }
+
+    /**
+     * Orden de los resultados de la búsqueda (7.5): primero los apartamentos cuya capacidad se acerca más al tamaño del
+     * grupo (sobran menos camas), después el valor estimado de la estancia, de menor a mayor, y por último la
+     * identificación, para que el orden sea estable entre páginas.
+     */
+    static Comparator<ApartamentoDisponible> ordenBusqueda(int totalOcupantes) {
+        return Comparator.<ApartamentoDisponible>comparingInt(
+                        d -> Math.abs(d.apartamento().getCapacidad().maximo() - totalOcupantes))
+                .thenComparing(d -> d.valorEstimado().monto())
+                .thenComparing(d -> d.apartamento().getIdentificacion().codigo());
     }
 
     /**
@@ -107,6 +122,17 @@ public class DisponibilidadApartamentoService {
      */
     public List<NocheDisponibilidad> disponibilidadPorNoche(Apartamento apartamento, LocalDate desde, LocalDate hasta,
                                                             LocalDate hoy) {
+        return disponibilidadPorNoche(apartamento, desde, hasta, hoy, null);
+    }
+
+    /**
+     * Igual que {@link #disponibilidadPorNoche(Apartamento, LocalDate, LocalDate, LocalDate)}, sin contar como
+     * ocupación la reserva que se está modificando (RN-14): sus noches y su tiempo de preparación quedan libres.
+     *
+     * @param reservaExcluida reserva que no se cuenta como ocupación; puede ser null.
+     */
+    public List<NocheDisponibilidad> disponibilidadPorNoche(Apartamento apartamento, LocalDate desde, LocalDate hasta,
+                                                            LocalDate hoy, CodigoReserva reservaExcluida) {
         requerido(apartamento, "El apartamento es obligatorio");
         requerido(hoy, "La fecha actual es obligatoria");
         if (desde == null || hasta == null) {
@@ -121,8 +147,15 @@ public class DisponibilidadApartamentoService {
                     + " noches y se pidieron " + noches);
         }
         return new Estancia(desde, hasta).fechasDeNoches().stream()
-                .map(noche -> new NocheDisponibilidad(noche, !noche.isBefore(hoy)
-                        && estaDisponible(apartamento, new Estancia(noche, noche.plusDays(1)), 1, null)))
+                .map(noche -> {
+                    Estancia unaNoche = new Estancia(noche, noche.plusDays(1));
+                    // RN-07: se marca la noche bloqueada (también si ya pasó, para que el calendario lo muestre)
+                    boolean bloqueada = !bloqueoRepository
+                            .listarVigentesQueSeSolapan(apartamento.getIdentificacion(), unaNoche).isEmpty();
+                    boolean libre = !noche.isBefore(hoy) && !bloqueada
+                            && estaDisponible(apartamento, unaNoche, 1, reservaExcluida);
+                    return new NocheDisponibilidad(noche, libre, bloqueada);
+                })
                 .toList();
     }
 

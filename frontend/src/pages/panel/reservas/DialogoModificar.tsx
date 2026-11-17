@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { z } from 'zod'
 import { useTodosLosApartamentos } from '@/api/apartamentos'
-import { useApartamento } from '@/api/publico'
+import { useApartamento, useEstanciasLibres } from '@/api/publico'
 import {
   useModificarReserva,
   type ModificacionReservaResponse,
@@ -21,12 +22,26 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import {
+  documentoOpcional,
+  erroresDelServidor,
+  esErrorDeCampos,
+  fecha,
+  fechaMinimaNacimiento,
+  fechaNoFutura,
+  finDespuesDeInicio,
+  MAXIMO_NOMBRE_PERSONA,
+  nombrePersona,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { useCotizacion, useReglasAlojamiento, useTemporadasAlojamiento } from '@/pages/publico/comun/consultas'
 import { EtiquetaPago } from '@/pages/publico/comun/EtiquetaPago'
 import { claseSelect } from '@/pages/publico/comun/estilos'
+import { SelectorEstancia } from '@/pages/publico/comun/SelectorEstancia'
 import { SelectorMascotas } from '@/pages/publico/comun/SelectorMascotas'
 import { TextoCargo } from '@/pages/publico/comun/TextoCargo'
-import { avisoEstanciaMinima, esFechaValida, hoyISO, nochesEntre, sumarDias } from '@/pages/publico/comun/reglas'
+import { avisoEstanciaMinima, esFechaValida, hoyISO, nochesEntre } from '@/pages/publico/comun/reglas'
 
 interface Props {
   reserva: ReservaDetalleResponse
@@ -56,6 +71,46 @@ function aFormulario(reserva: ReservaDetalleResponse) {
     mascotas: reserva.cantidadMascotas,
     peso: reserva.cantidadMascotas > 0 ? String(reserva.pesoMascotaMasPesadaKg) : '',
   }
+}
+
+/*
+ * ModificarReservaRequest: fechas válidas con la salida después de la llegada, cada ocupante con nombre y fecha de
+ * nacimiento no futura, sin pasar la capacidad del apartamento, y mascotas sin números negativos (con peso si hay).
+ */
+function esquemaModificacion(capacidad: number | null, pesoMaximo: number | null) {
+  return z
+    .object({
+      apartamento: z.string().min(1, 'Elige el apartamento'),
+      entrada: fecha('Elige la fecha de llegada'),
+      salida: fecha('Elige la fecha de salida'),
+      ocupantes: z
+        .array(
+          z.object({
+            nombre: nombrePersona('Escribe el nombre del ocupante'),
+            tipoDocumento: z.string(),
+            numeroDocumento: documentoOpcional(),
+            fechaNacimiento: fechaNoFutura('Escribe la fecha de nacimiento'),
+          }),
+        )
+        .min(1, 'La reserva debe tener al menos un ocupante.')
+        .refine(
+          (lista) => capacidad === null || lista.length <= capacidad,
+          `El apartamento recibe máximo ${capacidad} personas.`,
+        ),
+      mascotas: z.number().int().min(0, 'La cantidad de mascotas no puede ser negativa'),
+      peso: z.string(),
+    })
+    .superRefine(finDespuesDeInicio('entrada', 'salida', 'La salida debe ser después de la llegada.'))
+    .superRefine((datos, contexto) => {
+      if (datos.mascotas === 0) return
+      const kg = Number(datos.peso)
+      const mensaje = !/^\d+$/.test(datos.peso.trim()) || kg <= 0
+        ? 'Escribe el peso de la mascota más pesada en kilos enteros, mayor que cero.'
+        : pesoMaximo !== null && kg > pesoMaximo
+          ? `Máximo ${pesoMaximo} kg.`
+          : null
+      if (mensaje) contexto.addIssue({ code: 'custom', path: ['peso'], message: mensaje })
+    })
 }
 
 function aOcupantes(lista: OcupanteFormulario[]): OcupanteRequest[] {
@@ -89,14 +144,37 @@ function Formulario({
 }) {
   const inicial = aFormulario(reserva)
   const [form, setForm] = useState(inicial)
-  const [errores, setErrores] = useState<Record<string, string>>({})
+  const [avisoSinCambios, setAvisoSinCambios] = useState(false)
+  const [errorEstancia, setErrorEstancia] = useState<string | null>(null)
   const modificar = useModificarReserva(reserva.codigo)
   const apartamentos = useTodosLosApartamentos()
+  // Las noches de esta misma reserva cuentan como libres (RN-14)
+  const estanciasLibres = useEstanciasLibres(
+    (apartamentos.data ?? []).map((a) => a.identificacion),
+    form.entrada,
+    form.salida,
+    reserva.codigo,
+  )
   const apartamento = useApartamento(form.apartamento || undefined)
   const { reglas } = useReglasAlojamiento()
   const { temporadas } = useTemporadasAlojamiento()
 
   const capacidad = apartamento.data?.capacidadMaxima ?? null
+  const validacion = useValidacion(esquemaModificacion(capacidad, reglas.pesoMaximoMascotaKg), form)
+  const errores = unirErrores(
+    validacion.errores,
+    erroresDelServidor(modificar.error, {
+      identificacionApartamento: 'apartamento',
+      fechaEntrada: 'entrada',
+      fechaSalida: 'salida',
+      cantidadMascotas: 'mascotas',
+      pesoMascotaMasPesadaKg: 'peso',
+    }),
+  )
+  // El documento no se edita aquí: si el guardado no lo tenía en el formato vigente, el aviso va junto al nombre
+  const errorOcupante = (i: number, campo: 'nombre' | 'fechaNacimiento') =>
+    errores[`ocupantes.${i}.${campo}`] ??
+    (campo === 'nombre' ? errores[`ocupantes.${i}.numeroDocumento`] : undefined)
   const dentroDeCapacidad = capacidad === null || form.ocupantes.length <= capacidad
   const noches = nochesEntre(form.entrada, form.salida)
   const avisoRP01 = avisoEstanciaMinima(form.entrada, form.salida, temporadas, reglas)
@@ -118,17 +196,12 @@ function Formulario({
     setForm({ ...form, ocupantes: form.ocupantes.map((o, j) => (j === i ? { ...o, ...cambios } : o)) })
 
   const guardar = () => {
-    const e: Record<string, string> = {}
-    if (noches < 1) e.salida = 'La salida debe ser después de la llegada.'
-    if (!dentroDeCapacidad) e.ocupantes = `El apartamento recibe máximo ${capacidad} personas.`
-    if (!ocupantesValidos) e.ocupantes = 'Cada ocupante necesita nombre y fecha de nacimiento.'
-    if (form.mascotas > 0) {
-      const kg = Number(form.peso)
-      if (!form.peso || Number.isNaN(kg) || kg <= 0) e.peso = 'Escribe el peso de la mascota más pesada.'
-      else if (reglas.pesoMaximoMascotaKg !== null && kg > reglas.pesoMaximoMascotaKg) e.peso = `Máximo ${reglas.pesoMaximoMascotaKg} kg.`
+    setAvisoSinCambios(false)
+    if (!validacion.comprobar()) return
+    if (estanciasLibres[form.apartamento] === false) {
+      setErrorEstancia('El apartamento no tiene libres todas las noches de esa estancia. Elige otras fechas.')
+      return
     }
-    setErrores(e)
-    if (Object.keys(e).length > 0) return
 
     // Solo viajan los campos que cambiaron; el resto se conserva
     const datos: ModificarReservaRequest = {}
@@ -141,7 +214,7 @@ function Formulario({
       datos.pesoMascotaMasPesadaKg = form.mascotas > 0 ? Number(form.peso) : 0
     }
     if (Object.keys(datos).length === 0) {
-      setErrores({ general: 'No hay cambios para guardar.' })
+      setAvisoSinCambios(true)
       return
     }
     modificar.mutate(datos, {
@@ -162,42 +235,44 @@ function Formulario({
       </DialogHeader>
 
       <div className="flex flex-col gap-5">
-        <Campo id="mod-apartamento" etiqueta="Apartamento">
+        <Campo
+          id="mod-apartamento"
+          etiqueta="Apartamento"
+          error={errores.apartamento}
+          ayuda='Los marcados "No disponible" no tienen libres todas las noches de esas fechas.'
+        >
           <select
             className={claseSelect}
             value={form.apartamento}
             onChange={(e) => setForm({ ...form, apartamento: e.target.value })}
           >
             {!apartamentos.data && <option value={form.apartamento}>{form.apartamento}</option>}
-            {(apartamentos.data ?? []).map((a) => (
-              <option key={a.identificacion} value={a.identificacion}>
-                {a.identificacion} · {a.nombre} (hasta {a.capacidadMaxima})
-              </option>
-            ))}
+            {(apartamentos.data ?? []).map((a) => {
+              const noDisponible = estanciasLibres[a.identificacion] === false
+              return (
+                <option
+                  key={a.identificacion}
+                  value={a.identificacion}
+                  disabled={noDisponible && a.identificacion !== form.apartamento}
+                >
+                  {a.identificacion} · {a.nombre} (hasta {a.capacidadMaxima})
+                  {noDisponible ? ' · No disponible' : ''}
+                </option>
+              )
+            })}
           </select>
         </Campo>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo id="mod-entrada" etiqueta="Llegada">
-            <Input
-              type="date"
-              min={hoyISO()}
-              value={form.entrada}
-              onChange={(e) => {
-                const v = e.target.value
-                setForm({ ...form, entrada: v, salida: v && form.salida <= v ? sumarDias(v, 1) : form.salida })
-              }}
-            />
-          </Campo>
-          <Campo id="mod-salida" etiqueta="Salida" error={errores.salida}>
-            <Input
-              type="date"
-              min={form.entrada ? sumarDias(form.entrada, 1) : undefined}
-              value={form.salida}
-              onChange={(e) => setForm({ ...form, salida: e.target.value })}
-            />
-          </Campo>
-        </div>
+        <SelectorEstancia
+          idApartamento={form.apartamento || undefined}
+          entrada={form.entrada}
+          salida={form.salida}
+          excluirReserva={reserva.codigo}
+          alCambiar={(entrada, salida) => setForm({ ...form, entrada, salida })}
+          errorEntrada={errores.entrada}
+          errorSalida={errores.salida}
+        />
         {avisoRP01 && <AvisoError mensaje={avisoRP01} />}
+        {errorEstancia && <AvisoError mensaje={errorEstancia} />}
 
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-sm font-medium">
@@ -208,20 +283,42 @@ function Formulario({
             </span>
           </legend>
           {form.ocupantes.map((o, i) => (
-            <div key={i} className="grid gap-2 sm:grid-cols-[1fr_10rem_auto] sm:items-center">
-              <Input
-                aria-label={`Nombre del ocupante ${i + 1}`}
-                placeholder="Nombre"
-                value={o.nombre}
-                onChange={(e) => cambiarOcupante(i, { nombre: e.target.value })}
-              />
-              <Input
-                type="date"
-                aria-label={`Fecha de nacimiento del ocupante ${i + 1}`}
-                max={hoyISO()}
-                value={o.fechaNacimiento}
-                onChange={(e) => cambiarOcupante(i, { fechaNacimiento: e.target.value })}
-              />
+            <div key={i} className="grid gap-2 sm:grid-cols-[1fr_10rem_auto] sm:items-start">
+              <div className="flex flex-col gap-1">
+                <Input
+                  aria-label={`Nombre del ocupante ${i + 1}`}
+                  placeholder="Nombre"
+                  maxLength={MAXIMO_NOMBRE_PERSONA}
+                  value={o.nombre}
+                  onChange={(e) => cambiarOcupante(i, { nombre: e.target.value })}
+                  aria-invalid={errorOcupante(i, 'nombre') ? true : undefined}
+                  aria-describedby={errorOcupante(i, 'nombre') ? `mod-ocupante-${i}-nombre-error` : undefined}
+                />
+                {errorOcupante(i, 'nombre') && (
+                  <p id={`mod-ocupante-${i}-nombre-error`} className="text-xs font-medium text-error">
+                    {errorOcupante(i, 'nombre')}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1">
+                <Input
+                  type="date"
+                  aria-label={`Fecha de nacimiento del ocupante ${i + 1}`}
+                  min={fechaMinimaNacimiento()}
+                  max={hoyISO()}
+                  value={o.fechaNacimiento}
+                  onChange={(e) => cambiarOcupante(i, { fechaNacimiento: e.target.value })}
+                  aria-invalid={errorOcupante(i, 'fechaNacimiento') ? true : undefined}
+                  aria-describedby={
+                    errorOcupante(i, 'fechaNacimiento') ? `mod-ocupante-${i}-fecha-error` : undefined
+                  }
+                />
+                {errorOcupante(i, 'fechaNacimiento') && (
+                  <p id={`mod-ocupante-${i}-fecha-error`} className="text-xs font-medium text-error">
+                    {errorOcupante(i, 'fechaNacimiento')}
+                  </p>
+                )}
+              </div>
               <div className="flex items-center justify-between gap-2">
                 {o.fechaNacimiento && (
                   <EtiquetaPago fecha={o.fechaNacimiento} umbral={reglas.umbralEdad} referencia={form.entrada} />
@@ -312,8 +409,8 @@ function Formulario({
           )}
         </div>
 
-        {errores.general && <AvisoError mensaje={errores.general} />}
-        {modificar.error && <AvisoError error={modificar.error} />}
+        {avisoSinCambios && <AvisoError mensaje="No hay cambios para guardar." />}
+        {modificar.error && !esErrorDeCampos(modificar.error) && <AvisoError error={modificar.error} />}
       </div>
 
       <DialogFooter>

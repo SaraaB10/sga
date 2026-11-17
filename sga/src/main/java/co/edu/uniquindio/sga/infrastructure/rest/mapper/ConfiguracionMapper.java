@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.infrastructure.rest.mapper;
 
 import co.edu.uniquindio.sga.application.dto.request.ActualizarAlojamientoRequest;
+import co.edu.uniquindio.sga.application.dto.request.ActualizarParametrosRequest;
 import co.edu.uniquindio.sga.application.dto.request.CrearTemporadaRequest;
 import co.edu.uniquindio.sga.application.dto.request.RangoFechasRequest;
 import co.edu.uniquindio.sga.application.dto.request.TramoCancelacionRequest;
@@ -8,6 +9,7 @@ import co.edu.uniquindio.sga.application.dto.response.AlojamientoResponse;
 import co.edu.uniquindio.sga.application.dto.response.PoliticaCancelacionResponse;
 import co.edu.uniquindio.sga.application.dto.response.TemporadaResponse;
 import co.edu.uniquindio.sga.application.usecase.ConfiguracionAlojamientoUseCase;
+import co.edu.uniquindio.sga.application.usecase.ParametrosAlojamientoUseCase;
 import co.edu.uniquindio.sga.application.usecase.TemporadasUseCase;
 import co.edu.uniquindio.sga.domain.entity.Alojamiento;
 import co.edu.uniquindio.sga.domain.entity.ServicioAdicional;
@@ -44,20 +46,26 @@ public interface ConfiguracionMapper {
                 r.horaSalida());
     }
 
+    default ParametrosAlojamientoUseCase.DatosParametros aDatosParametros(ActualizarParametrosRequest r) {
+        return new ParametrosAlojamientoUseCase.DatosParametros(r.umbralEdadFacturable(), r.tiempoPreparacionHoras(),
+                r.plazoConfirmacionHoras(), r.horaLimiteNoShow(), r.horaInicioLlegadaNocturna(),
+                r.recargoRecepcionNocturna(), r.estanciaMinimaNoches(), r.estanciaMinimaActiva(), r.exigeAnticipo(),
+                r.porcentajeAnticipo(), r.conceptoDepositoGarantia(), r.depositoGarantia(), r.aceptaMascotas(),
+                r.cargoAseoMascota(), r.maximoMascotas(), r.pesoMaximoMascotaKg(), r.edadMinimaCuenta());
+    }
+
     /**
-     * El depósito de garantía (RP-02) no es parte del agregado Alojamiento: llega del bean DepositoGarantia, el mismo
-     * que usa el folio, para no duplicar el valor configurado.
-     */
-    /**
+     * @param recargoRecepcionNocturna  valor del servicio que cobra la llegada nocturna (RP-03); null si no existe.
      * @param motivoObligatorio por qué cada servicio (por su id) no puede desactivarse ni dejar de generar cargo;
      *                          null si se puede. Lo decide GestionServiciosAdicionalesService.
      */
-    default AlojamientoResponse aAlojamientoResponse(Alojamiento a, DepositoGarantia deposito,
+    default AlojamientoResponse aAlojamientoResponse(Alojamiento a, Long recargoRecepcionNocturna,
                                                      Function<String, String> motivoObligatorio) {
         if (a == null) {
             return null;
         }
         CargoAseoMascota mascotas = a.getPoliticaMascotas();
+        DepositoGarantia deposito = a.getDepositoGarantia();
         AlojamientoResponse.ParametrosResponse parametros = new AlojamientoResponse.ParametrosResponse(
                 a.getUmbralEdadFacturable() == null ? null : a.getUmbralEdadFacturable().anios(),
                 a.getTiempoPreparacion() == null ? null : a.getTiempoPreparacion().horas(),
@@ -72,7 +80,10 @@ public interface ConfiguracionMapper {
                 aPesos(mascotas.valor()),
                 mascotas.maximoMascotas(),
                 mascotas.pesoMaximoKg(),
-                deposito == null ? 0 : aPesos(deposito.monto()));
+                deposito == null ? 0 : aPesos(deposito.monto()),
+                deposito == null ? null : deposito.concepto(),
+                recargoRecepcionNocturna,
+                a.getEdadMinimaCuenta());
         return new AlojamientoResponse(a.getId(), a.getNombre(), a.getDescripcion(), a.getCiudad(),
                 a.getDireccion(), a.getUbicacion().latitud(), a.getUbicacion().longitud(), a.getHoraEntrada(),
                 a.getHoraSalida(), a.getNormaConvivencia(),

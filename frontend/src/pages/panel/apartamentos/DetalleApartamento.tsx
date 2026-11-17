@@ -6,6 +6,7 @@ import {
   BedDouble,
   CalendarX2,
   CircleDollarSign,
+  LockOpen,
   Pencil,
   Power,
   ScrollText,
@@ -15,7 +16,7 @@ import {
 import { useHistoricoTarifas, useTodasLasTemporadas } from '@/api/apartamentos'
 import { esErrorApi } from '@/api/cliente'
 import { useApartamento } from '@/api/publico'
-import type { ApartamentoDetalleResponse, TemporadaResponse } from '@/api/tipos'
+import type { ApartamentoDetalleResponse, BloqueoResponse, TemporadaResponse } from '@/api/tipos'
 import {
   AvisoError,
   Dinero,
@@ -31,6 +32,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   DialogoActivar,
   DialogoBloqueo,
+  DialogoLevantarBloqueo,
   DialogoRetirar,
   DialogoServicio,
 } from './AccionesApartamento'
@@ -47,6 +49,7 @@ export default function DetalleApartamento() {
   const consulta = useApartamento(id)
   const temporadas = useTodasLasTemporadas()
   const [dialogo, setDialogo] = useState<Dialogo>(null)
+  const [bloqueoALevantar, setBloqueoALevantar] = useState<BloqueoResponse | null>(null)
   const abrir = (d: Exclude<Dialogo, null>) => ({
     abierto: dialogo === d,
     alCambiar: (abierto: boolean) => setDialogo(abierto ? d : null),
@@ -94,7 +97,7 @@ export default function DetalleApartamento() {
           <h1 className="font-titulo text-3xl font-semibold">{a.nombre}</h1>
           <span className="text-lg text-muted-foreground">{a.identificacion}</span>
           <EstadoOperativo estado={a.estadoOperativo} />
-          <EtiquetaActivo activo={a.activo} />
+          <EtiquetaActivo apartamento={a} />
         </div>
 
         {esAdmin && (
@@ -148,6 +151,18 @@ export default function DetalleApartamento() {
             <Dato icono={<BedDouble aria-hidden="true" className="size-4" />} etiqueta="Dormitorios" valor={a.dormitorios} />
             <Dato icono={<Users aria-hidden="true" className="size-4" />} etiqueta="Capacidad" valor={`${a.capacidadMaxima} ${a.capacidadMaxima === 1 ? 'persona' : 'personas'}`} />
           </dl>
+          <h3 className="mt-5 text-sm font-semibold">Características</h3>
+          {(a.caracteristicas ?? []).length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">Sin características registradas.</p>
+          ) : (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {a.caracteristicas.map((c) => (
+                <li key={c} className="rounded-full bg-crema px-3 py-1 text-xs">
+                  {c}
+                </li>
+              ))}
+            </ul>
+          )}
           <h3 className="mt-5 text-sm font-semibold">Dotación</h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {a.dotacion.map((d) => (
@@ -178,6 +193,20 @@ export default function DetalleApartamento() {
             filas={[...a.bloqueosVigentes].sort((x, y) => x.fechaInicio.localeCompare(y.fechaInicio))}
             claveFila={(b) => b.id}
             descripcion="Bloqueos vigentes"
+            acciones={
+              esAdmin
+                ? (b) => (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBloqueoALevantar(b)}
+                      aria-label={`Levantar el bloqueo del ${b.fechaInicio}: ${b.motivo}`}
+                    >
+                      <LockOpen aria-hidden="true" /> Levantar
+                    </Button>
+                  )
+                : undefined
+            }
           />
         )}
       </Tarjeta>
@@ -195,6 +224,11 @@ export default function DetalleApartamento() {
           />
           <DialogoActivar apartamento={a} {...abrir('activar')} />
           <DialogoBloqueo apartamento={a} {...abrir('bloqueo')} />
+          <DialogoLevantarBloqueo
+            apartamento={a}
+            bloqueo={bloqueoALevantar}
+            alCambiar={(abierto) => !abierto && setBloqueoALevantar(null)}
+          />
           <DialogoServicio apartamento={a} {...abrir('servicio')} />
           <DialogoRetirar apartamento={a} {...abrir('retirar')} alRetirar={() => navigate('/panel/apartamentos')} />
         </>

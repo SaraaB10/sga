@@ -5,6 +5,7 @@ import co.edu.uniquindio.sga.domain.entity.ServicioAdicional;
 import co.edu.uniquindio.sga.domain.entity.Temporada;
 import co.edu.uniquindio.sga.domain.valueobject.CargoAseoMascota;
 import co.edu.uniquindio.sga.domain.valueobject.Coordenada;
+import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.EstanciaMinima;
 import co.edu.uniquindio.sga.domain.valueobject.IdentificacionApartamento;
@@ -61,13 +62,19 @@ public class AlojamientoPersistenceMapper {
         e.setMascotasMaximo(mascotas.maximoMascotas());
         e.setMascotasPesoMaximoKg(mascotas.pesoMaximoKg());
 
+        if (a.getDepositoGarantia() != null) {
+            e.setDepositoGarantiaConcepto(a.getDepositoGarantia().concepto());
+            e.setDepositoGarantiaValor(a.getDepositoGarantia().monto().monto());
+        }
+        e.setEdadMinimaCuenta(a.getEdadMinimaCuenta());
+
         e.setApartamentos(new ArrayList<>(a.getApartamentos().stream().map(IdentificacionApartamento::codigo).toList()));
         return e;
     }
 
     public Alojamiento aDominio(AlojamientoEntity e, List<TemporadaEntity> temporadas,
                                 List<ServicioAdicionalEntity> servicios) {
-        return Alojamiento.reconstruir(
+        Alojamiento alojamiento = Alojamiento.reconstruir(
                 e.getAlojamientoId(), e.getNombre(), e.getDescripcion(), e.getCiudad(), e.getDireccion(),
                 new Coordenada(e.getLatitud(), e.getLongitud()), e.getHoraEntrada(), e.getHoraSalida(),
                 e.getNormaConvivencia(),
@@ -84,6 +91,15 @@ public class AlojamientoPersistenceMapper {
                 e.getApartamentos().stream().map(IdentificacionApartamento::new).toList(),
                 temporadas.stream().map(this::aDominio).toList(),
                 servicios.stream().map(this::aDominio).toList());
+        // Una base anterior a estos parámetros los trae en null: los completa DatosInicialesParametrosConfig
+        if (e.getDepositoGarantiaConcepto() != null && e.getDepositoGarantiaValor() != null) {
+            alojamiento.configurarDepositoGarantia(
+                    DepositoGarantia.de(e.getDepositoGarantiaConcepto(), new Dinero(e.getDepositoGarantiaValor())));
+        }
+        if (e.getEdadMinimaCuenta() != null) {
+            alojamiento.configurarEdadMinimaCuenta(e.getEdadMinimaCuenta());
+        }
+        return alojamiento;
     }
 
     //  TEMPORADA

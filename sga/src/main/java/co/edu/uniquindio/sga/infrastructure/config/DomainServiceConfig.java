@@ -31,8 +31,6 @@ import co.edu.uniquindio.sga.domain.service.RegistrarBloqueoService;
 import co.edu.uniquindio.sga.domain.service.ReportesService;
 import co.edu.uniquindio.sga.domain.service.RetiroApartamentoService;
 import co.edu.uniquindio.sga.domain.service.VencimientoReservasService;
-import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
-import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -54,14 +52,6 @@ public class DomainServiceConfig {
     @Bean
     public Clock reloj(@Value("${sga.alojamiento.zona-horaria}") String zona) {
         return Clock.system(ZoneId.of(zona));
-    }
-
-    /** RP-02: depósito de garantía que se asienta en el folio de toda reserva nueva del Apartahotel Coral. */
-    @Bean
-    public DepositoGarantia depositoGarantia(
-            @Value("${sga.alojamiento.deposito-garantia-concepto}") String concepto,
-            @Value("${sga.alojamiento.deposito-garantia}") long pesos) {
-        return DepositoGarantia.de(concepto, Dinero.de(pesos));
     }
 
     /**
@@ -95,16 +85,15 @@ public class DomainServiceConfig {
         return new CotizadorEstanciaService(apartamentos, alojamientos);
     }
 
-    /** RP-02 y RP-03: recibe el depósito de garantía y el id del servicio de recepción nocturna. */
+    /** RP-03: recibe el id del servicio de recepción nocturna; el depósito (RP-02) lo lee del alojamiento. */
     @Bean
     public CreacionReservaService creacionReservaService(
             ReservaRepository reservas, FolioRepository folios, ApartamentoRepository apartamentos,
             AlojamientoRepository alojamientos, ServicioAdicionalRepository servicios,
             DisponibilidadApartamentoService disponibilidad, CotizadorEstanciaService cotizador,
-            DepositoGarantia deposito,
             @Value("${sga.alojamiento.id-servicio-recepcion-nocturna}") String idRecepcionNocturna) {
         return new CreacionReservaService(reservas, folios, apartamentos, alojamientos, servicios,
-                disponibilidad, cotizador, deposito, idRecepcionNocturna);
+                disponibilidad, cotizador, idRecepcionNocturna);
     }
 
     /** RP-03: protege el servicio con el que se cobra la recepción nocturna. */

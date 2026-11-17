@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -156,8 +157,20 @@ public class ReservaJpaRepository implements ReservaRepository {
                 Sort.by(Sort.Direction.DESC, "fechaCreacion").and(Sort.by(Sort.Direction.DESC, "id")));
         Page<ReservaEntity> resultado = dataRepository.buscarConFiltro(criterios.estado(),
                 criterios.apartamento() == null ? null : criterios.apartamento().codigo(),
-                criterios.canal(), criterios.documentoTitular(), criterios.desde(), criterios.hasta(), pageable);
+                criterios.canal(), criterios.documentoTitular(), criterios.desde(), criterios.hasta(),
+                patronDeBusqueda(criterios.busqueda()), pageable);
         return mapper.aPagina(resultado);
+    }
+
+    /** Texto buscado en minúsculas, con %, _ y \ escapados para que el like los tome como texto */
+    private static String patronDeBusqueda(String busqueda) {
+        if (busqueda == null) {
+            return null;
+        }
+        return busqueda.toLowerCase(Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private static Pageable porApartamento(int pagina, int tamano) {

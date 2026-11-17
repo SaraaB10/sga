@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cliente } from './cliente'
 import { llavesPublicas } from './publico'
+import type { MedioPagoResponse } from './reservas'
 import type {
   AlojamientoResponse,
   FechaISO,
@@ -163,6 +164,88 @@ export function useActualizarAlojamiento() {
       return queryClient.invalidateQueries({ queryKey: llavesPublicas.alojamiento })
     },
   })
+}
+
+// ---------- Parámetros del alojamiento ----------
+
+/** PUT /api/alojamiento/parametros: la configuración completa; el dinero en pesos enteros, las horas "HH:mm" */
+export interface ActualizarParametrosRequest {
+  umbralEdadFacturable: number
+  tiempoPreparacionHoras: number
+  plazoConfirmacionHoras: number
+  horaLimiteNoShow: string
+  horaInicioLlegadaNocturna: string
+  recargoRecepcionNocturna: number
+  estanciaMinimaNoches: number
+  estanciaMinimaActiva: boolean
+  exigeAnticipo: boolean
+  porcentajeAnticipo: number
+  conceptoDepositoGarantia: string
+  depositoGarantia: number
+  aceptaMascotas: boolean
+  cargoAseoMascota: number
+  maximoMascotas: number
+  pesoMaximoMascotaKg: number
+  edadMinimaCuenta: number
+}
+
+export async function actualizarParametros(datos: ActualizarParametrosRequest): Promise<AlojamientoResponse> {
+  const { data } = await cliente.put<AlojamientoResponse>('/api/alojamiento/parametros', datos)
+  return data
+}
+
+/**
+ * Rigen de inmediato: se reemplaza el alojamiento en caché y se descartan las cotizaciones guardadas, que se
+ * calcularon con los parámetros anteriores.
+ */
+export function useActualizarParametros() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: actualizarParametros,
+    onSuccess: (alojamiento) => {
+      queryClient.setQueryData(llavesPublicas.alojamiento, alojamiento)
+      queryClient.removeQueries({ queryKey: ['cotizacion'] })
+      return queryClient.invalidateQueries({ queryKey: llavesPublicas.alojamiento })
+    },
+  })
+}
+
+// ---------- Medios de pago (L-18) ----------
+
+const llaveMediosTodos = ['medios-pago', 'todos'] as const
+
+/** Activos e inactivos; solo el administrador (GET /api/medios-pago/todos) */
+export function useTodosLosMediosPago(habilitado = true) {
+  return useQuery({
+    queryKey: llaveMediosTodos,
+    queryFn: async () => (await cliente.get<MedioPagoResponse[]>('/api/medios-pago/todos')).data,
+    enabled: habilitado,
+  })
+}
+
+/** Agregar, activar o desactivar cambia las dos listas: la pública (activos) y la del administrador */
+function useCambioMedioPago<T>(funcion: (dato: T) => Promise<MedioPagoResponse>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: funcion,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['medios-pago'] }),
+  })
+}
+
+export function useCrearMedioPago() {
+  return useCambioMedioPago(async (nombre: string) => (await cliente.post<MedioPagoResponse>('/api/medios-pago', { nombre })).data)
+}
+
+export function useActivarMedioPago() {
+  return useCambioMedioPago(
+    async (codigo: string) => (await cliente.put<MedioPagoResponse>(`/api/medios-pago/${codigo}/activar`)).data,
+  )
+}
+
+export function useDesactivarMedioPago() {
+  return useCambioMedioPago(
+    async (codigo: string) => (await cliente.put<MedioPagoResponse>(`/api/medios-pago/${codigo}/desactivar`)).data,
+  )
 }
 
 /** Los servicios viajan dentro del alojamiento: al cambiar uno se vuelve a consultar */

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { History, Info, Plus, ScrollText, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import { useActualizarPoliticaCancelacion, useVersionesPolitica } from '@/api/configuracion'
 import { usePoliticaVigente } from '@/api/publico'
 import type { PoliticaCancelacionResponse, TramoCancelacionResponse } from '@/api/tipos'
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { entero, erroresDelServidor, MAXIMO_MOTIVO, textoObligatorio, unirErrores, useValidacion } from '@/lib/validacion'
 import { DialogoFormulario } from '@/pages/panel/folio/DialogoFormulario'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 
@@ -155,6 +157,35 @@ function TablaTramos({ politica }: { politica: PoliticaCancelacionResponse }) {
 
 // ---------- Publicar nueva versión ----------
 
+/*
+ * ActualizarPoliticaCancelacionRequest: la consecuencia del no-show y los tramos, cada uno con su antelación (días
+ * enteros, 0 o más) y su porcentaje (entero de 0 a 100). Al menos dos tramos, con antelaciones distintas y uno
+ * desde 0 días.
+ */
+const esquemaPolitica = z.object({
+  tramos: z
+    .array(
+      z.object({
+        antelacion: entero('Días enteros, 0 o más', { minimo: 0 }),
+        porcentaje: entero('Entero entre 0 y 100', { minimo: 0, maximo: 100 }),
+      }),
+    )
+    .min(2, 'La política necesita al menos dos tramos.')
+    .superRefine((tramos, contexto) => {
+      const antelaciones = tramos.map((t) => t.antelacion.trim()).filter((a) => /^\d+$/.test(a)).map(Number)
+      if (antelaciones.length !== tramos.length) return
+      if (new Set(antelaciones).size !== antelaciones.length)
+        contexto.addIssue({ code: 'custom', message: 'Dos tramos no pueden tener la misma antelación.' })
+      else if (!antelaciones.includes(0))
+        contexto.addIssue({ code: 'custom', message: 'Debe haber un tramo desde 0 días.' })
+    }),
+  consecuencia: textoObligatorio(
+    'Describe qué pasa si el huésped no se presenta',
+    MAXIMO_MOTIVO,
+    'La consecuencia del no-show admite máximo 250 caracteres',
+  ),
+})
+
 interface TramoEditable {
   clave: number
   antelacion: string
@@ -171,7 +202,14 @@ function DialogoPublicar({ vigente, abierto, alCambiar }: PropsPublicar) {
   const publicar = useActualizarPoliticaCancelacion()
   const [tramos, setTramos] = useState<TramoEditable[]>([])
   const [consecuencia, setConsecuencia] = useState('')
-  const [errores, setErrores] = useState<Record<string, string | undefined>>({})
+  const validacion = useValidacion(esquemaPolitica, { tramos, consecuencia })
+  const errores = unirErrores(
+    validacion.errores,
+    erroresDelServidor(publicar.error, { consecuenciaNoShow: 'consecuencia' }),
+  )
+  const errorTramo = (i: number, campo: 'antelacion' | 'porcentaje') =>
+    errores[`tramos.${i}.${campo}`] ??
+    errores[`tramos.${i}.${campo === 'antelacion' ? 'antelacionMinimaDias' : 'porcentajeRetencion'}`]
 
   // Al abrir, el formulario parte de la versión vigente
   const [anterior, setAnterior] = useState(abierto)
@@ -186,7 +224,7 @@ function DialogoPublicar({ vigente, abierto, alCambiar }: PropsPublicar) {
         })),
       )
       setConsecuencia(vigente?.consecuenciaNoShow ?? '')
-      setErrores({})
+      validacion.reiniciar()
       publicar.reset()
     }
   }
@@ -195,29 +233,15 @@ function DialogoPublicar({ vigente, abierto, alCambiar }: PropsPublicar) {
     setTramos((ts) => ts.map((t) => (t.clave === clave ? { ...t, [campo]: valor } : t)))
 
   const enviar = () => {
-    const nuevos: Record<string, string | undefined> = {}
-    const convertidos = tramos.map((t) => {
-      const antelacion = Number(t.antelacion)
-      const porcentaje = Number(t.porcentaje)
-      if (t.antelacion.trim() === '' || !Number.isInteger(antelacion) || antelacion < 0)
-        nuevos[`antelacion-${t.clave}`] = 'Días enteros, 0 o más'
-      if (t.porcentaje.trim() === '' || !Number.isInteger(porcentaje) || porcentaje < 0 || porcentaje > 100)
-        nuevos[`porcentaje-${t.clave}`] = 'Entre 0 y 100'
-      return { antelacionMinimaDias: antelacion, porcentajeRetencion: porcentaje }
-    })
-    if (convertidos.length < 2) nuevos.tramos = 'La política necesita al menos dos tramos.'
-    else if (new Set(convertidos.map((t) => t.antelacionMinimaDias)).size !== convertidos.length)
-      nuevos.tramos = 'Dos tramos no pueden tener la misma antelación.'
-    else if (!convertidos.some((t) => t.antelacionMinimaDias === 0)) nuevos.tramos = 'Debe haber un tramo desde 0 días.'
-    if (!consecuencia.trim()) nuevos.consecuencia = 'Describe qué pasa si el huésped no se presenta'
-
-    setErrores(nuevos)
-    if (Object.values(nuevos).some(Boolean)) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
 
     publicar.mutate(
       {
-        consecuenciaNoShow: consecuencia.trim(),
-        tramos: convertidos.sort((a, b) => b.antelacionMinimaDias - a.antelacionMinimaDias),
+        consecuenciaNoShow: limpios.consecuencia,
+        tramos: limpios.tramos
+          .map((t) => ({ antelacionMinimaDias: Number(t.antelacion), porcentajeRetencion: Number(t.porcentaje) }))
+          .sort((a, b) => b.antelacionMinimaDias - a.antelacionMinimaDias),
       },
       {
         onSuccess: (politica) => {
@@ -249,10 +273,10 @@ function DialogoPublicar({ vigente, abierto, alCambiar }: PropsPublicar) {
         </p>
         {tramos.map((t, i) => (
           <div key={t.clave} className="grid grid-cols-[1fr_1fr_auto] items-start gap-2">
-            <Campo id={`tramo-${t.clave}-antelacion`} etiqueta="Desde (días)" error={errores[`antelacion-${t.clave}`]}>
+            <Campo id={`tramo-${t.clave}-antelacion`} etiqueta="Desde (días)" error={errorTramo(i, 'antelacion')}>
               <Input inputMode="numeric" value={t.antelacion} onChange={(e) => cambiar(t.clave, 'antelacion', e.target.value)} />
             </Campo>
-            <Campo id={`tramo-${t.clave}-porcentaje`} etiqueta="Retiene (%)" error={errores[`porcentaje-${t.clave}`]}>
+            <Campo id={`tramo-${t.clave}-porcentaje`} etiqueta="Retiene (%)" error={errorTramo(i, 'porcentaje')}>
               <Input inputMode="numeric" value={t.porcentaje} onChange={(e) => cambiar(t.clave, 'porcentaje', e.target.value)} />
             </Campo>
             <Button

@@ -12,7 +12,7 @@ El SGA es el backend que maneja la operación del Apartahotel Coral, en Bocagran
 
 - Java 25
 - Spring Boot 4 con Gradle
-- Spring Data JPA y H2 en memoria
+- Spring Data JPA y H2 en archivo (en memoria con el perfil `memoria` y en las pruebas)
 - Bean Validation
 - MapStruct (DTO ↔ dominio)
 - springdoc-openapi (Swagger UI)
@@ -61,7 +61,7 @@ Cuando en la consola salga `Started SgaApplication`, la API queda en `http://loc
 | Qué | Dónde |
 |---|---|
 | Swagger UI | http://localhost:8080/swagger-ui.html |
-| Consola H2 | http://localhost:8080/h2-console (URL `jdbc:h2:mem:sgadb`, usuario `sa`, sin contraseña) |
+| Consola H2 | http://localhost:8080/h2-console (URL `jdbc:h2:file:./data/sga`, usuario `sa`, sin contraseña; con el perfil `memoria`, `jdbc:h2:mem:sgadb`) |
 | Contrato OpenAPI | `sga/docs/api/openapi.yaml` |
 
 Para correr las pruebas:
@@ -72,9 +72,37 @@ Para correr las pruebas:
 
 El reporte queda en `sga/build/reports/tests/test/index.html`.
 
+### Los datos se guardan entre reinicios
+
+Al arrancar normal (`./gradlew bootRun`) la base H2 se guarda en el archivo `sga/data/sga.mv.db` (`jdbc:h2:file:./data/sga`, con `ddl-auto=update`): las cuentas, reservas y demás cambios siguen ahí al volver a arrancar. No hace falta ningún perfil.
+
+- Los datos iniciales solo se cargan cuando la base está vacía (el primer arranque); en los siguientes no se vuelven a cargar ni se duplican.
+- La carpeta `data/` está en `.gitignore`: la base nunca se sube al repositorio.
+- Las pruebas (`./gradlew test`) usan H2 en memoria (`src/test/resources/config/application.properties`) y nunca tocan `data/`.
+
+**Empezar en limpio.** Hay dos formas:
+
+1. Detén la app, borra la carpeta `sga/data/` y vuelve a arrancar: se crea una base nueva con los datos iniciales.
+2. Arranca con el perfil `memoria`, que usa H2 en memoria (`jdbc:h2:mem:sgadb`): cada arranque empieza de cero y al detener la app no queda nada guardado. Desde la carpeta `sga/`:
+
+```bash
+# Mac y Linux
+./gradlew bootRun --args='--spring.profiles.active=memoria'
+```
+
+```powershell
+# Windows (PowerShell)
+.\gradlew.bat bootRun --args='--spring.profiles.active=memoria'
+```
+
+```bat
+:: Windows (símbolo del sistema, cmd)
+gradlew.bat bootRun --args="--spring.profiles.active=memoria"
+```
+
 ## Datos iniciales
 
-La base es en memoria, así que cada vez que arranca la app se cargan solos estos datos. Las fechas de los bloqueos y de las reservas son relativas al día en que arranca (hoy en Colombia):
+Cuando la base está vacía (el primer arranque, después de borrar `sga/data/` o en cada arranque con el perfil `memoria`) se cargan solos estos datos. Las fechas de los bloqueos y de las reservas son relativas al día en que se cargan (hoy en Colombia), así que con una base guardada de días anteriores esas fechas ya no son las de hoy:
 
 - El alojamiento Coral, con sus horarios (entrada 15:00, salida 11:00), normas, parámetros y la política de mascotas (máximo 2 de hasta 10 kg, aseo de $110.000) (Anexo A).
 - Tres servicios adicionales: recepción nocturna ($70.000, RP-03), paseo privado por la bahía ($420.000) y cena en balcón ($260.000).
@@ -84,10 +112,10 @@ La base es en memoria, así que cada vez que arranca la app se cargan solos esto
 
 | Apartamento | Nombre | Capacidad | Estado al arrancar |
 |---|---|---|---|
-| APT-101 | Coral Luminoso | 2 | PREPARADO |
+| APT-101 | Coral Luminoso | 2 | PREPARADO, con un bloqueo de hoy+4 a hoy+7 |
 | APT-102 | Arrecife Rosado | 2 | PREPARADO |
 | APT-201 | Marea Dorada | 4 | OCUPADO (tiene la reserva EN_CURSO) |
-| APT-202 | Bahía Cristal | 4 | FUERA_DE_SERVICIO, con un bloqueo de hoy+3 a hoy+15 |
+| APT-202 | Bahía Cristal | 4 | FUERA_DE_SERVICIO, con un bloqueo de hoy a hoy+15 |
 | APT-301 | Gran Coral Imperial | 6 | PREPARADO, con un bloqueo de hoy+20 a hoy+25 |
 
 - 7 reservas en todos los estados y por los tres canales, cada una con su folio:
@@ -102,13 +130,17 @@ La base es en memoria, así que cada vez que arranca la app se cargan solos esto
 | CANCELADA | APT-101 | hoy+20 a hoy+22 | PORTAL |
 | PENDIENTE | APT-201 | hoy+15 a hoy+18 | EXTERNO (sin hora de llegada) |
 
+- Al menos un usuario por rol (administrador, recepción, personal de servicio y dos huéspedes).
+
+Si la base ya existe, los cargadores no duplican nada y solo completan lo mínimo que le falte: los apartamentos del inventario y sus tarifas, un usuario por cada rol sin ninguno, un apartamento FUERA_DE_SERVICIO con su bloqueo, un bloqueo vigente y una reserva por cada estado y canal que no tenga ninguna, siempre en noches libres.
+
 ## Endpoints
 
-Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (ver [Seguridad](#seguridad)), la sugerencia de gravedad (ver [Modelo de IA](#modelo-de-ia)) y los 3 reportes del administrador (`GET /api/reportes/ocupacion`, `/ingresos` y `/reservas-por-canal`). Todos los listados devuelven 10 resultados por página y las páginas empiezan en 0 (`?pagina=`).
+Son 81 operaciones: las 65 de esta lista, las 12 de autenticación y usuarios (ver [Seguridad](#seguridad)), la sugerencia de gravedad (ver [Modelo de IA](#modelo-de-ia)) y los 3 reportes del administrador (`GET /api/reportes/ocupacion`, `/ingresos` y `/reservas-por-canal`). Todos los listados devuelven 10 resultados por página y las páginas empiezan en 0 (`?pagina=`).
 
 **Reservas**
 - `POST /api/reservas` crear una reserva (201 con `Location`); acepta mascotas opcionales (`cantidadMascotas`, `pesoMascotaMasPesadaKg`)
-- `GET /api/reservas` listar con filtros (estado, apartamento, canal, titular y fechas), de la más reciente a la más antigua
+- `GET /api/reservas` listar con filtros (estado, apartamento, canal, documento del titular, fechas y `buscar`, que encuentra por una parte del código o del nombre del titular), de la más reciente a la más antigua. El buscador del encabezado del panel abre **Reservas** con esa búsqueda aplicada
 - `GET /api/reservas/{codigo}` consultar una reserva
 - `PUT /api/reservas/{codigo}` modificar fechas, ocupantes, apartamento o mascotas
 - `PUT /api/reservas/{codigo}/confirmar` confirmar (el cuerpo con la hora de llegada es opcional)
@@ -137,6 +169,7 @@ Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (v
 - `GET /api/apartamentos/pendientes-preparacion` los que están en PENDIENTE_PREPARACION o EN_PREPARACION
 - `POST /api/apartamentos/{id}/bloqueos` registrar un bloqueo (201 con `Location`)
 - `GET /api/apartamentos/{id}/bloqueos/{idBloqueo}` consultar un bloqueo, también si ya se levantó (es el recurso del `Location`)
+- `PUT /api/apartamentos/{id}/bloqueos/{idBloqueo}/levantar` levantar un bloqueo vigente: sus noches vuelven a la venta y el bloqueo se conserva como levantado (solo administrador)
 - `POST /api/apartamentos/{id}/novedades` registrar una novedad (201 con `Location`)
 - `GET /api/apartamentos/{id}/novedades/{idNovedad}` consultar una novedad (es el recurso del `Location`)
 - `GET /api/apartamentos/{id}/novedades` historial de novedades, de la más reciente a la más antigua
@@ -164,8 +197,10 @@ Son 80 operaciones: las 64 de esta lista, las 12 de autenticación y usuarios (v
 - `GET /api/canales/eventos?canal=&desde=&hasta=` bitácora de mensajes con los canales (7.8)
 
 **Configuración del alojamiento**
-- `GET /api/alojamiento` y `PUT /api/alojamiento` consultar y actualizar los datos del alojamiento (los parámetros son de solo lectura)
-- `POST /api/alojamiento/servicios` crear un servicio adicional (201 con `Location`), `GET` y `PUT /api/alojamiento/servicios/{id}` consultarlo y editar su nombre, descripción, si genera cargo y su valor, y `PUT /api/alojamiento/servicios/{id}/desactivar` y `/activar` (eliminación lógica). La recepción nocturna no se puede desactivar ni dejar sin cargo, porque RP-03 la cobra a las llegadas desde las 20:00; la respuesta lo explica en `motivoObligatorio` y el panel **Administración → Alojamiento** lo muestra
+- `GET /api/alojamiento` y `PUT /api/alojamiento` consultar y actualizar los datos del alojamiento
+- `GET /api/medios-pago` medios de pago aceptados y activos (público); el administrador los gestiona con `GET /api/medios-pago/todos`, `POST /api/medios-pago` y `PUT /api/medios-pago/{codigo}/activar` y `/desactivar`. Solo con un medio activo se registra un pago
+- `PUT /api/alojamiento/parametros` el administrador cambia los parámetros (umbral de edad facturable, tiempo de preparación, plazo de confirmación y del anticipo, hora límite de no-show, hora y recargo de la recepción nocturna, estancia mínima, anticipo, depósito de garantía, mascotas y edad mínima de la cuenta). Se guardan en la base, nacen con los valores de `application.properties` y rigen de inmediato, sin reiniciar
+- `POST /api/alojamiento/servicios` crear un servicio adicional (201 con `Location`), `GET` y `PUT /api/alojamiento/servicios/{id}` consultarlo y editar su nombre, descripción, si genera cargo y su valor, y `PUT /api/alojamiento/servicios/{id}/desactivar` y `/activar` (eliminación lógica). La recepción nocturna no se puede desactivar ni dejar sin cargo, porque RP-03 la cobra a las llegadas desde la hora configurada; la respuesta lo explica en `motivoObligatorio` y el panel **Administración → Alojamiento** lo muestra
 - `GET /api/temporadas`, `GET /api/temporadas/{id}` y `POST /api/temporadas` listar, consultar y crear temporadas (201 con `Location`)
 - `POST /api/temporadas/{id}/rangos` agregar un rango a una temporada (201 con `Location`)
 - `GET /api/politica-cancelacion` política vigente
@@ -178,11 +213,11 @@ Los errores siempre vuelven con el mismo formato (`ErrorResponse`): **400** cuan
 
 ## Probar la API
 
-En `sga/docs/api/sga.http` dejamos una colección de 253 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 259 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
+En `sga/docs/api/sga.http` dejamos una colección de 261 peticiones que recorre el flujo completo de una reserva y prueba un 409 por cada regla que expone la API, además de los 400 y 404, los casos de seguridad (401, 403 por rol, por propietario y por canal), la gestión de usuarios, el orden de las validaciones de una reserva, el calendario de disponibilidad, el filtro por servicios y los servicios adicionales. Con las 6 del simulador `canal-externo.http` son 267 peticiones. Cada petición valida su respuesta con `client.test`: las de éxito, el código y uno o dos campos clave; las de error, el código y todo el `ErrorResponse` (`status`, `error`, `mensaje`, `path`, `timestamp` y los `errores` por campo de los 400).
 
-1. Arranca la app desde cero.
+1. Arranca la app en limpio, con el perfil `memoria` (`./gradlew bootRun --args='--spring.profiles.active=memoria'`) o después de borrar `sga/data/`. Con una base guardada de antes, las peticiones que esperan los datos iniciales fallan.
 2. Abre `sga.http` en IntelliJ y dale a **Run All Requests in File**. En VS Code se puede usar la extensión REST Client.
-3. Si la quieres volver a correr, reinicia la app primero: la colección cambia los datos.
+3. Si la quieres volver a correr, reinicia la app primero (con el perfil `memoria`, o borrando `sga/data/`): la colección cambia los datos.
 
 ## Documentación
 
@@ -198,7 +233,7 @@ En `sga/docs/api/sga.http` dejamos una colección de 253 peticiones que recorre 
     - Apartamentos y operación: operaciones del estado operativo en lugar del cambio genérico, cada una con su estado de origen, `Location` en bloqueos y novedades con su consulta por id, historial de novedades y apartamentos pendientes de preparación.
     - Folio y transversal: depósito como `AJUSTE_MODIFICACION`, consulta del folio, cargos de servicios adicionales y correcciones (RN-16), `Location` en pagos y temporadas, consulta de una temporada y disponibilidad del canal paginada.
     - Pruebas unitarias de las reglas de configuración (L-03, L-06, L-09, L-12, L-13, L-14 y L-17), del titular facturable (3.2), del apartamento activo (3.3) y del formato del código de reserva.
-- **Verificación:** las 444 pruebas pasan (`./gradlew clean test`), las 253 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
+- **Verificación:** las 472 pruebas pasan (`./gradlew clean test`), las 261 peticiones de `sga.http` y las 6 de `canal-externo.http` pasan contra la app recién arrancada en limpio, las pruebas de integración de cada módulo comprueban el cuerpo de error de un 400, 401, 403, 404 y 409 y la matriz de trazabilidad dice qué prueba unitaria y de integración cubre cada regla.
 
 ## Seguridad
 
@@ -227,7 +262,7 @@ La plantilla es `application-secrets.properties.example`. En despliegue y en Git
 **Login y registro**, ambos públicos:
 
 - `POST /api/auth/login` recibe `correo` y `contrasena` y devuelve el token, que dura 30 minutos.
-- `POST /api/auth/registro` crea un huésped (201) con `nombre`, `correo`, `contrasena`, `telefono`, `documento` y `fechaNacimiento`. Responde 409 si el correo o el documento ya existen.
+- `POST /api/auth/registro` crea un huésped (201) con `nombre`, `correo`, `contrasena`, `telefono`, `documento` y `fechaNacimiento`. El teléfono debe tener al menos 7 dígitos y solo admite números, espacios, guiones, paréntesis y el signo + al inicio (la misma regla rige en el perfil, en los usuarios del panel y en el titular de una reserva, y el frontend la valida igual). Responde 409 si el correo o el documento ya existen.
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/login -H "Content-Type: application/json" \
@@ -366,7 +401,7 @@ WARN ... DatosInicialesCanalesConfig : Falta sga.canales.credencial-demo en appl
 
 **Correr el simulador.** `sga/docs/api/canal-externo.http` hace de plataforma externa y es independiente de `sga.http`:
 
-1. Arranca la app desde cero (`./gradlew bootRun`).
+1. Arranca la app en limpio (`./gradlew bootRun --args='--spring.profiles.active=memoria'`, o después de borrar `sga/data/`).
 2. Abre `canal-externo.http` y pon en `@credencial` el valor de `sga.canales.credencial-demo` (o el del log). `@canal` ya es `booking`.
 3. En IntelliJ dale a **Run All Requests in File**. Corre en orden y cada petición dice arriba qué debe responder:
    1. consultar disponibilidad (200);

@@ -1,5 +1,6 @@
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQueries, useQuery } from '@tanstack/react-query'
 import { cliente } from './cliente'
+import type { MedioPagoResponse } from './reservas'
 import type {
   AlojamientoResponse,
   ApartamentoDetalleResponse,
@@ -42,17 +43,45 @@ export async function consultarApartamento(id: string): Promise<ApartamentoDetal
   return data
 }
 
-/** Noches libres u ocupadas del apartamento en [desde, hasta), máximo 62 noches */
+/**
+ * Noches libres u ocupadas del apartamento en [desde, hasta), máximo 62 noches.
+ * @param excluirReserva al modificar una reserva, sus noches no cuentan como ocupadas (personal o su titular)
+ */
 export async function consultarDisponibilidad(
   id: string,
   desde: string,
   hasta: string,
+  excluirReserva?: string,
 ): Promise<DisponibilidadApartamentoResponse> {
   const { data } = await cliente.get<DisponibilidadApartamentoResponse>(
     `/api/apartamentos/${encodeURIComponent(id)}/disponibilidad`,
-    { params: { desde, hasta } },
+    { params: { desde, hasta, ...(excluirReserva ? { excluirReserva } : {}) } },
   )
   return data
+}
+
+/** Máximo de noches por consulta de disponibilidad */
+const NOCHES_POR_CONSULTA = 62
+
+const sumarDiasISO = (fecha: string, dias: number) => {
+  const d = new Date(`${fecha}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
+/** true si todas las noches de [entrada, salida) están libres; consulta por tramos de 62 noches */
+export async function estanciaLibre(
+  id: string,
+  entrada: string,
+  salida: string,
+  excluirReserva?: string,
+): Promise<boolean> {
+  for (let desde = entrada; desde < salida; desde = sumarDiasISO(desde, NOCHES_POR_CONSULTA)) {
+    const hasta = sumarDiasISO(desde, NOCHES_POR_CONSULTA) < salida ? sumarDiasISO(desde, NOCHES_POR_CONSULTA) : salida
+    const tramo = await consultarDisponibilidad(id, desde, hasta, excluirReserva)
+    if (tramo.noches.some((n) => !n.libre)) return false
+  }
+  return true
 }
 
 export async function consultarAlojamiento(): Promise<AlojamientoResponse> {
@@ -95,12 +124,44 @@ export const llavesPublicas = {
   apartamentos: (pagina: number) => ['apartamentos', 'lista', pagina] as const,
   disponibles: (filtros: FiltrosDisponibles, pagina: number) => ['apartamentos', 'disponibles', filtros, pagina] as const,
   apartamento: (id: string) => ['apartamentos', 'detalle', id] as const,
-  disponibilidad: (id: string, desde: string, hasta: string) =>
-    ['apartamentos', 'disponibilidad', id, desde, hasta] as const,
+  disponibilidad: (id: string, desde: string, hasta: string, excluirReserva = '') =>
+    ['apartamentos', 'disponibilidad', id, desde, hasta, excluirReserva] as const,
+  estanciaLibre: (id: string, entrada: string, salida: string, excluirReserva = '') =>
+    ['apartamentos', 'estancia-libre', id, entrada, salida, excluirReserva] as const,
   alojamiento: ['alojamiento'] as const,
   temporadas: (pagina: number) => ['temporadas', 'lista', pagina] as const,
   temporada: (id: string) => ['temporadas', 'detalle', id] as const,
   politicaVigente: ['politica-cancelacion', 'vigente'] as const,
+  mediosPago: ['medios-pago', 'activos'] as const,
+  opcionesFiltro: ['apartamentos', 'filtros'] as const,
+}
+
+/** GET /api/apartamentos/filtros: opciones reales de los filtros "Dormitorios", "Características" y "Servicios" */
+export interface OpcionesFiltroResponse {
+  /** Números de dormitorios de los apartamentos activos */
+  dormitorios: number[]
+  /** Rasgos de los apartamentos activos, por ejemplo "Vista al mar" */
+  caracteristicas: string[]
+  /** Elementos de la dotación de los apartamentos activos */
+  servicios: string[]
+}
+
+export function useOpcionesFiltro() {
+  return useQuery({
+    queryKey: llavesPublicas.opcionesFiltro,
+    queryFn: async () => (await cliente.get<OpcionesFiltroResponse>('/api/apartamentos/filtros')).data,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/** GET /api/medios-pago: medios aceptados y activos (L-18), públicos */
+export async function listarMediosPago(): Promise<MedioPagoResponse[]> {
+  const { data } = await cliente.get<MedioPagoResponse[]>('/api/medios-pago')
+  return data
+}
+
+export function useMediosPago() {
+  return useQuery({ queryKey: llavesPublicas.mediosPago, queryFn: listarMediosPago, staleTime: 5 * 60 * 1000 })
 }
 
 // ---------- Hooks ----------
@@ -131,13 +192,40 @@ export function useApartamento(id: string | undefined) {
   })
 }
 
-export function useDisponibilidadApartamento(id: string | undefined, desde: string, hasta: string) {
+export function useDisponibilidadApartamento(
+  id: string | undefined,
+  desde: string,
+  hasta: string,
+  excluirReserva?: string,
+) {
   return useQuery({
-    queryKey: llavesPublicas.disponibilidad(id ?? '', desde, hasta),
-    queryFn: () => consultarDisponibilidad(id as string, desde, hasta),
-    enabled: !!id,
+    queryKey: llavesPublicas.disponibilidad(id ?? '', desde, hasta, excluirReserva),
+    queryFn: () => consultarDisponibilidad(id as string, desde, hasta, excluirReserva),
+    enabled: !!id && !!desde && !!hasta && desde < hasta,
     placeholderData: keepPreviousData,
   })
+}
+
+/**
+ * Para cada apartamento, si tiene libres todas las noches de [entrada, salida): true, false o undefined mientras
+ * consulta (o si aún no hay fechas). Lo usan los selectores de apartamento para marcar los "No disponible".
+ */
+export function useEstanciasLibres(
+  ids: string[],
+  entrada: string,
+  salida: string,
+  excluirReserva?: string,
+): Record<string, boolean | undefined> {
+  const conFechas = !!entrada && !!salida && entrada < salida
+  const consultas = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: llavesPublicas.estanciaLibre(id, entrada, salida, excluirReserva),
+      queryFn: () => estanciaLibre(id, entrada, salida, excluirReserva),
+      enabled: conFechas,
+      staleTime: 30_000,
+    })),
+  })
+  return Object.fromEntries(ids.map((id, i) => [id, conFechas ? consultas[i]?.data : undefined]))
 }
 
 export function useAlojamiento() {

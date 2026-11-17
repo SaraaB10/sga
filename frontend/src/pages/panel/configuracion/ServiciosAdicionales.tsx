@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Loader2, Lock, Pencil, Plus, Power, PowerOff } from 'lucide-react'
 import { toast } from 'sonner'
+import { z } from 'zod'
 import {
   useActualizarServicioAdicional,
   useCambiarEstadoServicioAdicional,
@@ -12,8 +13,16 @@ import { AvisoError, Campo, Dinero } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { erroresDe } from '@/pages/panel/folio/erroresDe'
-import { aPesos } from '@/pages/panel/apartamentos/utilidades'
+import {
+  aPesos,
+  erroresDelServidor,
+  esErrorDeCampos,
+  pesos,
+  textoObligatorio,
+  textoOpcional,
+  unirErrores,
+  useValidacion,
+} from '@/lib/validacion'
 import { claseTextarea } from '@/pages/publico/comun/estilos'
 
 /**
@@ -118,6 +127,34 @@ interface Formulario {
   valor: string
 }
 
+/*
+ * ActualizarServicioAdicionalRequest: nombre de hasta 100 caracteres, descripción de hasta 300 y, si genera cargo,
+ * un valor mayor que cero. Al crear (RegistrarServicioAdicionalRequest) se suma el id, de hasta 40 caracteres.
+ */
+const esquemaEdicion = z
+  .object({
+    id: z.string(),
+    nombre: textoObligatorio('Escribe el nombre', 100, 'El nombre admite máximo 100 caracteres'),
+    descripcion: textoOpcional(300, 'La descripción admite máximo 300 caracteres'),
+    generaCargo: z.boolean(),
+    valor: z.string(),
+  })
+  .superRefine((datos, contexto) => {
+    if (datos.generaCargo && !pesos().safeParse(datos.valor).success)
+      contexto.addIssue({
+        code: 'custom',
+        path: ['valor'],
+        message: 'Un servicio con cargo necesita un valor mayor que cero, sin decimales',
+      })
+  })
+
+const esquemaNuevo = esquemaEdicion.safeExtend({
+  id: textoObligatorio('Escribe la identificación, por ejemplo SRV-SPA', 40, 'La identificación admite máximo 40 caracteres').regex(
+    /^[A-Za-z0-9][A-Za-z0-9-]*$/,
+    'Usa letras, números y guiones, por ejemplo SRV-SPA',
+  ),
+})
+
 function DialogoServicio({
   servicio,
   alCerrar,
@@ -138,27 +175,20 @@ function DialogoServicio({
     generaCargo: existente?.generaCargo ?? true,
     valor: existente?.generaCargo ? String(existente.valor) : '',
   })
-  const [errores, setErrores] = useState<Partial<Record<keyof Formulario, string>>>({})
-  const deServidor = erroresDe(errorServidor)
-  const error = (clave: keyof Formulario) => errores[clave] ?? deServidor[clave]
+  const validacion = useValidacion(nuevo ? esquemaNuevo : esquemaEdicion, datos)
+  const errores = unirErrores(validacion.errores, erroresDelServidor(errorServidor))
+  const error = (clave: keyof Formulario) => errores[clave]
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
-    const nuevos: Partial<Record<keyof Formulario, string>> = {}
-    if (nuevo && !/^[A-Za-z0-9][A-Za-z0-9-]{1,39}$/.test(datos.id.trim()))
-      nuevos.id = 'Usa letras, números y guiones, por ejemplo SRV-SPA'
-    if (!datos.nombre.trim()) nuevos.nombre = 'Escribe el nombre'
-    const valor = aPesos(datos.valor)
-    if (datos.generaCargo && (!Number.isInteger(valor) || valor <= 0))
-      nuevos.valor = 'Un servicio con cargo necesita un valor mayor que cero, sin decimales'
-    setErrores(nuevos)
-    if (Object.keys(nuevos).length > 0) return
+    const limpios = validacion.comprobar()
+    if (!limpios) return
 
     const solicitud: ServicioAdicionalRequest = {
-      nombre: datos.nombre.trim(),
-      descripcion: datos.descripcion.trim() === '' ? null : datos.descripcion.trim(),
+      nombre: limpios.nombre,
+      descripcion: limpios.descripcion === '' ? null : limpios.descripcion,
       generaCargo: datos.generaCargo,
-      valor: datos.generaCargo ? valor : null,
+      valor: datos.generaCargo ? aPesos(datos.valor) : null,
     }
     const listo = (texto: string) => () => {
       toast.success(texto, { description: solicitud.nombre })
@@ -230,7 +260,7 @@ function DialogoServicio({
               />
             </Campo>
           )}
-          {errorServidor && <AvisoError error={errorServidor} />}
+          {errorServidor && !esErrorDeCampos(errorServidor) && <AvisoError error={errorServidor} />}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={alCerrar} disabled={guardando}>

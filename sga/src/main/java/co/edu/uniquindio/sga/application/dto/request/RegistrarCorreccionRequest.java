@@ -2,6 +2,8 @@ package co.edu.uniquindio.sga.application.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /**
  * POST /api/reservas/{codigo}/folio/correcciones (RN-16: toda corrección es un movimiento inverso)
@@ -10,9 +12,11 @@ import jakarta.validation.constraints.NotNull;
  */
 public record RegistrarCorreccionRequest(
         @NotNull(message = "La posición del cargo a corregir es obligatoria")
+        @PositiveOrZero(message = "La posición del cargo no puede ser negativa")
         Integer indiceCargo,
 
         @NotBlank(message = "El motivo de la corrección es obligatorio")
+        @Size(max = ReglaTexto.MAXIMO_MOTIVO, message = "El motivo admite máximo 250 caracteres")
         String motivo
 ) {
 }

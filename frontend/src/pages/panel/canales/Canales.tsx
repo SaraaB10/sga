@@ -53,7 +53,8 @@ export default function Canales() {
         <div>
           <h1 className="font-titulo text-3xl font-semibold">Canales de venta</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Plataformas externas que venden el inventario. Cada una se autentica con su propia credencial.
+            El inventario se vende por tres canales: Portal y Directo vienen con la aplicación, y cada plataforma
+            externa se autentica con su propia credencial.
           </p>
         </div>
         <Button onClick={() => setCreando(true)}>

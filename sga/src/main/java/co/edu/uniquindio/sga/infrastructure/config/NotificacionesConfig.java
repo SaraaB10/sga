@@ -1,6 +1,8 @@
 package co.edu.uniquindio.sga.infrastructure.config;
 
+import co.edu.uniquindio.sga.domain.entity.Alojamiento;
 import co.edu.uniquindio.sga.domain.port.NotificadorTitular;
+import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import co.edu.uniquindio.sga.infrastructure.notificaciones.NotificadorTitularLocal;
 import co.edu.uniquindio.sga.infrastructure.notificaciones.NotificadorTitularSmtp;
 import co.edu.uniquindio.sga.infrastructure.notificaciones.PlantillasCorreo;
@@ -30,12 +32,19 @@ public class NotificacionesConfig {
 
     private static final Logger log = LoggerFactory.getLogger(NotificacionesConfig.class);
 
+    /**
+     * El horario sale del alojamiento guardado en cada correo (lo edita el administrador); el de
+     * application.properties solo se usa si aún no hay alojamiento.
+     */
     @Bean
     public PlantillasCorreo plantillasCorreo(
+            AlojamientoRepository alojamientos,
             @Value("${sga.notificaciones.nombre-alojamiento}") String nombreAlojamiento,
-            @Value("${sga.alojamiento.hora-entrada}") LocalTime horaEntrada,
-            @Value("${sga.alojamiento.hora-salida}") LocalTime horaSalida) {
-        return new PlantillasCorreo(nombreAlojamiento, horaEntrada, horaSalida);
+            @Value("${sga.alojamiento.hora-entrada}") LocalTime horaEntradaInicial,
+            @Value("${sga.alojamiento.hora-salida}") LocalTime horaSalidaInicial) {
+        return new PlantillasCorreo(nombreAlojamiento,
+                () -> alojamientos.obtener().map(Alojamiento::getHoraEntrada).orElse(horaEntradaInicial),
+                () -> alojamientos.obtener().map(Alojamiento::getHoraSalida).orElse(horaSalidaInicial));
     }
 
     @Bean

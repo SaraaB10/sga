@@ -43,6 +43,7 @@ public interface ApartamentoMapper {
     @Mapping(target = "identificacion", source = "identificacion.codigo")
     @Mapping(target = "capacidadMaxima", source = "capacidad.maximo")
     @Mapping(target = "dotacion", source = "dotacion.elementos")
+    @Mapping(target = "caracteristicas", source = "caracteristicas.elementos")
     @Mapping(target = "imagenes", source = "imagenes")
     ApartamentoResponse aResponse(Apartamento apartamento);
 
@@ -73,6 +74,7 @@ public interface ApartamentoMapper {
                 apartamento.getDormitorios(),
                 apartamento.getCapacidad().maximo(),
                 apartamento.getDotacion().elementos(),
+                apartamento.getCaracteristicas().elementos(),
                 apartamento.getImagenes().stream()
                         .map(i -> new ApartamentoDetalleResponse.ImagenResponse(i.url(), i.esPrincipal()))
                         .toList(),

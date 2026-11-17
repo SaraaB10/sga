@@ -95,6 +95,22 @@ class FolioControllerIntegracionTest {
         put(folio + "/cerrar").andExpect(status().isConflict());
     }
 
+    // La devolución del depósito con la salida está en DevolucionDepositoIntegracionTest (base propia: saca a la
+    // reserva EN_CURSO de los datos iniciales, que otras pruebas usan)
+
+    @Test
+    @DisplayName("RP-02: el depósito no se devuelve antes de la llegada (409); 400 sin medio y 404 sin reserva")
+    void devolverDepositoValidaciones() throws Exception {
+        String folio = "/api/reservas/" + codigo(crearReserva(LocalDate.now(BOGOTA).plusDays(160))) + "/folio";
+        post(folio + "/devolucion-deposito", "{\"medio\":\"TARJETA_DEBITO_CREDITO\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje", containsString("durante la estancia")))
+                .andExpect(jsonPath("$.mensaje", containsString("PENDIENTE")));
+        post(folio + "/devolucion-deposito", "{}").andExpect(status().isBadRequest());
+        post(RESERVA_INEXISTENTE + "/devolucion-deposito", "{\"medio\":\"TARJETA_DEBITO_CREDITO\"}")
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     @DisplayName("El administrador cierra con saldo y queda registrado quién y por qué (RN-17)")
     void cierreAutorizadoConSaldo() throws Exception {
@@ -124,7 +140,10 @@ class FolioControllerIntegracionTest {
         post(folio + "/pagos", "{\"valor\":5000}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.medio").exists());
-        post(folio + "/pagos", "{\"valor\":5000,\"medio\":\"EFECTIVO\"}").andExpect(status().isBadRequest());
+        // Un medio que no está en el catálogo (L-18) es una regla del negocio, no un mensaje mal formado: 409
+        post(folio + "/pagos", "{\"valor\":5000,\"medio\":\"EFECTIVO\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("L-18: el medio de pago EFECTIVO no está entre los medios aceptados"));
         post(folio + "/autorizacion-cierre", "{\"autorizadoPor\":\"Marta\"}")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.motivo").exists());
@@ -230,9 +249,10 @@ class FolioControllerIntegracionTest {
         post(folio + "/correcciones", correccion(99, "No existe"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.mensaje", startsWith("RN-16")));
+        // Una posición negativa es un error de forma: 400 sobre el campo
         post(folio + "/correcciones", correccion(-1, "No existe"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.mensaje", startsWith("RN-16")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.indiceCargo").value("La posición del cargo no puede ser negativa"));
 
         cerrarConAutorizacion(folio);
         post(folio + "/correcciones", correccion(0, "Tarde"))

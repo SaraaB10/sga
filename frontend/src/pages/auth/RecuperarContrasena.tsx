@@ -10,16 +10,10 @@ import { esErrorApi } from '@/api/cliente'
 import { AvisoError, Campo } from '@/components/coral'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { correo, erroresDelServidor } from '@/lib/validacion'
 import { PanelBienvenida } from './PanelBienvenida'
 
-const esquema = z.object({
-  correo: z
-    .string()
-    .trim()
-    .min(1, 'Escribe tu correo')
-    .email('El correo no tiene un formato válido')
-    .max(120, 'El correo admite máximo 120 caracteres'),
-})
+const esquema = z.object({ correo: correo() })
 
 type Datos = z.infer<typeof esquema>
 
@@ -49,9 +43,8 @@ export default function RecuperarContrasena() {
       navigate('/recuperar/codigo', { state: { correo: datos.correo } satisfies EstadoRecuperacion })
     },
     onError: (error) => {
-      if (esErrorApi(error) && error.status === 400 && error.errores.correo) {
-        setError('correo', { message: error.errores.correo })
-      }
+      const { correo: mensaje } = erroresDelServidor(error)
+      if (mensaje) setError('correo', { message: mensaje })
     },
   })
 

@@ -105,7 +105,14 @@ export interface RetencionResponse {
   retencion: number
 }
 
-export type MedioPago = 'TARJETA_DEBITO_CREDITO' | 'TRANSFERENCIA_BANCARIA'
+/** Código de un medio del catálogo (L-18), por ejemplo TARJETA_DEBITO_CREDITO; el nombre viene de GET /api/medios-pago */
+export type MedioPago = string
+
+export interface MedioPagoResponse {
+  codigo: MedioPago
+  nombre: string
+  activo: boolean
+}
 
 export type TipoCargo = 'ALOJAMIENTO' | 'SERVICIO_ADICIONAL' | 'AJUSTE_MODIFICACION' | 'PENALIDAD_CANCELACION_NOSHOW'
 
@@ -117,18 +124,24 @@ export interface CargoResponse {
 }
 
 export interface PagoResponse {
+  /** Siempre positivo */
   valor: number
   medio: MedioPago
   fecha: FechaISO
+  /** Dinero devuelto al huésped (el depósito de garantía): resta del total pagado */
+  devolucion: boolean
 }
 
 export interface FolioResponse {
   codigoReserva: string
   fechaApertura: FechaISO
   depositoGarantia: number
+  /** Ya se devolvió el depósito de garantía */
+  depositoReembolsado: boolean
   cargos: CargoResponse[]
   pagos: PagoResponse[]
   totalCargos: number
+  /** Abonos menos devoluciones */
   totalPagado: number
   /** Cargos menos pagos; negativo si hay saldo a favor */
   saldo: number
@@ -146,6 +159,8 @@ export interface FiltrosReservas {
   titular?: string
   desde?: FechaISO
   hasta?: FechaISO
+  /** Parte del código de la reserva o del nombre del titular, sin distinguir mayúsculas */
+  buscar?: string
 }
 
 // ---------- Funciones ----------

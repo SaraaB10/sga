@@ -1,15 +1,16 @@
 package co.edu.uniquindio.sga.infrastructure.rest;
 
 import co.edu.uniquindio.sga.application.dto.request.ActualizarAlojamientoRequest;
+import co.edu.uniquindio.sga.application.dto.request.ActualizarParametrosRequest;
 import co.edu.uniquindio.sga.application.dto.request.ActualizarServicioAdicionalRequest;
 import co.edu.uniquindio.sga.application.dto.request.RegistrarServicioAdicionalRequest;
 import co.edu.uniquindio.sga.application.dto.response.AlojamientoResponse;
 import co.edu.uniquindio.sga.application.usecase.ConfiguracionAlojamientoUseCase;
+import co.edu.uniquindio.sga.application.usecase.ParametrosAlojamientoUseCase;
 import co.edu.uniquindio.sga.application.usecase.ServiciosAdicionalesUseCase;
 import co.edu.uniquindio.sga.application.usecase.ServiciosAdicionalesUseCase.DatosServicio;
 import co.edu.uniquindio.sga.domain.entity.Alojamiento;
 import co.edu.uniquindio.sga.domain.entity.ServicioAdicional;
-import co.edu.uniquindio.sga.domain.valueobject.DepositoGarantia;
 import co.edu.uniquindio.sga.infrastructure.rest.mapper.ConfiguracionMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -42,17 +43,16 @@ public class AlojamientoController {
 
     private final ConfiguracionAlojamientoUseCase configuracionAlojamientoUseCase;
     private final ServiciosAdicionalesUseCase serviciosAdicionalesUseCase;
+    private final ParametrosAlojamientoUseCase parametrosAlojamientoUseCase;
     private final ConfiguracionMapper mapper;
-    /** RP-02: el mismo depósito que se asienta en el folio (bean de DomainServiceConfig) */
-    private final DepositoGarantia depositoGarantia;
 
     /** CU-28. GET /api/alojamiento */
     @GetMapping
     @PreAuthorize("permitAll()")
     @Operation(summary = "Consultar el alojamiento",
             description = "Datos, ubicación, horario, normas de convivencia, servicios adicionales (activos e "
-                    + "inactivos, con el motivo si alguno no se puede desactivar) y parámetros vigentes (solo "
-                    + "lectura: se configuran en application.properties)")
+                    + "inactivos, con el motivo si alguno no se puede desactivar) y parámetros vigentes (los "
+                    + "edita el administrador con PUT /api/alojamiento/parametros)")
     @ApiResponse(responseCode = "200", description = "El alojamiento")
     public ResponseEntity<AlojamientoResponse> consultar() {
         return ResponseEntity.ok(respuesta(configuracionAlojamientoUseCase.consultar()));
@@ -64,7 +64,7 @@ public class AlojamientoController {
     @Operation(summary = "Actualizar los datos del alojamiento",
             description = "Reemplaza nombre, descripción, ciudad, dirección, ubicación y normas de convivencia. El "
                     + "horario (L-12) es opcional: si no llega ninguna hora se conserva el vigente. Los parámetros "
-                    + "no se cambian por API")
+                    + "se cambian con PUT /api/alojamiento/parametros")
     @ApiResponse(responseCode = "200", description = "Alojamiento actualizado")
     @ApiResponse(responseCode = "400", description = "Falta un dato obligatorio o una hora está mal escrita")
     @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
@@ -74,6 +74,25 @@ public class AlojamientoController {
     public ResponseEntity<AlojamientoResponse> actualizar(@Valid @RequestBody ActualizarAlojamientoRequest request) {
         Alojamiento alojamiento = configuracionAlojamientoUseCase.actualizar(mapper.aDatos(request));
         return ResponseEntity.ok(respuesta(alojamiento));
+    }
+
+    /** PUT /api/alojamiento/parametros */
+    @PutMapping("/parametros")
+    @PreAuthorize("hasAnyAuthority('ADMINISTRADOR')")
+    @Operation(summary = "Actualizar los parámetros del alojamiento",
+            description = "Umbral de edad facturable, tiempo de preparación, plazo de confirmación (y del anticipo), "
+                    + "hora límite de no-show, recepción nocturna (hora y recargo), estancia mínima, anticipo, "
+                    + "depósito de garantía, mascotas y edad mínima de la cuenta. Se guardan en la base y rigen "
+                    + "desde la siguiente operación, sin reiniciar")
+    @ApiResponse(responseCode = "200", description = "Parámetros actualizados; devuelve el alojamiento")
+    @ApiResponse(responseCode = "400", description = "Falta un parámetro o está fuera de su rango")
+    @ApiResponse(responseCode = "401", description = "Sin token o token inválido")
+    @ApiResponse(responseCode = "403", description = "El rol no lo permite")
+    @ApiResponse(responseCode = "409", description = "Una regla del negocio rechaza el valor (por ejemplo, anticipo "
+            + "exigido con 0 %, o mascotas aceptadas sin cargo de aseo)")
+    public ResponseEntity<AlojamientoResponse> actualizarParametros(
+            @Valid @RequestBody ActualizarParametrosRequest request) {
+        return ResponseEntity.ok(respuesta(parametrosAlojamientoUseCase.actualizar(mapper.aDatosParametros(request))));
     }
 
     // ==================== Servicios adicionales (L-17) ====================
@@ -161,7 +180,8 @@ public class AlojamientoController {
     }
 
     private AlojamientoResponse respuesta(Alojamiento alojamiento) {
-        return mapper.aAlojamientoResponse(alojamiento, depositoGarantia,
+        return mapper.aAlojamientoResponse(alojamiento,
+                serviciosAdicionalesUseCase.recargoRecepcionNocturna(alojamiento).orElse(null),
                 id -> serviciosAdicionalesUseCase.motivoObligatorio(id).orElse(null));
     }
 

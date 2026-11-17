@@ -7,7 +7,9 @@ import co.edu.uniquindio.sga.application.dto.request.CrearUsuarioRequest;
 import co.edu.uniquindio.sga.application.dto.response.PaginaResponse;
 import co.edu.uniquindio.sga.application.dto.response.UsuarioResponse;
 import co.edu.uniquindio.sga.application.exception.ContrasenaActualIncorrectaException;
+import co.edu.uniquindio.sga.application.exception.ContrasenaNuevaIgualALaActualException;
 import co.edu.uniquindio.sga.application.exception.EdadMinimaCuentaException;
+import co.edu.uniquindio.sga.application.exception.RolPropioNoModificableException;
 import co.edu.uniquindio.sga.application.security.EdadMinima;
 import co.edu.uniquindio.sga.application.exception.UsuarioNoDesactivableException;
 import co.edu.uniquindio.sga.application.exception.UsuarioNoEncontradoException;
@@ -97,8 +99,11 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Override
     @Transactional
-    public UsuarioResponse cambiarRol(Long id, CambioRolRequest request) {
+    public UsuarioResponse cambiarRol(Long id, CambioRolRequest request, String correoSolicitante) {
         UsuarioEntity usuario = buscar(id);
+        if (usuario.getCorreo().equalsIgnoreCase(correoSolicitante)) {
+            throw new RolPropioNoModificableException();
+        }
         usuario.setRol(RolUsuario.valueOf(request.rol()));
         return aResponse(usuario);
     }
@@ -140,6 +145,10 @@ public class UsuarioServiceImpl implements UsuarioService {
         UsuarioEntity usuario = buscarPorCorreo(correo);
         if (!passwordEncoder.matches(request.contrasenaActual(), usuario.getContrasena())) {
             throw new ContrasenaActualIncorrectaException();
+        }
+        // Se compara con el hash guardado: la contraseña en claro nunca se almacena
+        if (passwordEncoder.matches(request.contrasenaNueva(), usuario.getContrasena())) {
+            throw new ContrasenaNuevaIgualALaActualException();
         }
         usuario.setContrasena(passwordEncoder.encode(request.contrasenaNueva()));
     }
