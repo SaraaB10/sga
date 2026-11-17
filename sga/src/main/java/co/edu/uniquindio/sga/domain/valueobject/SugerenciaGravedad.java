@@ -5,8 +5,9 @@ import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 /**
  * Gravedad que el modelo de IA sugiere para una novedad, con una explicación corta (10.2, L-21).
  * Es solo una sugerencia: la gravedad que se guarda la elige siempre la persona que registra la novedad (7.6).
+ * El origen dice si la dio el modelo de IA o las reglas locales.
  */
-public record SugerenciaGravedad(GravedadNovedad gravedad, String explicacion) {
+public record SugerenciaGravedad(GravedadNovedad gravedad, String explicacion, OrigenSugerencia origen) {
 
     /** Largo máximo de la explicación; si llega más larga se recorta. */
     public static final int LARGO_MAXIMO_EXPLICACION = 200;
@@ -14,6 +15,9 @@ public record SugerenciaGravedad(GravedadNovedad gravedad, String explicacion) {
     public SugerenciaGravedad {
         if (gravedad == null) {
             throw new ReglaDominioException("10.2: la sugerencia debe indicar la gravedad");
+        }
+        if (origen == null) {
+            throw new ReglaDominioException("La sugerencia debe indicar su origen");
         }
         if (explicacion == null || explicacion.isBlank()) {
             throw new ReglaDominioException("10.2: la sugerencia debe traer una explicación");

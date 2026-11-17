@@ -97,7 +97,8 @@ public class SecurityConfig {
                                 "/api/medios-pago",
                                 "/api/politica-cancelacion",
                                 "/api/temporadas",
-                                "/api/temporadas/{id}"
+                                "/api/temporadas/{id}",
+                                "/api/imagenes/{nombre}"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/cotizaciones").permitAll()
                         .anyRequest().authenticated()

@@ -6,9 +6,9 @@ import java.util.Optional;
 
 /**
  * Puerto del modelo de IA que sugiere la gravedad de una novedad a partir de su descripción (10.2, L-21).
- * La integración no es bloqueante: si el modelo no responde, tarda o devuelve algo inválido, el adaptador
- * responde vacío y lo registra en el log. Nunca lanza excepciones ni guarda nada: la gravedad final la elige
- * siempre la persona (7.6).
+ * La integración no es bloqueante: si el modelo no responde, tarda o devuelve algo inválido, el adaptador de
+ * Gemini responde con las reglas locales (o vacío si tampoco hay) y lo registra en el log. Nunca lanza excepciones
+ * ni guarda nada: la gravedad final la elige siempre la persona (7.6).
  */
 public interface SugeridorGravedad {
 

@@ -36,11 +36,15 @@ export interface RegistrarNovedadRequest {
   gravedad: GravedadNovedad
 }
 
-/** Sugerencia de gravedad de la IA; si disponible es false, gravedad y explicacion vienen en null */
+/** De dónde salió la sugerencia: Gemini (IA) o las reglas locales, que también responden cuando Gemini falla */
+export type OrigenSugerencia = 'IA' | 'LOCAL'
+
+/** Sugerencia de gravedad; si disponible es false, gravedad, explicacion y origen vienen en null */
 export interface SugerenciaGravedadResponse {
   disponible: boolean
   gravedad: GravedadNovedad | null
   explicacion: string | null
+  origen: OrigenSugerencia | null
 }
 
 /** El backend acepta descripciones de hasta 1000 caracteres para la sugerencia */
@@ -130,6 +134,24 @@ export async function listarTodasLasTemporadas(maximoPaginas = 10): Promise<Temp
 export async function registrarApartamento(datos: RegistrarApartamentoRequest): Promise<ApartamentoDetalleResponse> {
   const { data } = await cliente.post<ApartamentoDetalleResponse>('/api/apartamentos', datos)
   return data
+}
+
+/** Formatos y tamaño de foto que acepta POST /api/imagenes */
+export const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp']
+export const TAMANO_MAXIMO_FOTO = 5 * 1024 * 1024
+
+/**
+ * Sube una foto al almacén de imágenes del backend (Cloudinary o el disco local, según su configuración) y
+ * devuelve la URL que luego va en las imágenes del apartamento. Si el almacén falla responde 502.
+ */
+export async function subirImagen(archivo: File): Promise<string> {
+  const formulario = new FormData()
+  formulario.append('archivo', archivo)
+  // Sin el JSON por defecto: axios arma el multipart con su boundary
+  const { data } = await cliente.post<{ url: string }>('/api/imagenes', formulario, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data.url
 }
 
 export async function actualizarApartamento(
