@@ -81,7 +81,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/h2-console/**"
+                                "/h2-console/**",
+                                "/actuator/health"
                         ).permitAll()
                         // Mismo patrón que GET /api/apartamentos/{id}: se declara antes para que siga pidiendo token
                         .requestMatchers(HttpMethod.GET, "/api/apartamentos/pendientes-preparacion").authenticated()
@@ -100,6 +101,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/cotizaciones").permitAll()
                         .anyRequest().authenticated()
+
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // 401 y 403 que nacen en la cadena de filtros, antes de llegar al GlobalExceptionHandler (7.5.6)

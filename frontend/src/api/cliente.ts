@@ -49,6 +49,7 @@ export function registrarManejadores(nuevos: Manejadores): void {
 
 export const cliente = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
+  timeout: 70_000,
   headers: { 'Content-Type': 'application/json' },
   // Listas como parámetros repetidos: fechasNacimiento=a&fechasNacimiento=b
   paramsSerializer: { indexes: null },
