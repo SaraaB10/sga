@@ -395,16 +395,18 @@ La idempotencia es por canal: el mismo identificador externo enviado por dos can
 echo "sga.canales.credencial-demo=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')" >> src/main/resources/application-secrets.properties
 ```
 
-Si no la configuras, la app genera una al arrancar y la escribe en el log:
+En producción va en la variable de entorno `SGA_CANALES_CREDENCIAL_DEMO`. Si no la configuras, la app genera una al azar al arrancar, pero **no la escribe en el log**: solo avisa que falta y cómo definirla:
 
 ```
-WARN ... DatosInicialesCanalesConfig : Falta sga.canales.credencial-demo en application-secrets.properties. Credencial generada para el canal externo 'booking' (encabezado X-Canal-Credencial): ...
+WARN ... DatosInicialesCanalesConfig : Falta sga.canales.credencial-demo: el canal externo 'booking' se creó con una credencial aleatoria que no se muestra. Defínala en application-secrets.properties (sga.canales.credencial-demo=...) o, en producción, con la variable de entorno SGA_CANALES_CREDENCIAL_DEMO, y arranque con la base vacía; o emita una nueva desde Administración → Canales de venta (Regenerar credencial).
 ```
+
+Como el canal ya quedó creado, definir la propiedad después solo surte efecto con la base vacía; si no, se emite una credencial nueva desde **Canales de venta**.
 
 **Correr el simulador.** `sga/docs/api/canal-externo.http` hace de plataforma externa y es independiente de `sga.http`:
 
 1. Arranca la app en limpio (`./gradlew bootRun --args='--spring.profiles.active=memoria'`, o después de borrar `sga/data/`).
-2. Abre `canal-externo.http` y pon en `@credencial` el valor de `sga.canales.credencial-demo` (o el del log). `@canal` ya es `booking`.
+2. Abre `canal-externo.http` y pon en `@credencial` el valor de `sga.canales.credencial-demo` (o la que emitas con **Regenerar credencial** en el panel). `@canal` ya es `booking`.
 3. En IntelliJ dale a **Run All Requests in File**. Corre en orden y cada petición dice arriba qué debe responder:
    1. consultar disponibilidad (200);
    2. reserva externa aceptada (201 `ACEPTADO`);
