@@ -1,6 +1,7 @@
 package co.edu.uniquindio.sga.infrastructure.rest.exception;
 
 import co.edu.uniquindio.sga.application.exception.ApartamentoNoEncontradoException;
+import co.edu.uniquindio.sga.application.exception.ArchivoImagenInvalidoException;
 import co.edu.uniquindio.sga.application.exception.CanalVentaNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.ConflictoCanalNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.CodigoRecuperacionInvalidoException;
@@ -19,6 +20,7 @@ import co.edu.uniquindio.sga.application.exception.UsuarioNoDesactivableExceptio
 import co.edu.uniquindio.sga.application.exception.UsuarioNoEncontradoException;
 import co.edu.uniquindio.sga.application.exception.UsuarioYaRegistradoException;
 import co.edu.uniquindio.sga.domain.exception.GrupoSinOcupanteFacturableException;
+import co.edu.uniquindio.sga.domain.exception.ImagenNoAlmacenadaException;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
 import co.edu.uniquindio.sga.domain.exception.TitularMenorDeEdadException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +37,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -76,6 +80,34 @@ public class GlobalExceptionHandler {
                                                            HttpServletRequest req) {
         return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
                 Map.of(ex.getParameterName(), "El parámetro es obligatorio"));
+    }
+
+    /** 400: falta la parte "archivo" de la subida de una foto. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> parteFaltante(MissingServletRequestPartException ex, HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
+                Map.of(ex.getRequestPartName(), "Selecciona una foto"));
+    }
+
+    /** 400: el archivo subido no sirve como foto (vacío, muy grande o de otro formato). */
+    @ExceptionHandler(ArchivoImagenInvalidoException.class)
+    public ResponseEntity<ErrorResponse> archivoImagenInvalido(ArchivoImagenInvalidoException ex,
+                                                               HttpServletRequest req) {
+        return construir(HttpStatus.BAD_REQUEST, "La petición tiene datos inválidos", req,
+                Map.of("archivo", ex.getMessage()));
+    }
+
+    /** 413: la foto supera el tamaño máximo que admite el servidor. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> archivoMuyGrande(MaxUploadSizeExceededException ex, HttpServletRequest req) {
+        return construir(HttpStatus.CONTENT_TOO_LARGE, "La foto supera los 5 MB", req,
+                Map.of("archivo", "La foto supera los 5 MB"));
+    }
+
+    /** 502: el almacén de imágenes (Cloudinary o el disco) no pudo guardar la foto. */
+    @ExceptionHandler(ImagenNoAlmacenadaException.class)
+    public ResponseEntity<ErrorResponse> imagenNoAlmacenada(ImagenNoAlmacenadaException ex, HttpServletRequest req) {
+        return construir(HttpStatus.BAD_GATEWAY, ex.getMessage(), req, null);
     }
 
     /** 400: JSON mal formado, fecha imposible o valor de enum que no existe. */

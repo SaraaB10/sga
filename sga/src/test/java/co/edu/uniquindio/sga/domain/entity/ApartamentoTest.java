@@ -459,9 +459,13 @@ class ApartamentoTest {
     void rechazarUrlQueNoSeaHttps() {
         assertDoesNotThrow(() -> new Imagen("https://coral.co/a.jpg", true));
         assertDoesNotThrow(() -> new Imagen("  https://coral.co/a.jpg ", true));
+        // Fotos del almacén local con el backend en el propio equipo
+        assertDoesNotThrow(() -> new Imagen("http://localhost:8080/api/imagenes/a.jpg", true));
+        assertDoesNotThrow(() -> new Imagen("http://127.0.0.1:8080/api/imagenes/a.jpg", true));
 
         for (String url : List.of("http://coral.co/a.jpg", "ftp://coral.co/a.jpg", "coral.co/a.jpg", "file:///C:/a.jpg",
-                " ", "https://", "https://coral.co/una foto.jpg")) {
+                " ", "https://", "https://coral.co/una foto.jpg", "http://localhost.coral.co/a.jpg",
+                "http://localhost:8080/una foto.jpg")) {
             ReglaDominioException error = assertThrows(ReglaDominioException.class, () -> new Imagen(url, true));
             assertTrue(error.getMessage().startsWith("7.3"), url);
         }

@@ -10,8 +10,12 @@ public final class ReglaTexto {
     /** Correo: usuario, @, dominio y al menos una extensión (ana@correo.co). Complementa a @Email */
     public static final String PATRON_CORREO = "^[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+$";
 
-    /** URL de una imagen: https:// seguido de la dirección, sin espacios */
-    public static final String PATRON_URL_IMAGEN = "^https://\\S+$";
+    /**
+     * URL de una imagen: https:// seguido de la dirección, sin espacios. También acepta http://localhost y
+     * http://127.0.0.1, que son las URL del almacén local de fotos cuando el backend corre en el propio equipo
+     */
+    public static final String PATRON_URL_IMAGEN =
+            "^(?:https://\\S+|http://(?:localhost|127\\.0\\.0\\.1)(?::\\d{1,5})?/\\S*)$";
 
     public static final String MENSAJE_URL_IMAGEN = "La URL de la imagen debe empezar por https:// y no tener espacios";
 

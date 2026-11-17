@@ -5852,3 +5852,127 @@ GET {{host}}/api/apartamentos/APT-101/disponibilidad?desde={{s21Inicio}}&hasta={
         client.assert(JSON.stringify(response.body).indexOf("Cambio de la tina") < 0, "El calendario público no debe mostrar el motivo");
     });
 %}
+
+### Sección 22: FOTOS DE LOS APARTAMENTOS (almacén de imágenes)
+
+# ====================================================================================================
+# 22. Con el proveedor por defecto (sga.imagenes.proveedor=local) la foto se guarda en el disco del servidor y el
+#     backend la sirve sin token en /api/imagenes/{nombre}. Con cloudinary la URL sería https://res.cloudinary.com/...
+#     El cuerpo es la cabecera mínima de un WebP: el backend reconoce el formato por los primeros bytes del archivo.
+#     La URL que devuelve sirve para registrar un apartamento, igual que una URL escrita a mano.
+# ====================================================================================================
+
+### 22.1 El administrador sube una foto: 201 con la URL
+POST {{host}}/api/imagenes
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: multipart/form-data; boundary=FotoCoral
+
+--FotoCoral
+Content-Disposition: form-data; name="archivo"; filename="sala.webp"
+Content-Type: image/webp
+
+RIFFxxxxWEBPVP8
+--FotoCoral--
+
+> {%
+    client.test("22.1 201 foto guardada", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        client.assert(/\/api\/imagenes\/[0-9a-f-]{36}\.webp$/.test(response.body.url), "URL: " + response.body.url);
+    });
+    client.global.set("s22Url", response.body.url);
+%}
+
+### 22.2 La foto se sirve sin token, con su tipo de contenido
+GET {{s22Url}}
+
+> {%
+    client.test("22.2 200 foto servida", function () {
+        client.assert(response.status === 200, "Se esperaba 200 y llegó " + response.status);
+        client.assert(response.contentType.mimeType === "image/webp", "Tipo: " + response.contentType.mimeType);
+    });
+%}
+
+### 22.3 La URL subida sirve para registrar un apartamento (APT-601, la foto es la principal)
+POST {{host}}/api/apartamentos
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: application/json
+
+{
+  "identificacion": "APT-601",
+  "nombre": "Coral Foto",
+  "dormitorios": 1,
+  "capacidadMaxima": 2,
+  "dotacion": ["Cama extragrande"],
+  "imagenes": [
+    { "url": "{{s22Url}}", "principal": true },
+    { "url": "https://coral.co/img/apt-601-balcon.jpg", "principal": false }
+  ]
+}
+
+> {%
+    client.test("22.3 201 apartamento con la foto subida", function () {
+        client.assert(response.status === 201, "Se esperaba 201 y llegó " + response.status);
+        var principal = response.body.imagenes.filter(function (i) { return i.principal; });
+        client.assert(principal.length === 1 && principal[0].url === client.global.get("s22Url"),
+            "Imágenes: " + JSON.stringify(response.body.imagenes));
+    });
+%}
+
+### 22.4 400 Un archivo que no es JPG, PNG ni WebP
+POST {{host}}/api/imagenes
+Authorization: Bearer {{tokenAdmin}}
+Content-Type: multipart/form-data; boundary=FotoCoral
+
+--FotoCoral
+Content-Disposition: form-data; name="archivo"; filename="foto.png"
+Content-Type: image/png
+
+esto no es una foto
+--FotoCoral--
+
+> {%
+    client.test("22.4 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 400 && e.error === "Bad Request", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "La petición tiene datos inválidos", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/imagenes", "path: " + e.path);
+        client.assert(e.timestamp != null, "Falta timestamp");
+        client.assert(e.errores.archivo === "La foto debe ser JPG, PNG o WebP", "errores: " + JSON.stringify(e.errores));
+    });
+    client.test("22.4 400 no es una foto", function () {
+        client.assert(response.status === 400, "Se esperaba 400 y llegó " + response.status);
+    });
+%}
+
+### 22.5 403 La recepción no sube fotos (solo ADMINISTRADOR)
+POST {{host}}/api/imagenes
+Authorization: Bearer {{tokenRecepcion}}
+Content-Type: multipart/form-data; boundary=FotoCoral
+
+--FotoCoral
+Content-Disposition: form-data; name="archivo"; filename="sala.webp"
+Content-Type: image/webp
+
+RIFFxxxxWEBPVP8
+--FotoCoral--
+
+> {%
+    client.test("22.5 cuerpo del error", function () {
+        var e = response.body;
+        client.assert(e.status === 403 && e.error === "Forbidden", "status/error: " + e.status + " " + e.error);
+        client.assert(e.mensaje === "No tiene permiso para realizar esta operación", "mensaje: " + e.mensaje);
+        client.assert(e.path === "/api/imagenes", "path: " + e.path);
+    });
+    client.test("22.5 403 la recepción no sube fotos", function () {
+        client.assert(response.status === 403, "Se esperaba 403 y llegó " + response.status);
+    });
+%}
+
+### 22.6 404 Una foto que no existe
+GET {{host}}/api/imagenes/00000000-0000-0000-0000-000000000000.webp
+
+> {%
+    client.test("22.6 404 foto inexistente", function () {
+        client.assert(response.status === 404, "Se esperaba 404 y llegó " + response.status);
+    });
+%}

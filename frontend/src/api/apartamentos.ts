@@ -132,6 +132,24 @@ export async function registrarApartamento(datos: RegistrarApartamentoRequest): 
   return data
 }
 
+/** Formatos y tamaño de foto que acepta POST /api/imagenes */
+export const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp']
+export const TAMANO_MAXIMO_FOTO = 5 * 1024 * 1024
+
+/**
+ * Sube una foto al almacén de imágenes del backend (Cloudinary o el disco local, según su configuración) y
+ * devuelve la URL que luego va en las imágenes del apartamento. Si el almacén falla responde 502.
+ */
+export async function subirImagen(archivo: File): Promise<string> {
+  const formulario = new FormData()
+  formulario.append('archivo', archivo)
+  // Sin el JSON por defecto: axios arma el multipart con su boundary
+  const { data } = await cliente.post<{ url: string }>('/api/imagenes', formulario, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data.url
+}
+
 export async function actualizarApartamento(
   id: string,
   datos: ActualizarApartamentoRequest,

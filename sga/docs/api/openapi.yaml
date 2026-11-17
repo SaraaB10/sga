@@ -1234,6 +1234,114 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/imagenes:
+    post:
+      tags: [Apartamentos]
+      summary: Subir una foto de apartamento
+      description: |
+        Guarda una foto JPG, PNG o WebP de hasta 5 MB en el almacén configurado en `sga.imagenes.proveedor` y
+        devuelve su URL, que luego se manda en `imagenes` al registrar el apartamento (igual que una URL escrita a
+        mano). No toca ningún apartamento.
+
+        - `cloudinary`: subida firmada a Cloudinary, con el tiempo de espera de `sga.imagenes.cloudinary.tiempo-espera`.
+          Devuelve una URL `https://res.cloudinary.com/...`.
+        - `local` (por defecto): guarda en `sga.imagenes.local.directorio` y devuelve
+          `{sga.imagenes.local.url-publica}/api/imagenes/{nombre}`, que sirve `GET /api/imagenes/{nombre}`.
+
+        El formato se reconoce por el contenido del archivo, no por su nombre. Si el almacén falla responde `502`;
+        el formulario registra el apartamento igual con las demás fotos y avisa. Mapea a
+        `SubirImagenApartamentoUseCase` y al puerto `AlmacenImagenes`.
+      operationId: subirImagenApartamento
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ archivo ]
+              properties:
+                archivo: { type: string, format: binary, description: 'JPG, PNG o WebP de hasta 5 MB' }
+      responses:
+        '201':
+          description: Foto guardada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImagenSubidaResponse'
+              examples:
+                cloudinary:
+                  summary: Con Cloudinary
+                  value:
+                    url: https://res.cloudinary.com/demo/image/upload/v1731800000/sga/apartamentos/abc123.jpg
+                local:
+                  summary: Con el almacén local
+                  value:
+                    url: http://localhost:8080/api/imagenes/3f2b8c1e-5a4d-4e8f-9b1c-2d3e4f5a6b7c.jpg
+        '400':
+          description: Falta el archivo, está vacío o no es JPG, PNG ni WebP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: '2026-11-17T10:00:00Z'
+                status: 400
+                error: Bad Request
+                mensaje: La petición tiene datos inválidos
+                path: /api/imagenes
+                errores:
+                  archivo: La foto debe ser JPG, PNG o WebP
+        '401':
+          $ref: '#/components/responses/NoAutenticado'
+        '403':
+          description: 'Sin permiso. Rol: ADMINISTRADOR'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: La foto supera los 5 MB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: El almacén de imágenes falló, tardó demasiado o faltan sus credenciales
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: '2026-11-17T10:00:00Z'
+                status: 502
+                error: Bad Gateway
+                mensaje: No se pudo subir la foto a Cloudinary
+                path: /api/imagenes
+
+  /api/imagenes/{nombre}:
+    parameters:
+      - name: nombre
+        in: path
+        required: true
+        schema: { type: string, example: 3f2b8c1e-5a4d-4e8f-9b1c-2d3e4f5a6b7c.jpg }
+    get:
+      tags: [Apartamentos]
+      summary: Foto guardada en el almacén local
+      description: |
+        Pública, sin token. Solo responde con `sga.imagenes.proveedor=local`; con Cloudinary las fotos se sirven
+        desde Cloudinary y aquí responde `404`. Solo acepta los nombres que genera el almacén (UUID y extensión).
+      operationId: verImagenLocal
+      security: []
+      responses:
+        '200':
+          description: La foto
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '404':
+          description: No existe o el almacén no es el local (sin cuerpo)
+
   # ==================== COTIZACIONES ====================
 
   /api/cotizaciones:
@@ -4069,8 +4177,14 @@ components:
       type: object
       required: [ url ]
       properties:
-        url: { type: string, example: 'https://coral.co/img/apt-401-sala.jpg', description: 'Debe empezar por http:// o https://' }
+        url: { type: string, example: 'https://coral.co/img/apt-401-sala.jpg', description: 'Debe empezar por https://. Solo se acepta http:// con localhost o 127.0.0.1 (fotos del almacén local). Puede ser la URL que devolvió POST /api/imagenes' }
         principal: { type: boolean, default: false, description: Exactamente una imagen debe ser la principal }
+
+    ImagenSubidaResponse:
+      type: object
+      description: Foto subida con POST /api/imagenes
+      properties:
+        url: { type: string, example: 'https://res.cloudinary.com/demo/image/upload/v1731800000/sga/apartamentos/abc123.jpg' }
 
     TarifaRequest:
       type: object
