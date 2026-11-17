@@ -1,7 +1,10 @@
 package co.edu.uniquindio.sga.application.usecase;
 
+import co.edu.uniquindio.sga.application.event.ReservaCreadaEvento;
+import co.edu.uniquindio.sga.application.security.EdadMinima;
 import co.edu.uniquindio.sga.domain.entity.Reserva;
 import co.edu.uniquindio.sga.domain.exception.ReglaDominioException;
+import co.edu.uniquindio.sga.domain.exception.TitularMenorDeEdadException;
 import co.edu.uniquindio.sga.domain.service.CreacionReservaService;
 import co.edu.uniquindio.sga.domain.service.PoliticaCancelacionService;
 import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
@@ -12,6 +15,7 @@ import co.edu.uniquindio.sga.domain.valueobject.Mascotas;
 import co.edu.uniquindio.sga.domain.valueobject.Ocupante;
 import co.edu.uniquindio.sga.domain.valueobject.Titular;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,26 +49,40 @@ public class CrearReservaUseCase {
     private final CreacionReservaService creacionReservaService;
     private final PoliticaCancelacionService politicaCancelacionService;
     private final Clock reloj;
+    private final ApplicationEventPublisher eventos;
+    private final EdadMinima edadMinima;
 
     /**
      * @param politicaCancelacionService entrega la política de cancelación vigente en el repositorio, que se congela
      *                                   en cada reserva nueva (RN-22). Cambia cuando se publica una versión (CU-30).
      * @param reloj           reloj con zona horaria de Colombia (3.1).
+     * @param eventos         avisa que la reserva se creó; el correo al titular sale después de guardarla (7.8).
+     * @param edadMinima      edad que debe tener el titular de una reserva tomada por la recepción.
      */
     public CrearReservaUseCase(CreacionReservaService creacionReservaService,
-                               PoliticaCancelacionService politicaCancelacionService, Clock reloj) {
+                               PoliticaCancelacionService politicaCancelacionService, Clock reloj,
+                               ApplicationEventPublisher eventos, EdadMinima edadMinima) {
         this.creacionReservaService = Objects.requireNonNull(creacionReservaService);
         this.politicaCancelacionService = Objects.requireNonNull(politicaCancelacionService);
         this.reloj = Objects.requireNonNull(reloj);
+        this.eventos = Objects.requireNonNull(eventos);
+        this.edadMinima = Objects.requireNonNull(edadMinima);
     }
 
     @Transactional
     public Reserva ejecutar(SolicitudReserva solicitud) {
         if (solicitud == null) throw new ReglaDominioException("La solicitud de reserva es obligatoria");
-        return creacionReservaService.registrarReservaPropia(solicitud.apartamento(),
+        // Por la recepción el titular se registra en persona y responde por el pago: debe tener la edad mínima
+        if (solicitud.canal() == CanalOrigen.DIRECTO && solicitud.titular() != null
+                && solicitud.titular().esMenorDeEdadEn(solicitud.ocupantes(), edadMinima.hoy(), edadMinima.anios())) {
+            throw new TitularMenorDeEdadException(edadMinima.anios());
+        }
+        Reserva reserva = creacionReservaService.registrarReservaPropia(solicitud.apartamento(),
                 new Estancia(solicitud.fechaEntrada(), solicitud.fechaSalida()), solicitud.titular(),
                 solicitud.ocupantes(), solicitud.horaEstimadaLlegada(), solicitud.cotizacion(),
                 politicaCancelacionService.vigente(), solicitud.canal(), solicitud.mascotas(),
                 LocalDateTime.now(reloj));
+        eventos.publishEvent(new ReservaCreadaEvento(reserva));
+        return reserva;
     }
 }

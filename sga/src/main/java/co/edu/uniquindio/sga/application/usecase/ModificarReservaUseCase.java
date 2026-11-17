@@ -1,10 +1,13 @@
 package co.edu.uniquindio.sga.application.usecase;
 
 import co.edu.uniquindio.sga.application.exception.ReservaNoEncontradaException;
+import co.edu.uniquindio.sga.application.security.EdadMinima;
 import co.edu.uniquindio.sga.domain.entity.Reserva;
+import co.edu.uniquindio.sga.domain.exception.TitularMenorDeEdadException;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.service.ModificacionReservaService;
 import co.edu.uniquindio.sga.domain.service.ModificacionReservaService.DatosModificacion;
+import co.edu.uniquindio.sga.domain.valueobject.CanalOrigen;
 import co.edu.uniquindio.sga.domain.valueobject.CodigoReserva;
 import co.edu.uniquindio.sga.domain.valueobject.Dinero;
 import co.edu.uniquindio.sga.domain.valueobject.Estancia;
@@ -37,12 +40,14 @@ public class ModificarReservaUseCase {
     private final ReservaRepository reservaRepository;
     private final ModificacionReservaService modificacionService;
     private final Clock reloj;
+    private final EdadMinima edadMinima;
 
     public ModificarReservaUseCase(ReservaRepository reservaRepository, ModificacionReservaService modificacionService,
-                                   Clock reloj) {
+                                   Clock reloj, EdadMinima edadMinima) {
         this.reservaRepository = Objects.requireNonNull(reservaRepository);
         this.modificacionService = Objects.requireNonNull(modificacionService);
         this.reloj = Objects.requireNonNull(reloj);
+        this.edadMinima = Objects.requireNonNull(edadMinima);
     }
 
     /** @return la diferencia asentada en el folio (negativa si baja el valor). */
@@ -52,6 +57,11 @@ public class ModificarReservaUseCase {
                            Integer nuevaCantidadMascotas, Integer nuevoPesoMayorMascotaKg) {
         verificarQueExiste(codigo);
         Reserva actual = reservaRepository.buscarPorCodigo(codigo).orElseThrow();
+        // Por la recepción, el titular de los ocupantes nuevos debe seguir teniendo la edad mínima
+        if (actual.getCanalOrigen() == CanalOrigen.DIRECTO && actual.getTitular()
+                .esMenorDeEdadEn(nuevosOcupantes, edadMinima.hoy(), edadMinima.anios())) {
+            throw new TitularMenorDeEdadException(edadMinima.anios());
+        }
         Estancia nuevaEstancia = null;
         if (nuevaFechaEntrada != null || nuevaFechaSalida != null) {
             Estancia estancia = actual.getEstancia();

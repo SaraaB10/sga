@@ -3,11 +3,13 @@ package co.edu.uniquindio.sga.infrastructure.config;
 import co.edu.uniquindio.sga.domain.repository.AlojamientoRepository;
 import co.edu.uniquindio.sga.domain.repository.ApartamentoRepository;
 import co.edu.uniquindio.sga.domain.repository.BloqueoRepository;
+import co.edu.uniquindio.sga.domain.repository.CanalVentaRepository;
 import co.edu.uniquindio.sga.domain.repository.ConflictoCanalRepository;
 import co.edu.uniquindio.sga.domain.repository.EventoCanalRepository;
 import co.edu.uniquindio.sga.domain.repository.FolioRepository;
 import co.edu.uniquindio.sga.domain.repository.NovedadRepository;
 import co.edu.uniquindio.sga.domain.repository.PoliticaCancelacionRepository;
+import co.edu.uniquindio.sga.domain.repository.RecordatorioRepository;
 import co.edu.uniquindio.sga.domain.repository.ReservaRepository;
 import co.edu.uniquindio.sga.domain.repository.ServicioAdicionalRepository;
 import co.edu.uniquindio.sga.domain.repository.TemporadaRepository;
@@ -17,6 +19,8 @@ import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ApartamentoJpaDataRe
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ApartamentoJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.BloqueoJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.BloqueoJpaRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.CanalVentaJpaDataRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.CanalVentaJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ConflictoCanalJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ConflictoCanalJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.EventoCanalJpaDataRepository;
@@ -27,6 +31,8 @@ import co.edu.uniquindio.sga.infrastructure.persistence.jpa.NovedadJpaDataReposi
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.NovedadJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.PoliticaCancelacionJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.PoliticaCancelacionJpaRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.RecordatorioEnviadoJpaDataRepository;
+import co.edu.uniquindio.sga.infrastructure.persistence.jpa.RecordatorioJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ReservaJpaDataRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ReservaJpaRepository;
 import co.edu.uniquindio.sga.infrastructure.persistence.jpa.ServicioAdicionalJpaDataRepository;
@@ -73,6 +79,13 @@ public class RepositoryConfig {
         return new BloqueoJpaRepository(dataRepository, mapper);
     }
 
+    /** 10.3.1: canales de venta externos y el hash de su credencial. */
+    @Bean
+    public CanalVentaRepository canalVentaRepository(CanalVentaJpaDataRepository dataRepository,
+                                                     CanalPersistenceMapper mapper) {
+        return new CanalVentaJpaRepository(dataRepository, mapper);
+    }
+
     @Bean
     public ConflictoCanalRepository conflictoCanalRepository(ConflictoCanalJpaDataRepository dataRepository,
                                                              CanalPersistenceMapper mapper) {
@@ -101,6 +114,12 @@ public class RepositoryConfig {
     public PoliticaCancelacionRepository politicaCancelacionRepository(
             PoliticaCancelacionJpaDataRepository dataRepository, PoliticaCancelacionPersistenceMapper mapper) {
         return new PoliticaCancelacionJpaRepository(dataRepository, mapper);
+    }
+
+    /** 7.8: último recordatorio enviado por reserva y motivo. */
+    @Bean
+    public RecordatorioRepository recordatorioRepository(RecordatorioEnviadoJpaDataRepository dataRepository) {
+        return new RecordatorioJpaRepository(dataRepository);
     }
 
     @Bean
