@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.infrastructure.ia;
 
 import co.edu.uniquindio.sga.domain.port.SugeridorGravedad;
 import co.edu.uniquindio.sga.domain.valueobject.GravedadNovedad;
+import co.edu.uniquindio.sga.domain.valueobject.OrigenSugerencia;
 import co.edu.uniquindio.sga.domain.valueobject.SugerenciaGravedad;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
@@ -9,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.net.http.HttpClient;
@@ -21,13 +23,17 @@ import java.util.Optional;
 /**
  * Adaptador real del puerto SugeridorGravedad (10.2): API REST de Gemini en Google AI Studio, con RestClient.
  * El prompt pide una respuesta JSON {"gravedad": "BAJA|MEDIA|ALTA", "explicacion": "..."} y aquí se valida.
- * Es no bloqueante: sin clave, con un error de red, una respuesta lenta (sga.ia.gemini.tiempo-espera) o un JSON
- * inválido, responde vacío y lo registra en el log; la persona registra la novedad igual.
- * La clave (sga.ia.gemini.clave) solo se escribe en application-secrets.properties.
+ * Si Gemini responde 429 (límite de peticiones) o 503 (saturado), reintenta una sola vez tras una pausa corta.
+ * Si vuelve a fallar, o hay cualquier otro error (sin clave, red, respuesta lenta según sga.ia.gemini.tiempo-espera
+ * o un JSON inválido), usa el sugeridor de respaldo (el local) y registra el motivo en el log; la persona registra
+ * la novedad igual. La clave (sga.ia.gemini.clave) solo se escribe en application-secrets.properties.
  */
 public class SugeridorGravedadGemini implements SugeridorGravedad {
 
     private static final Logger log = LoggerFactory.getLogger(SugeridorGravedadGemini.class);
+
+    /** Códigos de Gemini que valen un reintento: límite de peticiones y servicio saturado. */
+    private static final List<Integer> ESTADOS_REINTENTABLES = List.of(429, 503);
 
     /** Lo que se le manda al modelo de la descripción; el formulario ya limita el largo, esto es un tope extra. */
     private static final int LARGO_MAXIMO_DESCRIPCION = 1000;
@@ -48,17 +54,24 @@ public class SugeridorGravedadGemini implements SugeridorGravedad {
     private final JsonMapper json;
     private final String modelo;
     private final String clave;
+    private final SugeridorGravedad respaldo;
+    private final Duration pausaReintento;
 
     /**
-     * @param url          base de la API, por ejemplo https://generativelanguage.googleapis.com/v1beta
-     * @param modelo       modelo de Gemini, por ejemplo gemini-2.5-flash
-     * @param clave        clave de Google AI Studio; vacía deja el adaptador sin sugerencias
-     * @param tiempoEspera tiempo máximo para conectar y para recibir la respuesta
+     * @param url            base de la API, por ejemplo https://generativelanguage.googleapis.com/v1beta
+     * @param modelo         modelo de Gemini, por ejemplo gemini-3.8-flash
+     * @param clave          clave de Google AI Studio; vacía hace que siempre responda el respaldo
+     * @param tiempoEspera   tiempo máximo para conectar y para recibir la respuesta, en cada intento
+     * @param respaldo       sugeridor que responde cuando Gemini falla (el local)
+     * @param pausaReintento espera antes del único reintento tras un 429 o un 503
      */
-    public SugeridorGravedadGemini(JsonMapper json, String url, String modelo, String clave, Duration tiempoEspera) {
+    public SugeridorGravedadGemini(JsonMapper json, String url, String modelo, String clave, Duration tiempoEspera,
+                                   SugeridorGravedad respaldo, Duration pausaReintento) {
         this.json = Objects.requireNonNull(json);
         this.modelo = Objects.requireNonNull(modelo);
         this.clave = clave == null ? "" : clave.trim();
+        this.respaldo = Objects.requireNonNull(respaldo);
+        this.pausaReintento = Objects.requireNonNull(pausaReintento);
         Objects.requireNonNull(tiempoEspera);
         JdkClientHttpRequestFactory fabrica = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(tiempoEspera).build());
@@ -75,26 +88,64 @@ public class SugeridorGravedadGemini implements SugeridorGravedad {
             return Optional.empty();
         }
         if (clave.isEmpty()) {
-            log.warn("IA: falta la clave de Gemini (sga.ia.gemini.clave); no se sugiere la gravedad");
-            return Optional.empty();
+            return conRespaldo(descripcion, "falta la clave de Gemini (sga.ia.gemini.clave)");
         }
         try {
-            RespuestaGemini respuesta = cliente.post()
-                    .uri("/models/{modelo}:generateContent", modelo)
-                    .header("x-goog-api-key", clave)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(peticion(descripcion))
-                    .retrieve()
-                    .body(RespuestaGemini.class);
-            Optional<SugerenciaGravedad> sugerencia = interpretar(textoDe(respuesta));
+            Optional<SugerenciaGravedad> sugerencia = interpretar(textoDe(consultarConReintento(descripcion)));
             if (sugerencia.isEmpty()) {
-                log.warn("IA: Gemini respondió algo que no es una sugerencia válida; se ignora");
+                return conRespaldo(descripcion, "Gemini respondió algo que no es una sugerencia válida");
             }
             return sugerencia;
+        } catch (RestClientResponseException e) {
+            return conRespaldo(descripcion, "Gemini respondió " + e.getStatusCode().value());
         } catch (RuntimeException e) {
-            log.warn("IA: no se pudo obtener la sugerencia de Gemini ({}): {}", e.getClass().getSimpleName(),
-                    e.getMessage());
+            return conRespaldo(descripcion, "no se pudo consultar a Gemini (" + e.getClass().getSimpleName() + ": "
+                    + e.getMessage() + ")");
+        }
+    }
+
+    /** Consulta a Gemini; ante un 429 o un 503 espera la pausa y reintenta una sola vez. */
+    private RespuestaGemini consultarConReintento(String descripcion) {
+        try {
+            return consultar(descripcion);
+        } catch (RestClientResponseException e) {
+            int estado = e.getStatusCode().value();
+            if (!ESTADOS_REINTENTABLES.contains(estado)) {
+                throw e;
+            }
+            log.warn("IA: Gemini respondió {}; se reintenta una vez en {} ms", estado, pausaReintento.toMillis());
+            esperar(pausaReintento);
+            return consultar(descripcion);
+        }
+    }
+
+    private RespuestaGemini consultar(String descripcion) {
+        return cliente.post()
+                .uri("/models/{modelo}:generateContent", modelo)
+                .header("x-goog-api-key", clave)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(peticion(descripcion))
+                .retrieve()
+                .body(RespuestaGemini.class);
+    }
+
+    /** Registra por qué no respondió Gemini y devuelve la sugerencia del respaldo (el local). */
+    private Optional<SugerenciaGravedad> conRespaldo(String descripcion, String motivo) {
+        log.warn("IA: se usa la sugerencia local porque {}", motivo);
+        try {
+            return respaldo.sugerir(descripcion);
+        } catch (RuntimeException e) {
+            log.warn("IA: el sugeridor local también falló: {}", e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    private static void esperar(Duration pausa) {
+        try {
+            Thread.sleep(pausa);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Se interrumpió la espera del reintento", e);
         }
     }
 
@@ -117,7 +168,7 @@ public class SugeridorGravedadGemini implements SugeridorGravedad {
                 return Optional.empty();
             }
             GravedadNovedad gravedad = GravedadNovedad.valueOf(respuesta.gravedad().trim().toUpperCase(Locale.ROOT));
-            return Optional.of(new SugerenciaGravedad(gravedad, respuesta.explicacion()));
+            return Optional.of(new SugerenciaGravedad(gravedad, respuesta.explicacion(), OrigenSugerencia.IA));
         } catch (RuntimeException e) {
             return Optional.empty();
         }

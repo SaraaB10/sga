@@ -18,9 +18,9 @@ import java.time.LocalDateTime;
  * Datos de prueba de los canales de venta (12.3, 10.3.1): el canal externo "booking", el mismo que envió la
  * reserva externa de los datos iniciales (BK-DEMO-000123). No hace nada si el canal ya existe.
  *
- * Su credencial sale de sga.canales.credencial-demo, que va solo en application-secrets.properties. Si falta, se
- * genera una al azar al arrancar y se escribe en el log, para poder usar el simulador del canal
- * (docs/api/canal-externo.http) sin configurar nada.
+ * Su credencial sale de sga.canales.credencial-demo, que va solo en application-secrets.properties o en la variable
+ * de entorno SGA_CANALES_CREDENCIAL_DEMO. Si falta, se genera una al azar que NO se escribe en el log: el log solo
+ * avisa que falta y cómo definirla. El administrador puede emitir otra desde el panel de canales.
  */
 @Configuration
 public class DatosInicialesCanalesConfig {
@@ -47,8 +47,12 @@ public class DatosInicialesCanalesConfig {
             if (configurada) {
                 log.info("Canal externo '{}' creado con la credencial de sga.canales.credencial-demo", CANAL_DEMO);
             } else {
-                log.warn("Falta sga.canales.credencial-demo en application-secrets.properties. Credencial generada "
-                        + "para el canal externo '{}' (encabezado X-Canal-Credencial): {}", CANAL_DEMO, credencial);
+                // La credencial generada nunca se escribe en el log: solo se avisa que falta y cómo definirla
+                log.warn("Falta sga.canales.credencial-demo: el canal externo '{}' se creó con una credencial "
+                        + "aleatoria que no se muestra. Defínala en application-secrets.properties "
+                        + "(sga.canales.credencial-demo=...) o, en producción, con la variable de entorno "
+                        + "SGA_CANALES_CREDENCIAL_DEMO, y arranque con la base vacía; o emita una nueva desde "
+                        + "Administración → Canales de venta (Regenerar credencial).", CANAL_DEMO);
             }
         };
     }

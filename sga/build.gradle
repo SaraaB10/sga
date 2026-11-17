@@ -55,6 +55,11 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+// Los secretos locales nunca viajan dentro del jar: en despliegue se leen de las variables de entorno
+tasks.named('processResources') {
+	exclude 'application-secrets.properties'
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 	environment 'SGA_JWT_SECRET', "${UUID.randomUUID()}${UUID.randomUUID()}"

@@ -125,7 +125,8 @@ export function FormularioNovedad({ apartamentoFijo, apartamentoInicial = '', gr
             <p className="flex min-w-0 flex-1 items-start gap-2 text-sm">
               <Sparkles aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-coral" />
               <span>
-                Sugerencia de la IA: <strong>{sugerencia.gravedad}</strong> · {sugerencia.explicacion}
+                {sugerencia.origen === 'IA' ? 'Sugerencia de IA' : 'Sugerencia local'}:{' '}
+                <strong>{sugerencia.gravedad}</strong> · {sugerencia.explicacion}
               </span>
             </p>
             <Button

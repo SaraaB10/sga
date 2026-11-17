@@ -391,7 +391,8 @@ public class ApartamentoController {
     @PreAuthorize("hasAnyAuthority('PERSONAL_SERVICIO', 'ADMINISTRADOR')")
     @Operation(summary = "Sugerir la gravedad de una novedad con IA",
             description = "El modelo de IA configurado en sga.ia.proveedor sugiere BAJA, MEDIA o ALTA con una "
-                    + "explicación corta. No es bloqueante: si el modelo falla, tarda o está apagado responde 200 con "
+                    + "explicación corta y su origen (IA o LOCAL). No es bloqueante: si Gemini falla responde la "
+                    + "sugerencia local (origen LOCAL); con el proveedor deshabilitado responde 200 con "
                     + "disponible=false (10.2)")
     @ApiResponse(responseCode = "200", description = "Sugerencia, o disponible=false si no hay ninguna")
     @ApiResponse(responseCode = "400", description = "Falta la descripción o supera los 1000 caracteres")
