@@ -4638,6 +4638,7 @@ Content-Type: application/json
         if (response.body.disponible) {
             client.assert(["BAJA", "MEDIA", "ALTA"].indexOf(response.body.gravedad) >= 0, "Gravedad inválida");
             client.assert(response.body.explicacion.length > 0, "Falta la explicación");
+            client.assert(["IA", "LOCAL"].indexOf(response.body.origen) >= 0, "Origen inválido: " + response.body.origen);
         }
     });
 %}

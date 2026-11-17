@@ -1187,11 +1187,14 @@ paths:
       summary: Sugerir la gravedad de una novedad con IA (10.2)
       description: |
         El modelo de IA configurado en `sga.ia.proveedor` sugiere BAJA, MEDIA o ALTA con una explicación corta a
-        partir de la descripción: `gemini` (API de Google AI Studio, tiempo de espera de 4 s), `local` (reglas por
-        palabras clave, el de por defecto) o `deshabilitado` (nunca sugiere).
+        partir de la descripción: `gemini` (API de Google AI Studio, modelo `gemini-3.8-flash`, tiempo de espera de
+        15 s), `local` (reglas por palabras clave, el de por defecto) o `deshabilitado` (nunca sugiere). `origen`
+        dice de dónde salió: `IA` (Gemini) o `LOCAL`.
 
-        No es bloqueante: si el modelo falla, tarda, devuelve algo inválido o está apagado, responde `200` con
-        `disponible: false` y lo registra en el log. Solo sugiere: no guarda nada y la gravedad final la elige la
+        No es bloqueante: si Gemini responde 429 o 503 se reintenta una sola vez tras 1 segundo; si vuelve a fallar,
+        o hay cualquier otro error (sin clave, red, tiempo de espera, respuesta inválida), responde la sugerencia
+        local con `origen: LOCAL` y el motivo queda en el log. Con `deshabilitado` responde `200` con
+        `disponible: false`. Solo sugiere: no guarda nada y la gravedad final la elige la
         persona al registrar la novedad (CU-17). Mapea a `SugerirGravedadNovedadUseCase` y al puerto
         `SugeridorGravedad`.
       operationId: sugerirGravedadNovedad
@@ -1211,18 +1214,27 @@ paths:
               schema:
                 $ref: '#/components/schemas/SugerenciaGravedadResponse'
               examples:
-                disponible:
-                  summary: Con sugerencia
+                ia:
+                  summary: Sugerencia de Gemini
+                  value:
+                    disponible: true
+                    gravedad: ALTA
+                    explicacion: Posible fuga de gas, riesgo para las personas
+                    origen: IA
+                local:
+                  summary: Sugerencia local (proveedor local, o respaldo cuando Gemini falla)
                   value:
                     disponible: true
                     gravedad: ALTA
                     explicacion: Menciona "gas", un posible riesgo para las personas o el apartamento
+                    origen: LOCAL
                 noDisponible:
-                  summary: Sin sugerencia (IA apagada, caída o lenta)
+                  summary: Sin sugerencia (IA deshabilitada)
                   value:
                     disponible: false
                     gravedad: null
                     explicacion: null
+                    origen: null
         '400':
           $ref: '#/components/responses/DatosInvalidos'
         '401':
@@ -3773,7 +3785,7 @@ components:
 
     SugerenciaGravedadResponse:
       type: object
-      description: Sugerencia de la IA (10.2). Si disponible es false, gravedad y explicacion vienen en null
+      description: Sugerencia de la IA (10.2). Si disponible es false, gravedad, explicacion y origen vienen en null
       properties:
         disponible: { type: boolean }
         gravedad:
@@ -3781,6 +3793,10 @@ components:
             - $ref: '#/components/schemas/GravedadNovedad'
             - type: 'null'
         explicacion: { type: [ string, 'null' ], maxLength: 200 }
+        origen:
+          type: [ string, 'null' ]
+          enum: [ IA, LOCAL, null ]
+          description: IA si la dio Gemini; LOCAL si la dieron las reglas locales (también cuando Gemini falla)
 
     ErrorResponse:
       type: object

@@ -38,7 +38,8 @@ class SugerenciaGravedadLocalIntegracionTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.disponible").value(true))
                 .andExpect(jsonPath("$.gravedad").value("ALTA"))
-                .andExpect(jsonPath("$.explicacion", not(emptyString())));
+                .andExpect(jsonPath("$.explicacion", not(emptyString())))
+                .andExpect(jsonPath("$.origen").value("LOCAL"));
     }
 
     @Test

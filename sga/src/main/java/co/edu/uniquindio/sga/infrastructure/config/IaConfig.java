@@ -25,6 +25,9 @@ public class IaConfig {
 
     private static final Logger log = LoggerFactory.getLogger(IaConfig.class);
 
+    /** Espera antes del único reintento cuando Gemini responde 429 o 503. */
+    private static final Duration PAUSA_REINTENTO_GEMINI = Duration.ofSeconds(1);
+
     @Bean
     public SugeridorGravedad sugeridorGravedad(
             @Value("${sga.ia.proveedor:local}") String proveedor,
@@ -35,8 +38,10 @@ public class IaConfig {
             ObjectProvider<JsonMapper> jsonMapper) {
         String elegido = proveedor == null ? "" : proveedor.trim().toLowerCase(Locale.ROOT);
         SugeridorGravedad sugeridor = switch (elegido) {
+            // Si Gemini falla, responde el local (con un reintento previo ante 429 o 503)
             case "gemini" -> new SugeridorGravedadGemini(
-                    jsonMapper.getIfAvailable(() -> JsonMapper.builder().build()), url, modelo, clave, tiempoEspera);
+                    jsonMapper.getIfAvailable(() -> JsonMapper.builder().build()), url, modelo, clave, tiempoEspera,
+                    new SugeridorGravedadLocal(), PAUSA_REINTENTO_GEMINI);
             case "deshabilitado" -> new SugeridorGravedadDeshabilitado();
             case "local" -> new SugeridorGravedadLocal();
             default -> {

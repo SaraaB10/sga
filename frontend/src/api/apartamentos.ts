@@ -36,11 +36,15 @@ export interface RegistrarNovedadRequest {
   gravedad: GravedadNovedad
 }
 
-/** Sugerencia de gravedad de la IA; si disponible es false, gravedad y explicacion vienen en null */
+/** De dónde salió la sugerencia: Gemini (IA) o las reglas locales, que también responden cuando Gemini falla */
+export type OrigenSugerencia = 'IA' | 'LOCAL'
+
+/** Sugerencia de gravedad; si disponible es false, gravedad, explicacion y origen vienen en null */
 export interface SugerenciaGravedadResponse {
   disponible: boolean
   gravedad: GravedadNovedad | null
   explicacion: string | null
+  origen: OrigenSugerencia | null
 }
 
 /** El backend acepta descripciones de hasta 1000 caracteres para la sugerencia */

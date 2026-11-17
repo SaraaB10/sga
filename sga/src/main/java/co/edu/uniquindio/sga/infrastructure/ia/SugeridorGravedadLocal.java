@@ -2,6 +2,7 @@ package co.edu.uniquindio.sga.infrastructure.ia;
 
 import co.edu.uniquindio.sga.domain.port.SugeridorGravedad;
 import co.edu.uniquindio.sga.domain.valueobject.GravedadNovedad;
+import co.edu.uniquindio.sga.domain.valueobject.OrigenSugerencia;
 import co.edu.uniquindio.sga.domain.valueobject.SugerenciaGravedad;
 
 import java.text.Normalizer;
@@ -46,15 +47,16 @@ public class SugeridorGravedadLocal implements SugeridorGravedad {
         Matcher alta = PATRON_ALTA.matcher(texto);
         if (alta.find()) {
             return Optional.of(new SugerenciaGravedad(GravedadNovedad.ALTA,
-                    "Menciona \"" + alta.group() + "\", un posible riesgo para las personas o el apartamento"));
+                    "Menciona \"" + alta.group() + "\", un posible riesgo para las personas o el apartamento",
+                    OrigenSugerencia.LOCAL));
         }
         Matcher media = PATRON_MEDIA.matcher(texto);
         if (media.find()) {
             return Optional.of(new SugerenciaGravedad(GravedadNovedad.MEDIA,
-                    "Menciona \"" + media.group() + "\", un daño o algo que no funciona"));
+                    "Menciona \"" + media.group() + "\", un daño o algo que no funciona", OrigenSugerencia.LOCAL));
         }
         return Optional.of(new SugerenciaGravedad(GravedadNovedad.BAJA,
-                "No menciona riesgos ni daños de funcionamiento"));
+                "No menciona riesgos ni daños de funcionamiento", OrigenSugerencia.LOCAL));
     }
 
     /** Minúsculas y sin tildes: "Fuga de GAS en la cocina" → "fuga de gas en la cocina". */

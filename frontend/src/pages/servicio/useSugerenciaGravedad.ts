@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { sugerirGravedad, type GravedadNovedad } from '@/api/apartamentos'
+import { sugerirGravedad, type GravedadNovedad, type OrigenSugerencia } from '@/api/apartamentos'
 
 /** Espera desde la última tecla antes de pedir la sugerencia */
 const ESPERA_MS = 800
@@ -8,7 +8,7 @@ const LARGO_MINIMO = 8
 
 export type SugerenciaGravedad =
   | { estado: 'inactiva' }
-  | { estado: 'disponible'; gravedad: GravedadNovedad; explicacion: string }
+  | { estado: 'disponible'; gravedad: GravedadNovedad; explicacion: string; origen: OrigenSugerencia }
   | { estado: 'no-disponible' }
 
 /**
@@ -44,7 +44,13 @@ export function useSugerenciaGravedad() {
         if (controlador.signal.aborted) return
         setSugerencia(
           respuesta.disponible && respuesta.gravedad && respuesta.explicacion
-            ? { estado: 'disponible', gravedad: respuesta.gravedad, explicacion: respuesta.explicacion }
+            ? {
+                estado: 'disponible',
+                gravedad: respuesta.gravedad,
+                explicacion: respuesta.explicacion,
+                // Sin origen (un backend anterior) se trata como local
+                origen: respuesta.origen ?? 'LOCAL',
+              }
             : { estado: 'no-disponible' },
         )
       } catch {
